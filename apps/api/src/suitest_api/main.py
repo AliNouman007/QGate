@@ -129,6 +129,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     from suitest_api.routers.defects import router as defects_router
     from suitest_api.routers.documents import router as documents_router
     from suitest_api.routers.eval_runs import router as eval_runs_router
+    from suitest_api.routers.exports import router as exports_router
     from suitest_api.routers.files import router as files_router
     from suitest_api.routers.generators import router as generators_router
     from suitest_api.routers.inbox import router as inbox_router
@@ -223,6 +224,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(requirements_router)
     app.include_router(traceability_router)
     app.include_router(runs_router)
+    app.include_router(exports_router)
     app.include_router(defects_router)
     app.include_router(integrations_router)
     app.include_router(documents_router)
