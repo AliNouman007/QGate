@@ -32,3 +32,9 @@ class LLMConfig(Base, TimestampMixin):
     last_validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (Index("ix_llm_configs_workspace_active", "workspace_id", "is_active"),)
+
+    @property
+    def base_url(self) -> str | None:
+        """Normalized optional provider base URL from the stored configuration."""
+        value = self.config_json.get("base_url")
+        return value if isinstance(value, str) else None

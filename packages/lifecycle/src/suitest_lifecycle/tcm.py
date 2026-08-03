@@ -31,6 +31,13 @@ class TcmSyncReport:
     detail: str
 
 
+_RUN_FIELDS = ("last_run_result", "last_run_at", "duration_ms", "failure_reason")
+
+
+def _prior_run_fields(prior: dict[str, object]) -> dict[str, object]:
+    return {key: prior.get(key) for key in _RUN_FIELDS}
+
+
 def _load(path: Path) -> list[dict[str, object]]:
     if path.is_file():
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -52,6 +59,10 @@ def _case_record(case: PlanCase, mode: Mode) -> dict[str, object]:
         "tags": [mode.value, case.category.lower()],
         "source_ref": case.source_ref,
         "automation_file": case.automation_file,
+        "testing_approach": case.testing_approach.value,
+        "test_level": case.test_level.value,
+        "framework": case.framework,
+        "strategy_ref": case.strategy_ref,
         "last_run_result": None,
         "last_run_at": None,
         "failure_reason": None,
@@ -81,8 +92,7 @@ def upsert_cases(
             rec["duration_ms"] = res.duration_ms
             rec["failure_reason"] = res.error.splitlines()[-1] if res.error else None
         elif prior is not None:
-            for k in ("last_run_result", "last_run_at", "duration_ms", "failure_reason"):
-                rec[k] = prior.get(k)
+            rec.update(_prior_run_fields(prior))
         existing[str(rec["id"])] = rec
 
     merged = list(existing.values())
@@ -106,6 +116,7 @@ def record_run(summary: RunSummary, paths: Paths, run_at: str) -> int:
             "errored": summary.errored,
             "duration_ms": summary.duration_ms,
             "ready": summary.ready,
+            "coverage": summary.coverage,
         }
     )
     paths.tcm_runs_json.write_text(json.dumps(runs, indent=2), encoding="utf-8")

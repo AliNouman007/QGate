@@ -20,16 +20,16 @@ import urllib.request
 import uuid
 from typing import Any
 
-JSONDict = dict[str, Any]
+type JSONDict = dict[str, Any]
 
 
 class SuitestAPIError(RuntimeError):
     """Raised on a non-2xx API response. Carries status + parsed body."""
 
     def __init__(self, status_code: int, body: object) -> None:
-        super().__init__(f"Suitest API error {status_code}: {body}")
         self.status_code = status_code
         self.body = body
+        RuntimeError.__init__(self, f"Suitest API error {status_code}: {body}")
 
 
 class SuitestClient:
@@ -166,6 +166,7 @@ class SuitestClient:
         project_name: str = "",
         run_id: str = "",
         finalize: bool = True,
+        coverage_summary: JSONDict | None = None,
     ) -> JSONDict:
         body: JSONDict = {
             "runId": run_id,
@@ -182,6 +183,8 @@ class SuitestClient:
             body["branch"] = branch
         if commit_sha is not None:
             body["commitSha"] = commit_sha
+        if coverage_summary is not None:
+            body["coverageSummary"] = coverage_summary
         result = self._request("POST", "/api/v1/runs/ingest", json_body=body)
         return result if isinstance(result, dict) else {}
 
@@ -220,8 +223,7 @@ class SuitestClient:
             connection.endheaders()
             connection.send(head)
             with open(path, "rb") as fh:
-                while chunk := fh.read(1024 * 1024):
-                    connection.send(chunk)
+                connection.send(fh)
             connection.send(tail)
             response = connection.getresponse()
             raw = response.read()

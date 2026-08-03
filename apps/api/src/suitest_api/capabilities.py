@@ -18,6 +18,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from suitest_core.capabilities import (
+    AutonomyLevel as CoreAutonomy,
+)
+from suitest_core.capabilities import (
     Tier,
     compute_autonomy,
     compute_features,
@@ -52,9 +55,10 @@ def _features_section(features: dict[str, bool]) -> FeaturesSection:
     return FeaturesSection.model_validate(features)
 
 
-def _autonomy_section(tier: Tier) -> AutonomySection:
+def _autonomy_section(tier: Tier, current: CoreAutonomy | None = None) -> AutonomySection:
     info = compute_autonomy(tier)
-    return AutonomySection(available=list(info.available), default=info.default)
+    selected = current if current in info.available else info.default
+    return AutonomySection(available=list(info.available), default=selected)
 
 
 def _auth_section() -> AuthSection:
@@ -95,7 +99,7 @@ def build_base_capabilities() -> Capabilities:
     )
 
 
-def _provider_to_tier(provider: str) -> Tier:
+def provider_to_tier(provider: str) -> Tier:
     """Map a workspace ``LLMConfig.provider`` string to the resolved tier.
 
     The DB-stored config is trusted (admin set it via Settings → LLM); we do not
@@ -142,7 +146,7 @@ def build_workspace_overlay(
     embeddings = resolve_embeddings()
 
     if active_llm_config is not None:
-        tier = _provider_to_tier(active_llm_config.provider)
+        tier = provider_to_tier(active_llm_config.provider)
         # CAPABILITY_TIERS §11.2: workspace DB config is the source of truth. base_url
         # lives in config_json (DATA_MODEL §4.1); fall back to the base only when absent.
         config_base_url = active_llm_config.config_json.get("base_url")
@@ -165,7 +169,10 @@ def build_workspace_overlay(
         llm=llm,
         embeddings=base.embeddings,
         features=_features_section(compute_features(tier, embeddings)),
-        autonomy=_autonomy_section(tier),
+        autonomy=_autonomy_section(
+            tier,
+            workspace_capability.autonomy_level if workspace_capability is not None else None,
+        ),
         auth=base.auth,
         version=base.version,
         mcp_providers=_mcp_public(mcp_providers),

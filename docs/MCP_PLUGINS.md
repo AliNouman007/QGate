@@ -2,7 +2,7 @@
 
 > Cross-links: [API.md](./API.md), [DATA_MODEL.md](./DATA_MODEL.md), [GENERATORS.md](./GENERATORS.md), [AI_AGENT.md](./AI_AGENT.md), [ARCHITECTURE.md](./ARCHITECTURE.md), [DEPLOYMENT.md](./DEPLOYMENT.md).
 
-> ⚠️ **PARTIAL.** Bundled providers built: `playwright`, `api-http`, `postgres` (M1c) + `graphql`, `mysql`, `mongo`, `kubernetes`, `grpc` (M2-10, in-process; backend drivers — `aiomysql`/`motor`/`kubernetes`/`grpcio` — imported lazily at call time, so the registry/tool-listing never requires them, and `graphql` runs on the already-bundled `httpx`). Documented-but-unbuilt: `browser-use`/`appium`/`computer-use`/`jira`/`github` (later milestones). See [ROADMAP.md](./ROADMAP.md).
+> ⚠️ **PARTIAL.** Bundled providers built: `playwright`, `api-http`, `postgres`, `graphql`, `mysql`, `mongo`, `kubernetes`, and `grpc`, plus lifecycle-local `suitest.whitebox.v1` adapters for pytest and Vitest/Jest. Documented-but-unbuilt: `browser-use`/`appium`/`computer-use`/`jira`/`github` (later milestones). See [ROADMAP.md](./ROADMAP.md).
 
 ---
 
@@ -637,7 +637,25 @@ Air-gap is a first-class constraint (see [DEPLOYMENT.md](./DEPLOYMENT.md)).
 
 ---
 
-## 16. Future (v1.x and v2.x)
+## 16. White-box lifecycle contract
+
+`suitest.whitebox.v1` is the framework-neutral capability contract used by
+the local lifecycle. Its MCP tools are:
+
+| Tool | Purpose |
+|---|---|
+| `whitebox_discover_tests` | Detect pytest, Vitest, or Jest; return native targets, command, and coverage path. |
+| `whitebox_run_tests` | Execute the native targets and emit the normal strategy/plan/TC/results/report/TCM artifacts. |
+
+Commands are argument arrays and never pass through a shell. Test discovery
+excludes VCS, virtualenv, dependency, build, and `suitest-output` directories.
+Native test files are retained as `TCxxx` automation source, while coverage.py
+and Istanbul JSON are normalized for the existing publish path. See
+[TESTING_APPROACHES.md](./TESTING_APPROACHES.md).
+
+---
+
+## 17. Future (v1.x and v2.x)
 
 ### v1.x
 

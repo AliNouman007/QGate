@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { components } from "@/lib/api-types";
 import {
+  caseSourceToPill,
   deriveCaseType,
   deriveServerStep,
   deriveStepType,
@@ -29,6 +30,14 @@ function step(partial: Partial<TestStepPublic>): TestStepPublic {
     ...partial,
   };
 }
+
+describe("caseSourceToPill", () => {
+  it("folds deterministic generated sources into the import pill", () => {
+    expect(caseSourceToPill("RECORDER")).toBe("IMPORT");
+    expect(caseSourceToPill("HEURISTIC_CRAWL")).toBe("IMPORT");
+    expect(caseSourceToPill("MCP")).toBe("MCP");
+  });
+});
 
 describe("humanizeTestTitle", () => {
   it("turns a snake_case slug into a sentence-case title", () => {
@@ -105,20 +114,20 @@ describe("deriveCaseType", () => {
 
 describe("generateFallbackSteps", () => {
   it("never returns an empty list and never uses a bare id as title", () => {
-    for (const key of [
+    const scenarios = [
       "successful_login_opens_the_dashboard",
       "products_list_loads_after_login",
       "search_with_no_match_shows_empty_state",
       "some_unknown_scenario",
-    ]) {
-      const steps = generateFallbackSteps(key);
-      expect(steps.length).toBeGreaterThan(0);
-      for (const s of steps) {
-        expect(s.title.trim().length).toBeGreaterThan(0);
-        expect(s.title).not.toMatch(/^TC-\d+$/);
-        expect(s.instruction.trim().length).toBeGreaterThan(0);
-        expect(s.expected.trim().length).toBeGreaterThan(0);
-      }
+    ];
+    const stepsByScenario = scenarios.map(generateFallbackSteps);
+    expect(stepsByScenario.every((steps) => steps.length > 0)).toBe(true);
+
+    for (const step of stepsByScenario.flat()) {
+      expect(step.title.trim().length).toBeGreaterThan(0);
+      expect(step.title).not.toMatch(/^TC-\d+$/);
+      expect(step.instruction.trim().length).toBeGreaterThan(0);
+      expect(step.expected.trim().length).toBeGreaterThan(0);
     }
   });
 

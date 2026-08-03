@@ -101,3 +101,6 @@ docs/superpowers
 assets/raw/
 # Local mode scratch (SQLite DB + disk artifacts)
 .suitest/
+.forgeguard/
+.codex/
+.mcp.json

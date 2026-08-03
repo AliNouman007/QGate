@@ -12,13 +12,10 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
+from suitest_shared.domain.enums import TestingApproach
 
-_WRITE_CONFIG = ConfigDict(
-    populate_by_name=True,
-    str_strip_whitespace=True,
-    extra="forbid",
-)
+from suitest_api.schemas.project import WRITE_MODEL_CONFIG
 
 
 class SuiteCreate(BaseModel):
@@ -28,12 +25,15 @@ class SuiteCreate(BaseModel):
     repository's ``order ASC, created_at DESC`` ordering position the suite.
     """
 
-    model_config = _WRITE_CONFIG
+    model_config = WRITE_MODEL_CONFIG
 
     project_id: Annotated[str, Field(min_length=1, alias="projectId")]
     name: Annotated[str, Field(min_length=1, max_length=120)]
     description: str | None = None
     order: int = Field(default=0, ge=0)
+    default_testing_approach: TestingApproach | None = Field(
+        default=None, alias="defaultTestingApproach"
+    )
 
 
 class SuiteUpdate(BaseModel):
@@ -45,9 +45,12 @@ class SuiteUpdate(BaseModel):
     exactly or a 400 with ``details.missing`` / ``details.unknown`` lands.
     """
 
-    model_config = _WRITE_CONFIG
+    model_config = WRITE_MODEL_CONFIG
 
     name: Annotated[str, Field(min_length=1, max_length=120)] | None = None
     description: str | None = None
     order: int | None = Field(default=None, ge=0)
-    case_order: list[str] | None = Field(default=None, alias="caseOrder")
+    default_testing_approach: TestingApproach | None = Field(
+        default=None, alias="defaultTestingApproach"
+    )
+    case_order: list[str] | None = Field(default=None, alias="caseOrder", max_length=1_000)

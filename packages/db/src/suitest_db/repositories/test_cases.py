@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid  # runtime import: Pydantic v2 evaluates field annotations
 from datetime import datetime  # runtime import: Pydantic v2 evaluates field annotations
+from itertools import product
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
@@ -13,7 +14,13 @@ from suitest_db.models.case import CaseTag, TestCase, TestStep
 from suitest_db.models.project import Project, Suite
 from suitest_db.public_id import set_workspace_id
 from suitest_db.repositories.base import AsyncRepository
-from suitest_shared.domain.enums import CaseSource, CaseStatus, Priority
+from suitest_shared.domain.enums import (
+    CaseSource,
+    CaseStatus,
+    Priority,
+    TestingApproach,
+    TestLevel,
+)
 from suitest_shared.text import derive_slug, derive_title
 
 if TYPE_CHECKING:
@@ -44,6 +51,10 @@ class TestCaseCreate(BaseModel):
     generated_from: dict[str, object] | None = None
     automation_file_path: str | None = None
     automation_code: str | None = None
+    testing_approach: TestingApproach | None = None
+    test_level: TestLevel | None = None
+    framework: str | None = None
+    strategy_id: str | None = None
 
 
 class TestCaseUpdate(BaseModel):
@@ -60,6 +71,10 @@ class TestCaseUpdate(BaseModel):
     # Automation linkage + denormalized last-run pointers (set by run ingest).
     automation_file_path: str | None = None
     automation_code: str | None = None
+    testing_approach: TestingApproach | None = None
+    test_level: TestLevel | None = None
+    framework: str | None = None
+    strategy_id: str | None = None
     last_run_id: str | None = None
     last_run_result: str | None = None
     last_run_at: datetime | None = None
@@ -107,6 +122,7 @@ class TestCaseRepo(AsyncRepository[TestCase, TestCaseCreate, TestCaseUpdate]):
         status: CaseStatus | None = None,
         source: CaseSource | None = None,
         priority: Priority | None = None,
+        testing_approach: TestingApproach | None = None,
         tag: str | None = None,
         q: str | None = None,
         cursor: tuple[datetime, str] | None = None,
@@ -122,6 +138,15 @@ class TestCaseRepo(AsyncRepository[TestCase, TestCaseCreate, TestCaseUpdate]):
             stmt = stmt.where(TestCase.source == source)
         if priority is not None:
             stmt = stmt.where(TestCase.priority == priority)
+        if testing_approach is not None:
+            stmt = stmt.join(Suite, Suite.id == TestCase.suite_id).where(
+                func.coalesce(
+                    TestCase.testing_approach,
+                    Suite.default_testing_approach,
+                    TestingApproach.BLACK_BOX,
+                )
+                == testing_approach
+            )
         if tag is not None:
             stmt = stmt.where(TestCase.id.in_(select(CaseTag.case_id).where(CaseTag.tag == tag)))
         if q is not None:
@@ -136,14 +161,7 @@ class TestCaseRepo(AsyncRepository[TestCase, TestCaseCreate, TestCaseUpdate]):
         stmt = stmt.order_by(TestCase.created_at.desc(), TestCase.id.desc()).limit(limit + 1)
 
         rows = list((await self.session.scalars(stmt)).all())
-        if len(rows) > limit:
-            page = rows[:limit]
-            last = page[-1]
-            next_cursor: tuple[datetime, str] | None = (last.created_at, last.id)
-        else:
-            page = rows
-            next_cursor = None
-        return page, next_cursor
+        return self._paginate(rows, limit)
 
     async def get_steps(self, case_id: str) -> Sequence[TestStep]:
         stmt = select(TestStep).where(TestStep.case_id == case_id).order_by(TestStep.order.asc())
@@ -404,27 +422,11 @@ class TestCaseRepo(AsyncRepository[TestCase, TestCaseCreate, TestCaseUpdate]):
             return []
         # Existing tag set per case (load once vs. N queries).
         existing_stmt = select(CaseTag.case_id, CaseTag.tag).where(CaseTag.case_id.in_(list(ids)))
-        existing: dict[str, set[str]] = {}
-        for case_id, tag in (await self.session.execute(existing_stmt)).all():
-            existing.setdefault(case_id, set()).add(tag)
-
-        # Dedupe input tags, preserving the caller's order for reproducibility.
-        seen: set[str] = set()
-        unique_tags: list[str] = []
-        for tag in tags:
-            if tag in seen:
-                continue
-            seen.add(tag)
-            unique_tags.append(tag)
-
-        affected: set[str] = set()
-        for case_id in ids:
-            had = existing.get(case_id, set())
-            for tag in unique_tags:
-                if tag in had:
-                    continue
-                self.session.add(CaseTag(case_id=case_id, tag=tag))
-                affected.add(case_id)
+        existing = set((await self.session.execute(existing_stmt)).all())
+        requested = set(product(ids, dict.fromkeys(tags)))
+        missing = requested - existing
+        self.session.add_all(CaseTag(case_id=case_id, tag=tag) for case_id, tag in missing)
+        affected = {case_id for case_id, _tag in missing}
         if affected:
             await self.session.flush()
         return list(affected)

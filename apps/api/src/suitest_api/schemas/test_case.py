@@ -22,7 +22,14 @@ from enum import StrEnum
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Discriminator, Field, Tag
-from suitest_shared.domain.enums import CaseSource, CaseStatus, Priority, TargetKind
+from suitest_shared.domain.enums import (
+    CaseSource,
+    CaseStatus,
+    Priority,
+    TargetKind,
+    TestingApproach,
+    TestLevel,
+)
 
 
 class TestStepPublic(BaseModel):
@@ -62,6 +69,11 @@ class TestCaseListItem(BaseModel):
     status: CaseStatus
     priority: Priority
     owner_id: uuid.UUID | None = None
+    testing_approach: TestingApproach | None = None
+    effective_testing_approach: TestingApproach = TestingApproach.BLACK_BOX
+    test_level: TestLevel | None = None
+    framework: str | None = None
+    strategy_id: str | None = None
     # Denormalized latest-run outcome (PASS/FAIL/ERROR) — lets the Cases tree
     # compute the "Failing" filter/count without loading every case's runs.
     last_run_result: str | None = None
@@ -146,6 +158,10 @@ class TestCaseCreate(BaseModel):
     priority: Priority = Priority.P2
     status: CaseStatus = CaseStatus.ACTIVE
     source: CaseSource = CaseSource.MANUAL
+    testing_approach: TestingApproach | None = Field(default=None, alias="testingApproach")
+    test_level: TestLevel | None = Field(default=None, alias="testLevel")
+    framework: Annotated[str, Field(min_length=1, max_length=64)] | None = None
+    strategy_id: str | None = Field(default=None, alias="strategyId")
     steps: list[StepCreate] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
 
@@ -167,6 +183,10 @@ class TestCaseUpdate(BaseModel):
     preconditions: str | None = None
     status: CaseStatus | None = None
     priority: Priority | None = None
+    testing_approach: TestingApproach | None = Field(default=None, alias="testingApproach")
+    test_level: TestLevel | None = Field(default=None, alias="testLevel")
+    framework: Annotated[str, Field(min_length=1, max_length=64)] | None = None
+    strategy_id: str | None = Field(default=None, alias="strategyId")
     tags: list[str] | None = None
 
 

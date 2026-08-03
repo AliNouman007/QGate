@@ -55,14 +55,7 @@ class DocumentRepo(AsyncRepository[Document, DocumentCreate, DocumentUpdate]):
         stmt = stmt.order_by(Document.created_at.desc(), Document.id.desc()).limit(limit + 1)
 
         rows = list((await self.session.scalars(stmt)).all())
-        if len(rows) > limit:
-            page = rows[:limit]
-            last = page[-1]
-            next_cursor: tuple[datetime, str] | None = (last.created_at, last.id)
-        else:
-            page = rows
-            next_cursor = None
-        return page, next_cursor
+        return self._paginate(rows, limit)
 
     async def chunk_counts(self, document_ids: Sequence[str]) -> dict[str, int]:
         """Map each document id → its number of chunks (one grouped query)."""

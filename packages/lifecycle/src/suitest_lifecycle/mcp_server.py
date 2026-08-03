@@ -18,7 +18,7 @@ import sys
 import threading
 import urllib.error
 import urllib.request
-from typing import TYPE_CHECKING, TextIO
+from typing import TYPE_CHECKING, TextIO, cast
 
 from suitest_lifecycle.tools import KWARG_TOOLS, TOOLS
 
@@ -74,6 +74,14 @@ _TOOL_DESCRIPTIONS = {
         "an agent context window (<= 8 KB) so you can diagnose and fix WITHOUT "
         "opening screenshots/videos by hand. No prior run -> error; run with no "
         "failures -> empty context."
+    ),
+    "whitebox_discover_tests": (
+        "White-box: detect pytest or Vitest/Jest targets through the "
+        "suitest.whitebox.v1 normalized contract."
+    ),
+    "whitebox_run_tests": (
+        "White-box: run native repository tests, normalize results/coverage into "
+        "suitest-output, and publish through the standard lifecycle pipeline."
     ),
     "bootstrap_project": "Open a browser setup wizard (target URL, credentials, crawl scope, optional markdown PRD upload); writes suitest.config.json into the project and returns its path. Call this FIRST when no config exists.",
     "blackbox_discover_app": "Blackbox: open the app URL, detect+perform login, crawl routes, capture evidence, save discovery/graph/report JSON. No repo needed.",
@@ -217,7 +225,7 @@ def handle(message: dict[str, object]) -> dict[str, object] | None:
             return _err(req_id, -32602, "invalid params")
         name = params.get("name")
         args = params.get("arguments") or {}
-        tool: Callable[..., dict[str, object]] | None = TOOLS.get(str(name))
+        tool = cast("Callable[..., dict[str, object]] | None", TOOLS.get(str(name)))
         if tool is None:
             return _err(req_id, -32601, f"unknown tool: {name}")
         arguments = args if isinstance(args, dict) else {}

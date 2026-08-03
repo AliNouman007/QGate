@@ -34,6 +34,8 @@ from suitest_shared.domain.enums import (
     Severity,
     StepOutcome,
     TargetKind,
+    TestingApproach,
+    TestLevel,
     Tier,
 )
 
@@ -65,6 +67,7 @@ class SuiteOut(DomainModel):
     name: str
     description: str | None = None
     order: int
+    default_testing_approach: TestingApproach | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -100,6 +103,10 @@ class TestCaseOut(DomainModel):
     status: CaseStatus
     priority: Priority
     owner_id: uuid.UUID | None = None
+    testing_approach: TestingApproach | None = None
+    test_level: TestLevel | None = None
+    framework: str | None = None
+    strategy_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -137,7 +144,7 @@ class TraceabilityMatrixOut(DomainModel):
     rows: list[TraceabilityRow] = Field(default_factory=list)
 
 
-class RunOut(DomainModel):
+class RunListOut(DomainModel):
     id: str
     public_id: str
     project_id: str
@@ -151,11 +158,14 @@ class RunOut(DomainModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     duration_ms: int | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class RunOut(RunListOut):
     total_steps: int
     passed_steps: int
     failed_steps: int
-    created_at: datetime
-    updated_at: datetime
 
 
 class ArtifactOut(DomainModel):

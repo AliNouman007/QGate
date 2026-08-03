@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib
+import importlib.util
 import site
 import subprocess
 import sys
@@ -55,12 +56,8 @@ def _pip_install_variants(pkg: str) -> list[list[str]]:
 def _ensure_pip() -> None:
     """Best-effort: bootstrap pip via ensurepip when the interpreter lacks it
     (minimal venvs / stripped pythons ship without pip)."""
-    try:
-        import pip  # noqa: F401
-
+    if importlib.util.find_spec("pip") is not None:
         return
-    except ImportError:
-        pass
     with contextlib.suppress(subprocess.TimeoutExpired, OSError):
         subprocess.run(
             [sys.executable, "-m", "ensurepip", "--upgrade"],

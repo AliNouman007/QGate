@@ -18,7 +18,14 @@ _BODY_SNIPPET = 400
 _FAIL_STATES = ("FAILED", "ERROR")
 
 
-def excerpt_console(lines: list[dict], *, max_lines: int = 20) -> list[str]:
+def _as_int(value: object, default: int = 0) -> int:
+    try:
+        return int(value) if isinstance(value, (str, bytes, int, float)) else default
+    except ValueError:
+        return default
+
+
+def excerpt_console(lines: list[dict[str, object]], *, max_lines: int = 20) -> list[str]:
     kept = [
         f"[{line.get('level')}] {line.get('message', '')}"
         for line in lines
@@ -27,13 +34,10 @@ def excerpt_console(lines: list[dict], *, max_lines: int = 20) -> list[str]:
     return kept[-max_lines:]  # last = closest to the failure
 
 
-def excerpt_network(entries: list[dict], *, max_entries: int = 10) -> list[str]:
+def excerpt_network(entries: list[dict[str, object]], *, max_entries: int = 10) -> list[str]:
     out: list[str] = []
     for entry in entries:
-        try:
-            status = int(entry.get("status", 0))
-        except (TypeError, ValueError):
-            status = 0
+        status = _as_int(entry.get("status"))
         # 2xx success and 3xx redirects are normal — only surface real failures.
         if 200 <= status < 400:
             continue
@@ -50,6 +54,23 @@ def _selector_tokens(selector: str) -> list[str]:
     return [t for t in re.split(r"[^a-zA-Z0-9]+", selector) if len(t) >= 3]
 
 
+def _line_matches_tokens(line: str, tokens: list[str]) -> bool:
+    lowered = line.lower()
+    return any(token.lower() in lowered for token in tokens)
+
+
+def _ordered_indexes(indexes: set[int]) -> list[int]:
+    ordered = list(indexes)
+    ordered.sort()
+    return ordered
+
+
+def _dict_items(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
 def excerpt_dom(dom: str, *, failed_selector: str, max_chars: int = 2000) -> str:
     """Clip DOM to the lines around the failed selector + similar candidates.
 
@@ -61,7 +82,7 @@ def excerpt_dom(dom: str, *, failed_selector: str, max_chars: int = 2000) -> str
     if not tokens:
         return dom[:max_chars]
 
-    hits = [i for i, line in enumerate(lines) if any(tok.lower() in line.lower() for tok in tokens)]
+    hits = [index for index, line in enumerate(lines) if _line_matches_tokens(line, tokens)]
     if not hits:
         return dom[:max_chars]
 
@@ -71,7 +92,7 @@ def excerpt_dom(dom: str, *, failed_selector: str, max_chars: int = 2000) -> str
         keep.update(range(max(0, i - 2), min(len(lines), i + 3)))  # ±2 lines context
     out_lines: list[str] = []
     last = -10
-    for i in sorted(keep):
+    for i in _ordered_indexes(keep):
         if i > last + 1:
             out_lines.append("…")
         text = lines[i].strip()
@@ -95,8 +116,8 @@ class FailedCase:
     error_stack: str = ""
     failed_selector: str = ""
     dom: str = ""
-    console: list[dict] = field(default_factory=list)
-    network: list[dict] = field(default_factory=list)
+    console: list[dict[str, object]] = field(default_factory=list)
+    network: list[dict[str, object]] = field(default_factory=list)
     evidence_links: dict[str, str] = field(default_factory=dict)
     classification: str = ""  # optional failure label (STALE/FLAKE/...) from run data
 
@@ -154,14 +175,14 @@ def _inner_error(error: str) -> str:
     return lines[-1] if lines else (error or "").strip()
 
 
-def _failed_step(steps: list[dict], total: int) -> tuple[int, str]:
+def _failed_step(steps: list[dict[str, object]], total: int) -> tuple[int, str]:
     """First FAILED/ERROR step -> (index, description). Falls back to the last step."""
     for s in steps:
         if str(s.get("status", "")).upper() in _FAIL_STATES:
-            return int(s.get("index", 0)), str(s.get("description", ""))
+            return _as_int(s.get("index")), str(s.get("description", ""))
     if steps:
         last = steps[-1]
-        return int(last.get("index", total)), str(last.get("description", ""))
+        return _as_int(last.get("index"), total), str(last.get("description", ""))
     return total, ""
 
 
@@ -176,7 +197,7 @@ def _file_uri(mode_dir: Path, name: str) -> str | None:
     return p.as_uri() if p.is_file() else None
 
 
-def _evidence_links(result: dict, mode_dir: Path) -> dict[str, str]:
+def _evidence_links(result: dict[str, object], mode_dir: Path) -> dict[str, str]:
     links: dict[str, str] = {}
     shot = _file_uri(mode_dir, str(result.get("screenshot", "")))
     if shot:
@@ -187,7 +208,7 @@ def _evidence_links(result: dict, mode_dir: Path) -> dict[str, str]:
     return links
 
 
-def _context_sidecar(mode_dir: Path, test_id: str) -> dict:
+def _context_sidecar(mode_dir: Path, test_id: str) -> dict[str, object]:
     """Optional ``<TC>.context.json`` (dom/console/network/failedSelector).
 
     Written by the frontend recorder when the evidence-recording flag is on; the
@@ -235,10 +256,12 @@ def load_failed_cases(output_dir: Path) -> list[FailedCase]:
             continue
         if str(result.get("status", "")).upper() not in _FAIL_STATES:
             continue
-        steps = [s for s in (result.get("steps") or []) if isinstance(s, dict)]
+        steps = _dict_items(result.get("steps"))
         total = len(steps) or 1
         step_index, step_desc = _failed_step(steps, total)
         ctx = _context_sidecar(mode_dir, str(result.get("testId", "")))
+        console = ctx.get("console")
+        network = ctx.get("network")
         cases.append(
             FailedCase(
                 title=str(result.get("title") or result.get("testId") or "untitled"),
@@ -249,8 +272,8 @@ def load_failed_cases(output_dir: Path) -> list[FailedCase]:
                 error_stack=str(result.get("error", "")),
                 failed_selector=str(ctx.get("failedSelector", "")),
                 dom=str(ctx.get("dom", "")),
-                console=[c for c in (ctx.get("console") or []) if isinstance(c, dict)],
-                network=[n for n in (ctx.get("network") or []) if isinstance(n, dict)],
+                console=_dict_items(console),
+                network=_dict_items(network),
                 evidence_links=_evidence_links(result, mode_dir),
             )
         )

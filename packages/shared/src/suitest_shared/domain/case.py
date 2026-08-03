@@ -7,8 +7,8 @@ DATA_MODEL.md §3.4 / §5).
 
 from __future__ import annotations
 
+import datetime as dt
 import uuid
-from datetime import datetime
 from typing import Any
 
 from pydantic import Field
@@ -61,8 +61,8 @@ class TestCase(DomainModel):
     generated_by: str | None = None
     generated_from: dict[str, Any] | None = None
     estimated_ms: int | None = None
-    created_at: datetime
-    updated_at: datetime
-    deleted_at: datetime | None = None
+    created_at: dt.datetime
+    updated_at: dt.datetime
+    deleted_at: dt.datetime | None = None
     steps: list[TestStep] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)

@@ -33,8 +33,11 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Protocol, cast, runtime_checkable
 
 import structlog
+from suitest_agent.generators.selector_repair import is_selector_changed_failure
 from suitest_agent.graphs.execution import translate_single_step
 from suitest_agent.providers.litellm_router import get_provider
+from suitest_core.autonomy import AutonomyConfig, compute_effective
+from suitest_core.capabilities import AutonomyLevel as CoreAutonomy
 from suitest_db.models.project import Project
 from suitest_db.repositories.llm_configs import LLMConfigRepo
 from suitest_db.repositories.run_step_logs import RunStepLogRepo
@@ -42,15 +45,18 @@ from suitest_db.repositories.runs import RunRepo, RunStepRepo
 from suitest_db.repositories.workspace_capabilities import WorkspaceCapabilityRepo
 from suitest_mcp.invoker import McpInvoker
 from suitest_mcp.registry import McpRegistry
-from suitest_shared.domain.enums import RunStatus, StepOutcome, Tier
+from suitest_shared.domain.enums import AutonomyLevel, RunStatus, StepOutcome, Tier
 
-from suitest_runner.executors.step_executor import StepTranslator, execute_step
+from suitest_runner.executors.step_executor import StepResult, StepTranslator, execute_step
 from suitest_runner.handlers.step_handler import on_run_step_failed
 from suitest_runner.observability import get_tracer
 from suitest_runner.settings import RunnerSettings
 
 if TYPE_CHECKING:
+    from suitest_api.schemas.self_heal import SelectorRepairPublic
     from suitest_api.services.defect_auto_filer import DefectAutoFiler
+    from suitest_db.models.case import TestStep
+    from suitest_db.models.workspace_capability import WorkspaceCapability
 
 log = structlog.get_logger(__name__)
 
@@ -103,11 +109,10 @@ async def _build_translator(
     llm = await LLMConfigRepo(session).get_active(workspace_id)
     if llm is None:
         return None
-    base_url = llm.config_json.get("base_url")
     provider = get_provider(
         llm.provider,
         api_key=llm.api_key_encrypted,
-        base_url=base_url if isinstance(base_url, str) else None,
+        base_url=llm.base_url,
     )
     model = llm.model
 
@@ -115,6 +120,116 @@ async def _build_translator(
         return await translate_single_step(provider, model=model, action=action)
 
     return _translate
+
+
+def _auto_self_heal_enabled(capability: WorkspaceCapability | None) -> bool:
+    """Full self-heal is a hard `auto` rail even when lower-level overrides say true."""
+    if capability is None or capability.autonomy_level is not AutonomyLevel.AUTO:
+        return False
+    raw = capability.features_json.get("autonomy_overrides", {})
+    overrides = {key: bool(value) for key, value in raw.items()} if isinstance(raw, dict) else {}
+    effective = compute_effective(
+        AutonomyConfig(
+            level=CoreAutonomy(capability.autonomy_level.value),
+            overrides=overrides,
+        )
+    )
+    return effective["exec_self_heal_enabled"]
+
+
+async def _try_auto_self_heal(
+    *,
+    factory: object,
+    test_step: TestStep,
+    case_id: str,
+    workspace_id: str,
+    user_id: str | None,
+    result: StepResult,
+) -> SelectorRepairPublic | None:
+    """Propose one selector patch and stage it in memory for a single retry."""
+    if not callable(factory) or not is_selector_changed_failure(
+        test_step.code, result.error_message
+    ):
+        return None
+    from suitest_api.services.self_heal_service import SelfHealError, SelfHealService
+
+    try:
+        async with factory() as session:
+            service = SelfHealService(
+                session,
+                workspace_id=workspace_id,
+                user_id=user_id,
+            )
+            proposal = await service.propose(
+                case_id,
+                step_id=test_step.id,
+                error=result.error_message or "",
+                dom_snapshot=result.stderr or None,
+            )
+            await session.commit()
+    except SelfHealError as exc:
+        log.warning(
+            "runner.self_heal.skip",
+            step_id=test_step.id,
+            code=exc.code,
+            reason=exc.message,
+        )
+        return None
+    except Exception as exc:
+        log.warning("runner.self_heal.error", step_id=test_step.id, reason=str(exc))
+        return None
+    test_step.code = proposal.updated_code
+    return proposal
+
+
+async def _persist_auto_self_heal(
+    *,
+    factory: object,
+    case_id: str,
+    workspace_id: str,
+    user_id: str | None,
+    proposal: SelectorRepairPublic,
+) -> bool:
+    """Persist a staged repair only after its retry passed."""
+    if not callable(factory):
+        return False
+    from suitest_api.schemas.self_heal import SelectorRepairApplyRequest
+    from suitest_api.services.self_heal_service import SelfHealError, SelfHealService
+
+    try:
+        async with factory() as session:
+            await SelfHealService(
+                session,
+                workspace_id=workspace_id,
+                user_id=user_id,
+            ).apply(
+                case_id,
+                SelectorRepairApplyRequest(
+                    step_id=proposal.step_id,
+                    old_selector=proposal.old_selector,
+                    new_selector=proposal.new_selector,
+                    code_sha256=proposal.code_sha256,
+                    rationale=proposal.rationale,
+                ),
+                actor_type="agent",
+            )
+            await session.commit()
+    except SelfHealError as exc:
+        log.warning(
+            "runner.self_heal.persist_skip",
+            step_id=proposal.step_id,
+            code=exc.code,
+            reason=exc.message,
+        )
+        return False
+    except Exception as exc:
+        log.warning(
+            "runner.self_heal.persist_error",
+            step_id=proposal.step_id,
+            reason=str(exc),
+        )
+        return False
+    return True
 
 
 async def run_test_case(ctx: dict[str, object], run_id: str) -> dict[str, object]:
@@ -169,6 +284,9 @@ async def run_test_case(ctx: dict[str, object], run_id: str) -> dict[str, object
 
             capability = await WorkspaceCapabilityRepo(session).get(workspace_id)
             tier = Tier(capability.tier) if capability is not None else Tier.ZERO
+            auto_self_heal = tier in (Tier.LOCAL, Tier.CLOUD) and _auto_self_heal_enabled(
+                capability
+            )
             overrides_raw = (
                 capability.features_json.get("routing_overrides") if capability else None
             )
@@ -233,6 +351,51 @@ async def run_test_case(ctx: dict[str, object], run_id: str) -> dict[str, object
                 routing_overrides=overrides,
                 translator=translator,
             )
+            selector_change_detected = is_selector_changed_failure(
+                test_step.code,
+                result.error_message,
+            )
+            self_heal_state: dict[str, object] | None = None
+            if auto_self_heal and result.outcome == StepOutcome.FAIL:
+                original_error = result.error_message
+                repair_proposal = await _try_auto_self_heal(
+                    factory=factory,
+                    test_step=test_step,
+                    case_id=case_id,
+                    workspace_id=workspace_id,
+                    user_id=triggered_by,
+                    result=result,
+                )
+                if repair_proposal is not None:
+                    self_heal_state = {
+                        "failureKind": "selector_changed",
+                        "oldSelector": repair_proposal.old_selector,
+                        "newSelector": repair_proposal.new_selector,
+                        "retryCount": 1,
+                    }
+                    result = await execute_step(
+                        invoker=invoker,
+                        test_step=test_step,
+                        run_id=run_id,
+                        workspace_id=workspace_id,
+                        actor_user_id=triggered_by,
+                        tier=tier,
+                        routing_overrides=overrides,
+                        translator=translator,
+                    )
+                    self_heal_state["originalError"] = original_error or ""
+                    self_heal_state["retryOutcome"] = result.outcome.value
+                    self_heal_state["persisted"] = (
+                        await _persist_auto_self_heal(
+                            factory=factory,
+                            case_id=case_id,
+                            workspace_id=workspace_id,
+                            user_id=triggered_by,
+                            proposal=repair_proposal,
+                        )
+                        if result.outcome == StepOutcome.PASS
+                        else False
+                    )
 
             async with factory() as session:
                 run_step_repo = RunStepRepo(session)
@@ -249,11 +412,16 @@ async def run_test_case(ctx: dict[str, object], run_id: str) -> dict[str, object
                     error_message=result.error_message,
                     # M5-1: capture the normalized MCP output as the step's state
                     # snapshot so time-travel replay can diff consecutive steps.
-                    state_snapshot=(
-                        dict(result.mcp_result.output)
-                        if result.mcp_result is not None and result.mcp_result.output
-                        else None
-                    ),
+                    state_snapshot={
+                        **(
+                            dict(result.mcp_result.output)
+                            if result.mcp_result is not None and result.mcp_result.output
+                            else {}
+                        ),
+                        **({"failureKind": "selector_changed"} if selector_change_detected else {}),
+                        **({"selfHeal": self_heal_state} if self_heal_state else {}),
+                    }
+                    or None,
                 )
                 if result.mcp_result is not None and result.mcp_result.artifacts:
                     # Task 13 wires this. Late import keeps the runner importable
@@ -280,6 +448,8 @@ async def run_test_case(ctx: dict[str, object], run_id: str) -> dict[str, object
                     "outcome": result.outcome.value,
                     "durationMs": result.duration_ms,
                     "error": result.error_message,
+                    "failureKind": ("selector_changed" if selector_change_detected else None),
+                    "selfHeal": self_heal_state,
                 },
                 factory=factory,
                 run_step_id=run_step.id,

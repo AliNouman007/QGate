@@ -12,34 +12,20 @@ target not ready) — those become ``success=false`` envelopes with ``errors``.
 from __future__ import annotations
 
 from suitest_lifecycle.blackbox.mcp import BLACKBOX_TOOLS
-from suitest_lifecycle.config import ConfigError, load_config
+from suitest_lifecycle.config import Config, ConfigError, load_config
 from suitest_lifecycle.models import Mode
 from suitest_lifecycle.orchestrator import LifecycleResult, generate_only, run_lifecycle
-from suitest_lifecycle.paths import Paths, build_paths
+from suitest_lifecycle.paths import build_paths
+from suitest_lifecycle.retest import load_change_report
 from suitest_lifecycle.serialize import (
     code_summary_to_json,
     plan_to_json,
     summary_to_json,
 )
+from suitest_lifecycle.tool_result import envelope as _envelope
 
 
-def _envelope(
-    success: bool,
-    summary: str,
-    data: dict[str, object] | None = None,
-    artifacts: list[str] | None = None,
-    errors: list[str] | None = None,
-) -> dict[str, object]:
-    return {
-        "success": success,
-        "summary": summary,
-        "data": data or {},
-        "artifacts": artifacts or [],
-        "errors": errors or [],
-    }
-
-
-def _safe_load(config_path: str) -> tuple[object, dict[str, object] | None]:
+def _safe_load(config_path: str) -> tuple[Config | None, dict[str, object] | None]:
     try:
         return load_config(config_path), None
     except (ConfigError, OSError) as exc:
@@ -69,19 +55,6 @@ def analyze_project(config_path: str) -> dict[str, object]:
     )
 
 
-def _change_report(paths: Paths) -> dict[str, object]:
-    import json
-
-    p = paths.tmp_dir / "change_report.json"
-    if not p.is_file():
-        return {}
-    try:
-        raw = json.loads(p.read_text(encoding="utf-8"))
-        return raw if isinstance(raw, dict) else {}
-    except ValueError:
-        return {}
-
-
 def generate_test_cases(config_path: str) -> dict[str, object]:
     """analyze → PRD → plan → export runnable files (no execution)."""
     cfg, err = _safe_load(config_path)
@@ -93,7 +66,7 @@ def generate_test_cases(config_path: str) -> dict[str, object]:
     return _envelope(
         True,
         f"generated {len(cases)} test case(s) for {cfg.mode.value}",  # type: ignore[union-attr]
-        data={"cases": plan_to_json(cases), **_change_report(paths)},
+        data={"cases": plan_to_json(cases), **load_change_report(paths)},
         artifacts=artifacts,
     )
 
@@ -249,6 +222,31 @@ def get_failure_context(config_path: str) -> dict[str, object]:
     )
 
 
+def whitebox_discover_tests(config_path: str) -> dict[str, object]:
+    cfg, err = _safe_load(config_path)
+    if err is not None:
+        return err
+    try:
+        from suitest_lifecycle.whitebox import discover
+
+        result = discover(cfg)  # type: ignore[arg-type]
+    except (OSError, ValueError) as exc:
+        return _envelope(False, f"white-box discovery failed: {exc}", errors=[str(exc)])
+    return _envelope(
+        True,
+        f"discovered {len(result.targets)} {result.framework} test target(s)",
+        data=result.to_json(cfg.project_path),  # type: ignore[union-attr]
+    )
+
+
+def whitebox_run_tests(config_path: str) -> dict[str, object]:
+    cfg, err = _safe_load(config_path)
+    if err is not None:
+        return err
+    cfg.testing.approach = "white-box"  # type: ignore[union-attr]
+    return _run_result(run_lifecycle(cfg))  # type: ignore[arg-type]
+
+
 # Tool registry (name -> callable) used by the MCP server.
 TOOLS = {
     "analyze_project": analyze_project,
@@ -261,6 +259,8 @@ TOOLS = {
     "sync_tcm": sync_tcm,
     "generate_report": generate_report,
     "get_failure_context": get_failure_context,
+    "whitebox_discover_tests": whitebox_discover_tests,
+    "whitebox_run_tests": whitebox_run_tests,
     **BLACKBOX_TOOLS,
 }
 

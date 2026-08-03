@@ -30,10 +30,32 @@ from suitest_lifecycle.models import Priority
 
 if TYPE_CHECKING:
     from suitest_lifecycle.analyzers.crawl import CrawlResult
+    from suitest_lifecycle.blackbox.models import ElementInfo
     from suitest_lifecycle.config import Config
     from suitest_lifecycle.models import CodeSummary, PlanCase
 
 _PRIORITY = {"high": Priority.HIGH, "medium": Priority.MEDIUM, "low": Priority.LOW}
+
+
+def _edge_steps(value: object) -> list[tuple[str, str]]:
+    if not isinstance(value, list):
+        return []
+    steps: list[tuple[str, str]] = []
+    for step in value:
+        if isinstance(step, (list, tuple)) and len(step) == 2:
+            kind = "assertion" if str(step[0]).lower() == "assertion" else "action"
+            steps.append((kind, str(step[1])))
+    return steps
+
+
+def _discovery_element_lines(elements: list[ElementInfo]) -> list[str]:
+    from suitest_lifecycle.blackbox.selector import build_locator, describe
+
+    return [
+        f"  {element.kind or element.tag} '{describe(element)}': {build_locator(element)}"
+        for element in elements[:14]
+    ]
+
 
 # The generated body runs inside the fixed exporter wrapper — these names are
 # in scope. The model must use them and nothing else needs importing.
@@ -150,13 +172,7 @@ class LlmClientBase:
             title = str(item.get("title", "")).strip().lower().replace(" ", "_")
             if not title or title in existing_titles:
                 continue
-            steps_raw = item.get("steps")
-            steps: list[tuple[str, str]] = []
-            if isinstance(steps_raw, list):
-                for s in steps_raw:
-                    if isinstance(s, (list, tuple)) and len(s) == 2:
-                        kind = "assertion" if str(s[0]).lower() == "assertion" else "action"
-                        steps.append((kind, str(s[1])))
+            steps = _edge_steps(item.get("steps"))
             if not steps:
                 continue
             out.append(
@@ -350,17 +366,18 @@ def build_dom_context(crawl: CrawlResult | None, summary: CodeSummary) -> str:
             if tids:
                 lines.append(f"  testids: {json.dumps(tids[:30])}")
             els = crawl.page_elements.get(p.route, {})
-            if els.get("inputs"):
-                lines.append(f"  inputs: {json.dumps(els['inputs'][:15])}")
-            if els.get("buttons"):
-                lines.append(f"  buttons: {json.dumps(els['buttons'][:15])}")
+            inputs = els.get("inputs")
+            if isinstance(inputs, list) and inputs:
+                lines.append(f"  inputs: {json.dumps(inputs[:15])}")
+            buttons = els.get("buttons")
+            if isinstance(buttons, list) and buttons:
+                lines.append(f"  buttons: {json.dumps(buttons[:15])}")
     return "\n".join(lines) or "No DOM digest available — rely on the planned steps only."
 
 
 def build_dom_context_from_discovery(discovery: object) -> str:
     """Compact digest of a blackbox ``DiscoveryResult`` for codegen prompts."""
     from suitest_lifecycle.blackbox.models import DiscoveryResult
-    from suitest_lifecycle.blackbox.selector import build_locator, describe
 
     if not isinstance(discovery, DiscoveryResult):
         return "No DOM digest available — rely on the planned steps only."
@@ -381,8 +398,7 @@ def build_dom_context_from_discovery(discovery: object) -> str:
             lines.append(f"  rows: {p.row_locator}")
         if p.search_locator:
             lines.append(f"  search: {p.search_locator}")
-        for e in (p.inputs + p.buttons)[:14]:
-            lines.append(f"  {e.kind or e.tag} '{describe(e)}': {build_locator(e)}")
+        lines.extend(_discovery_element_lines(p.inputs + p.buttons))
         if p.visible_text_sample:
             sample = " ".join(p.visible_text_sample.split())[:280]
             lines.append(f"  visible text (assert ONLY strings occurring here): {sample}")

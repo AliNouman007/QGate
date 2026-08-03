@@ -13,6 +13,7 @@ subscribers never see a phantom event for a rolled-back write.
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import TYPE_CHECKING, NamedTuple
 
 from suitest_core.capabilities import TierFlag
@@ -24,10 +25,9 @@ from suitest_shared.schemas.responses import SuiteOut
 
 from suitest_api.deps.scope import TenantContext
 from suitest_api.deps.tier import require_tier
+from suitest_api.services.project_scope import project_belongs_to_workspace
 
 if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-
     from suitest_api.schemas.suite import SuiteCreate, SuiteUpdate
 
 
@@ -79,17 +79,13 @@ class SuiteWriteResult(NamedTuple):
 
 class SuiteService:
     def __init__(self, ctx: TenantContext, repo: SuiteRepo, project_repo: ProjectRepo) -> None:
-        self._ctx = ctx
-        self._repo = repo
-        self._project_repo = project_repo
-
-    @property
-    def _session(self) -> AsyncSession:
-        return self._repo.session
+        self._ctx, self._repo = ctx, repo
+        self._project_repo, self._session = project_repo, repo.session
 
     async def _project_in_scope(self, project_id: str) -> bool:
-        project = await self._project_repo.get_by_id(project_id)
-        return project is not None and project.workspace_id == self._ctx.workspace_id
+        return await project_belongs_to_workspace(
+            self._project_repo, project_id, self._ctx.workspace_id
+        )
 
     async def _load_active_suite_in_scope(self, suite_id: str) -> Suite | None:
         """Return an active (non-deleted) suite owned by the active workspace."""
@@ -135,6 +131,7 @@ class SuiteService:
             name=body.name,
             description=body.description,
             order=body.order,
+            default_testing_approach=body.default_testing_approach,
         )
         self._session.add(suite)
         await self._session.flush()
@@ -181,7 +178,7 @@ class SuiteService:
 
         payload = body.model_dump(exclude_unset=True)
         changed_fields: list[str] = []
-        for field in ("name", "description", "order"):
+        for field in ("name", "description", "order", "default_testing_approach"):
             if field in payload:
                 setattr(suite, field, payload[field])
                 changed_fields.append(field)
@@ -193,7 +190,7 @@ class SuiteService:
             live = await self._repo.active_case_ids_in_order(suite.id)
             live_set = set(live)
             submitted_set = set(submitted)
-            duplicates = sorted(cid for cid in submitted_set if submitted.count(cid) > 1)
+            duplicates = sorted(cid for cid, count in Counter(submitted).items() if count > 1)
             missing = sorted(live_set - submitted_set)
             unknown = sorted(submitted_set - live_set)
             if duplicates or missing or unknown:

@@ -51,7 +51,7 @@ Rows = behavior key. Columns = level. Cells = behavior when in that level.
 | **`gen_create_status`** (status of AI-generated cases) | n/a | `DRAFT` (always) | `DRAFT` if P0/P1 else `ACTIVE` | `ACTIVE` |
 | **`gen_dedupe_action`** | n/a | flag, ask | flag, ask if P0/P1 | auto-merge into existing |
 | **`exec_agentic_step`** | skip + warn | confirm each step via WS prompt | run without prompt | run + auto-retry once on transient error |
-| **`exec_self_heal`** (v1.x) | OFF | OFF | OFF | regenerate selectors on DOM drift, 1 retry |
+| **`exec_self_heal`** (M11) | OFF | propose/apply with human approval | propose/apply with human approval | regenerate selector on DOM drift, retry once, persist with audit only after PASS |
 | **`diagnose_run_on_failure`** | OFF (rule-based fallback only) | run + human review before defect close | run + auto-categorize FLAKE/INFRA, P0/P1 stay DRAFT | run + full auto |
 | **`defect_file`** | manual | AI files, human edits severity | AI files final | AI files final |
 | **`defect_close_flake`** | OFF | OFF (human closes) | OFF (human closes) | mark `RESOLVED` after N green retries; human still closes |

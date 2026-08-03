@@ -16,6 +16,10 @@ if TYPE_CHECKING:
 JsonValue = object  # documented alias; concrete dicts/lists below are fully typed
 
 
+def _plan_steps_to_json(case: PlanCase) -> list[dict[str, object]]:
+    return [{"type": step.type, "description": step.description} for step in case.steps]
+
+
 def prd_to_json(prd: Prd) -> dict[str, object]:
     return {
         "meta": {"project": prd.project, "date": prd.date, "prepared_by": prd.prepared_by},
@@ -36,10 +40,14 @@ def plan_to_json(cases: list[PlanCase]) -> list[dict[str, object]]:
             "description": c.description,
             "category": c.category,
             "priority": c.priority.value,
-            "steps": [{"type": s.type, "description": s.description} for s in c.steps],
+            "steps": _plan_steps_to_json(c),
             "source_ref": c.source_ref,
             "automation_file": c.automation_file,
             "tags": list(c.tags),
+            "testingApproach": c.testing_approach.value,
+            "testLevel": c.test_level.value,
+            "framework": c.framework,
+            "strategyRef": c.strategy_ref,
         }
         for c in cases
     ]
@@ -95,6 +103,9 @@ def result_to_json(r: TestResult) -> dict[str, object]:
             }
             for s in r.steps
         ],
+        "testingApproach": r.testing_approach.value,
+        "testLevel": r.test_level.value,
+        "framework": r.framework,
     }
 
 
@@ -119,6 +130,7 @@ def summary_to_json(summary: RunSummary) -> dict[str, object]:
         "ready": summary.ready,
         "readyDetail": summary.ready_detail,
         "results": results_to_json(summary.results),
+        "coverage": summary.coverage,
     }
 
 

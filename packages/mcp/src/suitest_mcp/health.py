@@ -30,7 +30,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import structlog
-from sqlalchemy import update
+from sqlalchemy import case, update
 
 from suitest_mcp.client import open_session
 from suitest_mcp.models import McpHealthState, McpHealthStatus
@@ -47,6 +47,7 @@ log = structlog.get_logger(__name__)
 PROBE_INTERVAL_SECONDS = 60
 PROBE_TIMEOUT_SECONDS = 5.0
 AUTO_DISABLE_AFTER_SECONDS = 300
+MAX_CONCURRENT_PROBES = 10
 
 
 class HealthMonitor:
@@ -79,7 +80,7 @@ class HealthMonitor:
         if self._task is not None:
             return
         self._stop.clear()
-        self._task = asyncio.create_task(self._loop(), name="mcp-health-monitor")
+        self._task = asyncio.create_task(self._run_cycle(), name="mcp-health-monitor")
 
     async def stop(self) -> None:
         self._stop.set()
@@ -88,27 +89,46 @@ class HealthMonitor:
                 await self._task
             self._task = None
 
-    async def _loop(self) -> None:
-        while not self._stop.is_set():
-            try:
-                await self.probe_all()
-            except Exception:  # pragma: no cover — logged, never raised
-                log.exception("mcp.health.loop_error")
-            with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(self._stop.wait(), timeout=self.probe_interval_seconds)
+    async def _run_cycle(self) -> None:
+        await self._probe_cycle()
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(self._stop.wait(), timeout=self.probe_interval_seconds)
+        if not self._stop.is_set():
+            self._task = asyncio.create_task(self._run_cycle(), name="mcp-health-monitor")
+
+    async def _probe_cycle(self) -> None:
+        try:
+            await self.probe_all()
+        except Exception:  # pragma: no cover — logged, never raised
+            log.exception("mcp.health.loop_error")
 
     # -- public API --------------------------------------------------------
 
     async def probe_all(self) -> list[McpHealthStatus]:
         """Probe every registered provider once. Returns the resulting statuses."""
-        results: list[McpHealthStatus] = []
-        for workspace_id in self.registry.workspace_ids:
-            for provider in self.registry.list_for_workspace(workspace_id):
-                status = await self._probe(provider)
-                await self._persist(provider, status)
-                await self._maybe_publish(workspace_id, provider, status)
-                results.append(status)
-        return results
+        semaphore = asyncio.Semaphore(MAX_CONCURRENT_PROBES)
+
+        async def probe_one(provider: McpProviderConfig) -> McpHealthStatus:
+            async with semaphore:
+                return await self._probe(provider)
+
+        providers = [
+            (workspace_id, provider)
+            for workspace_id in self.registry.workspace_ids
+            for provider in self.registry.list_for_workspace(workspace_id)
+        ]
+        statuses = list(
+            await asyncio.gather(*(probe_one(provider) for _workspace_id, provider in providers))
+        )
+        await self._persist_many(
+            [
+                (provider, status)
+                for (_workspace_id, provider), status in zip(providers, statuses, strict=True)
+            ]
+        )
+        for (workspace_id, provider), status in zip(providers, statuses, strict=True):
+            await self._maybe_publish(workspace_id, provider, status)
+        return statuses
 
     def is_routable(self, provider_id: str) -> bool:
         """Return False once the provider has been DOWN past the auto-disable threshold.
@@ -171,17 +191,21 @@ class HealthMonitor:
 
     # -- persistence + pubsub ---------------------------------------------
 
-    async def _persist(self, provider: McpProviderConfig, status: McpHealthStatus) -> None:
-        if provider.id.startswith("builtin:"):
-            return  # in-memory only
-        # Use a direct UPDATE so we don't load the row first; the health
-        # monitor must stay fast under many workspaces.
+    async def _persist_many(self, results: list[tuple[McpProviderConfig, McpHealthStatus]]) -> None:
+        persisted = [item for item in results if not item[0].id.startswith("builtin:")]
+        if not persisted:
+            return
         from suitest_db.models.mcp_provider import McpProvider  # late import
 
+        states = {provider.id: status.state.value for provider, status in persisted}
+        checked_at = {provider.id: status.checked_at for provider, status in persisted}
         stmt = (
             update(McpProvider)
-            .where(McpProvider.id == provider.id)
-            .values(health_status=status.state.value, last_health_at=status.checked_at)
+            .where(McpProvider.id.in_(states))
+            .values(
+                health_status=case(states, value=McpProvider.id),
+                last_health_at=case(checked_at, value=McpProvider.id),
+            )
         )
         async with self.session_factory() as session:
             await session.execute(stmt)

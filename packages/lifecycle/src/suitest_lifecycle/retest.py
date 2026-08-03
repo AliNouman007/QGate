@@ -73,6 +73,18 @@ class BindingResult:
         return out
 
 
+def load_change_report(paths: Paths) -> dict[str, object]:
+    """Load the persisted change report, degrading missing or invalid JSON to empty."""
+    path = paths.tmp_dir / "change_report.json"
+    if not path.is_file():
+        return {}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError:
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
 def project_slug(name: str) -> str:
     """Mirror of the server's project-slug shape: lowercase, alnum + dashes."""
     slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
@@ -192,6 +204,11 @@ def _sha(payload: object) -> str:
     ).hexdigest()[:16]
 
 
+def _case_fingerprint(case: PlanCase) -> str:
+    steps = [(step.type, step.description) for step in case.steps]
+    return _sha([case.source_ref, steps])
+
+
 def build_fingerprint(
     summary: CodeSummary,
     cases: list[PlanCase],
@@ -213,9 +230,7 @@ def build_fingerprint(
         for e in summary.endpoints
     }
     pages = {p.route: {"name": p.name, "protected": p.protected} for p in summary.pages}
-    case_hashes = {
-        c.title: _sha([c.source_ref, [(s.type, s.description) for s in c.steps]]) for c in cases
-    }
+    case_hashes = {case.title: _case_fingerprint(case) for case in cases}
     return {
         "mode": summary.mode.value,
         "endpoints": endpoints,
@@ -266,11 +281,14 @@ def diff_fingerprint(prev: dict[str, object] | None, cur: dict[str, object]) -> 
         changes.append({"kind": kind, "ref": ref, "detail": detail})
 
     pe, ce = _as_dict(prev.get("endpoints")), _as_dict(cur.get("endpoints"))
-    for key in sorted(pe.keys() - ce.keys()):
+    removed_endpoints = sorted(pe.keys() - ce.keys())
+    added_endpoints = sorted(ce.keys() - pe.keys())
+    shared_endpoints = sorted(pe.keys() & ce.keys())
+    for key in removed_endpoints:
         _add("endpoint_removed", key, "endpoint no longer discovered (breaking)")
-    for key in sorted(ce.keys() - pe.keys()):
+    for key in added_endpoints:
         _add("endpoint_added", key, "new endpoint discovered")
-    for key in sorted(pe.keys() & ce.keys()):
+    for key in shared_endpoints:
         p, c = _as_dict(pe[key]), _as_dict(ce[key])
         if p.get("auth") != c.get("auth"):
             _add("auth_flow_changed", key, f"auth requirement {p.get('auth')} -> {c.get('auth')}")
@@ -278,11 +296,14 @@ def diff_fingerprint(prev: dict[str, object] | None, cur: dict[str, object]) -> 
             _add("request_schema_changed", key, "request body shape changed")
 
     pp, cp = _as_dict(prev.get("pages")), _as_dict(cur.get("pages"))
-    for key in sorted(pp.keys() - cp.keys()):
+    removed_pages = sorted(pp.keys() - cp.keys())
+    added_pages = sorted(cp.keys() - pp.keys())
+    shared_pages = sorted(pp.keys() & cp.keys())
+    for key in removed_pages:
         _add("route_removed", key, "route no longer discovered (breaking)")
-    for key in sorted(cp.keys() - pp.keys()):
+    for key in added_pages:
         _add("route_added", key, "new route discovered")
-    for key in sorted(pp.keys() & cp.keys()):
+    for key in shared_pages:
         p, c = _as_dict(pp[key]), _as_dict(cp[key])
         if p.get("protected") != c.get("protected"):
             _add(
@@ -297,7 +318,8 @@ def diff_fingerprint(prev: dict[str, object] | None, cur: dict[str, object]) -> 
     # when either run had no element capture (repo-analysis frontend runs).
     pel, cel = _as_dict(prev.get("elements")), _as_dict(cur.get("elements"))
     if pel and cel:
-        for key in sorted(pel.keys() & cel.keys()):
+        shared_elements = sorted(pel.keys() & cel.keys())
+        for key in shared_elements:
             if pel[key] != cel[key]:
                 _add(
                     "selector_changed",
@@ -306,11 +328,14 @@ def diff_fingerprint(prev: dict[str, object] | None, cur: dict[str, object]) -> 
                 )
 
     pc, cc = _as_dict(prev.get("cases")), _as_dict(cur.get("cases"))
-    for key in sorted(pc.keys() - cc.keys()):
+    removed_cases = sorted(pc.keys() - cc.keys())
+    added_cases = sorted(cc.keys() - pc.keys())
+    shared_cases = sorted(pc.keys() & cc.keys())
+    for key in removed_cases:
         _add("case_removed", key, "scenario no longer generated (will be marked stale)")
-    for key in sorted(cc.keys() - pc.keys()):
+    for key in added_cases:
         _add("case_added", key, "new scenario generated")
-    for key in sorted(pc.keys() & cc.keys()):
+    for key in shared_cases:
         if pc[key] != cc[key]:
             _add("case_steps_changed", key, "scenario steps changed (case will be updated)")
 

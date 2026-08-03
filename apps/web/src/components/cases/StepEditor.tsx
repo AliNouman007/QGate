@@ -34,9 +34,11 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Code, GripVertical, Plus, Trash2 } from "lucide-react";
+import { Code, GripVertical, Plus, Trash2, Wrench } from "lucide-react";
 import { useCallback, useState } from "react";
 
+import { SelectorRepairDialog } from "@/components/cases/SelectorRepairDialog";
+import { Gated } from "@/components/gating/Gated";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api-client";
@@ -90,6 +92,19 @@ function toBulkPayload(steps: DraftStep[]): {
   };
 }
 
+function removeAndReorder(steps: DraftStep[], stepId: string): DraftStep[] {
+  const remaining = steps.filter((step) => step.id !== stepId);
+  return remaining.map((step, index) => ({ ...step, order: index + 1 }));
+}
+
+function persistedStepIds(steps: DraftStep[]): string[] {
+  const ids: string[] = [];
+  for (const step of steps) {
+    if (isPersisted(step.id)) ids.push(step.id);
+  }
+  return ids;
+}
+
 const TARGET_KINDS: TargetKind[] = [
   "FE_WEB",
   "FE_MOBILE",
@@ -119,6 +134,7 @@ interface StepEditorProps {
 export function StepEditor({ caseId, steps, onStepsChange }: StepEditorProps): React.ReactElement {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const [repairStep, setRepairStep] = useState<DraftStep | null>(null);
 
   // ------------------------------------------------------------------
   // POST /test-cases/:id/steps — append a blank step
@@ -240,9 +256,7 @@ export function StepEditor({ caseId, steps, onStepsChange }: StepEditorProps): R
   const handleRemove = useCallback(
     (stepId: string) => {
       const snapshot = steps;
-      const remaining = steps
-        .filter((s) => s.id !== stepId)
-        .map((s, idx) => ({ ...s, order: idx + 1 }));
+      const remaining = removeAndReorder(steps, stepId);
       // Optimistic update
       onStepsChange(remaining);
       replaceStepsMutation.mutate(remaining, {
@@ -313,7 +327,7 @@ export function StepEditor({ caseId, steps, onStepsChange }: StepEditorProps): R
     replaceStepsMutation.isPending || addStepMutation.isPending || reorderMutation.isPending;
 
   // Only persisted steps can participate in drag (no unpersisted drafts)
-  const sortableIds = steps.filter((s) => isPersisted(s.id)).map((s) => s.id);
+  const sortableIds = persistedStepIds(steps);
 
   return (
     <section className="flex flex-col gap-2" data-testid="step-editor">
@@ -371,12 +385,31 @@ export function StepEditor({ caseId, steps, onStepsChange }: StepEditorProps): R
                   sortable={isPersisted(step.id)}
                   onFieldChange={handleFieldChange}
                   onRemove={handleRemove}
+                  onRepair={() => {
+                    setRepairStep(step);
+                  }}
                 />
               ))}
             </ol>
           </SortableContext>
         </DndContext>
       )}
+      {repairStep ? (
+        <SelectorRepairDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setRepairStep(null);
+          }}
+          caseId={caseId}
+          stepId={repairStep.id}
+          onApplied={(code) => {
+            onStepsChange(
+              steps.map((step) => (step.id === repairStep.id ? { ...step, code } : step)),
+            );
+            void queryClient.invalidateQueries({ queryKey: ["test-cases", caseId] });
+          }}
+        />
+      ) : null}
     </section>
   );
 }
@@ -392,6 +425,7 @@ interface StepRowProps {
   sortable: boolean;
   onFieldChange: (stepId: string, field: keyof DraftStep, value: string) => void;
   onRemove: (stepId: string) => void;
+  onRepair: () => void;
 }
 
 function StepRow({
@@ -401,6 +435,7 @@ function StepRow({
   sortable,
   onFieldChange,
   onRemove,
+  onRepair,
 }: StepRowProps): React.ReactElement {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: step.id,
@@ -467,6 +502,21 @@ function StepRow({
         >
           <Trash2 className="h-3 w-3" aria-hidden="true" />
         </Button>
+        {sortable && step.target_kind === "FE_WEB" && step.code ? (
+          <Gated feature="autonomy_assist">
+            <Button
+              type="button"
+              size="icon-xs"
+              variant="ghost"
+              disabled={disabled}
+              className="shrink-0 text-violet hover:text-fg-1"
+              onClick={onRepair}
+              aria-label="Repair changed selector"
+            >
+              <Wrench className="h-3 w-3" aria-hidden="true" />
+            </Button>
+          </Gated>
+        ) : null}
       </div>
 
       {/* Expected (read-only label for now — mutable in M1-13) */}

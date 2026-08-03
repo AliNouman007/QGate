@@ -1,56 +1,101 @@
-"""``@require_tier`` — capability gate for service methods.
-
-M1a contract (NO-OP enforcement)
---------------------------------
-Every service method MUST be decorated with ``@require_tier(...)``. In M1a the
-decorator does **not** block: it only *records* the required :class:`TierFlag` on
-the wrapped function via the ``__suitest_required_tier__`` attribute and then
-calls through unchanged. This guarantees that when M3 flips on enforcement, the
-gate is already present on every method and only the decorator body changes —
-no service code has to be touched, and nothing silently ships ungated.
-
-When enforcement lands (M3) the decorator will resolve the deployment tier (and
-optional workspace overlay) and raise ``403`` via :func:`suitest_core.capabilities.tier_in`
-when the resolved tier is not permitted by the recorded flag.
-"""
+"""Workspace capability and autonomy enforcement decorators."""
 
 from __future__ import annotations
 
 import functools
 from collections.abc import Awaitable, Callable
-from typing import TypeVar
+from typing import ParamSpec, TypeVar
 
-from suitest_core.capabilities import TierFlag
+from fastapi import HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from suitest_core.capabilities import Tier, TierFlag, tier_in
+from suitest_db.repositories.llm_configs import LLMConfigRepo
+from suitest_db.repositories.workspace_capabilities import WorkspaceCapabilityRepo
+from suitest_shared.domain.enums import AutonomyLevel
 
-P = TypeVar("P")
+from suitest_api.capabilities import provider_to_tier
+from suitest_api.deps.scope import TenantContext
+
+P = ParamSpec("P")
 R = TypeVar("R")
 
-# Attribute name under which the required tier flag is stamped on a wrapped fn.
 REQUIRED_TIER_ATTR = "__suitest_required_tier__"
 
 
 def require_tier(
     flag: TierFlag = TierFlag.ANY,
-) -> Callable[[Callable[..., Awaitable[R]]], Callable[..., Awaitable[R]]]:
-    """Record ``flag`` as the method's tier requirement (no-op enforcement in M1a).
+) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
+    """Enforce ``flag`` for workspace-aware endpoints and record the contract.
 
-    Usage on a service method::
-
-        @require_tier(TierFlag.CLOUD | TierFlag.LOCAL)
-        async def generate(self, ...) -> ...:
-            ...
-
-    The wrapped coroutine is returned unchanged behaviourally; the requirement is
-    discoverable via ``getattr(fn, REQUIRED_TIER_ATTR)``.
+    ``TierFlag.ANY`` remains a zero-cost marker for deterministic service methods.
+    Restricted endpoints must expose their injected ``ctx`` and ``session`` keyword
+    arguments so a missing dependency fails closed.
     """
 
-    def decorator(fn: Callable[..., Awaitable[R]]) -> Callable[..., Awaitable[R]]:
+    def decorator(fn: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
         @functools.wraps(fn)
-        async def wrapper(*args: object, **kwargs: object) -> R:
-            # M1a: no gate. M3 resolves tier here and raises 403 when not permitted.
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            if flag is not TierFlag.ANY:
+                ctx = kwargs.get("ctx")
+                session = kwargs.get("session")
+                if not isinstance(ctx, TenantContext) or not isinstance(session, AsyncSession):
+                    raise RuntimeError("restricted endpoint requires ctx and session dependencies")
+                config = await LLMConfigRepo(session).get_active(ctx.workspace_id)
+                if config is not None:
+                    tier = provider_to_tier(config.provider)
+                else:
+                    capability = await WorkspaceCapabilityRepo(session).get(ctx.workspace_id)
+                    tier = Tier(capability.tier.value) if capability is not None else Tier.ZERO
+                if not tier_in(tier, flag):
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail={
+                            "code": "LLM_NOT_CONFIGURED",
+                            "message": "This endpoint requires LOCAL or CLOUD tier.",
+                            "currentTier": tier.value,
+                        },
+                    )
             return await fn(*args, **kwargs)
 
         setattr(wrapper, REQUIRED_TIER_ATTR, flag)
+        return wrapper
+
+    return decorator
+
+
+_AUTONOMY_RANK = {
+    AutonomyLevel.MANUAL: 0,
+    AutonomyLevel.ASSIST: 1,
+    AutonomyLevel.SEMI_AUTO: 2,
+    AutonomyLevel.AUTO: 3,
+}
+
+
+def require_autonomy(
+    minimum: AutonomyLevel,
+) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
+    """Enforce the workspace autonomy dial for agent actions."""
+
+    def decorator(fn: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
+        @functools.wraps(fn)
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            ctx = kwargs.get("ctx")
+            session = kwargs.get("session")
+            if not isinstance(ctx, TenantContext) or not isinstance(session, AsyncSession):
+                raise RuntimeError("autonomy-gated endpoint requires ctx and session dependencies")
+            capability = await WorkspaceCapabilityRepo(session).get(ctx.workspace_id)
+            current = capability.autonomy_level if capability is not None else AutonomyLevel.MANUAL
+            if _AUTONOMY_RANK[current] < _AUTONOMY_RANK[minimum]:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "code": "SELF_HEAL_REQUIRES_ASSIST",
+                        "message": f"This endpoint requires {minimum.value} autonomy or higher.",
+                        "currentAutonomy": current.value,
+                    },
+                )
+            return await fn(*args, **kwargs)
+
         return wrapper
 
     return decorator

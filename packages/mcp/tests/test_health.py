@@ -9,11 +9,12 @@ SQLAlchemy path in :mod:`packages.db.tests`.
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from suitest_mcp.health import HealthMonitor
-from suitest_mcp.models import McpHealthState, McpProviderConfig, McpTransport
+from suitest_mcp.health import MAX_CONCURRENT_PROBES, HealthMonitor
+from suitest_mcp.models import McpHealthState, McpHealthStatus, McpProviderConfig, McpTransport
 from suitest_mcp.registry import McpRegistry
 
 if TYPE_CHECKING:
@@ -218,6 +219,47 @@ async def test_persist_writes_for_db_backed_providers(mock_mcp_server: MockMcpSe
     assert len(factory.executions) == 1
     rendered = str(factory.executions[0])
     assert "mcp_providers" in rendered
+
+
+async def test_probe_all_bounds_concurrency(monkeypatch: pytest.MonkeyPatch) -> None:
+    reg = McpRegistry()
+    reg._by_workspace["ws-1"] = {
+        str(index): McpProviderConfig(
+            id=f"builtin:parallel-{index}",
+            workspace_id="ws-1",
+            name=str(index),
+            kind="test",
+            transport=McpTransport.STDIO,
+            command=["unused"],
+        )
+        for index in range(MAX_CONCURRENT_PROBES + 2)
+    }
+    monitor = HealthMonitor(
+        registry=reg,
+        session_factory=_RecordingSessionFactory(),  # type: ignore[arg-type]
+        redis_client=_RecordingRedis(),  # type: ignore[arg-type]
+    )
+    active = 0
+    peak = 0
+
+    async def fake_probe(provider: McpProviderConfig) -> McpHealthStatus:
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        await asyncio.sleep(0)
+        active -= 1
+        return McpHealthStatus(
+            provider_id=provider.id,
+            name=provider.name,
+            state=McpHealthState.OK,
+            checked_at=datetime.now(tz=UTC),
+        )
+
+    monkeypatch.setattr(monitor, "_probe", fake_probe)
+    results = await monitor.probe_all()
+
+    assert len(results) == MAX_CONCURRENT_PROBES + 2
+    assert peak == MAX_CONCURRENT_PROBES
 
 
 async def test_auto_disable_triggers_routing_fallback() -> None:

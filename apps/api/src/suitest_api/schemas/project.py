@@ -13,28 +13,18 @@ from datetime import datetime
 from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field
+from suitest_shared.domain.enums import TestingApproach
+from suitest_shared.schemas.responses import ProjectOut
 
-_WRITE_CONFIG = ConfigDict(
+WRITE_MODEL_CONFIG = ConfigDict(
     populate_by_name=True,
     str_strip_whitespace=True,
     extra="forbid",
 )
 
 
-class ProjectPublic(BaseModel):
+class ProjectPublic(ProjectOut):
     """A project, workspace-scoped (docs/API.md §3.2)."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    workspace_id: str
-    slug: str
-    name: str
-    description: str | None = None
-    gating_suite_id: str | None = None
-    default_mcp_routing: dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime
-    updated_at: datetime
 
 
 class SuitePublic(BaseModel):
@@ -48,6 +38,7 @@ class SuitePublic(BaseModel):
     description: str | None = None
     order: int
     case_count: int
+    default_testing_approach: TestingApproach | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -60,7 +51,7 @@ class ProjectCreate(BaseModel):
     suffix once on collision before bubbling 409.
     """
 
-    model_config = _WRITE_CONFIG
+    model_config = WRITE_MODEL_CONFIG
 
     name: Annotated[str, Field(min_length=1, max_length=120)]
     slug: Annotated[str, Field(min_length=1, max_length=64)] | None = None
@@ -77,7 +68,7 @@ class ProjectUpdate(BaseModel):
     ``model_dump(exclude_unset=True)`` keys are applied.
     """
 
-    model_config = _WRITE_CONFIG
+    model_config = WRITE_MODEL_CONFIG
 
     name: Annotated[str, Field(min_length=1, max_length=120)] | None = None
     description: str | None = None

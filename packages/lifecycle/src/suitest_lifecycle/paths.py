@@ -46,6 +46,10 @@ class Paths:
         return self.mode_dir / f"suitest_{self.mode.value}_test_plan.json"
 
     @property
+    def test_strategy_json(self) -> Path:
+        return self.mode_dir / f"suitest_{self.mode.value}_test_strategy.json"
+
+    @property
     def code_summary_json(self) -> Path:
         return self.tmp_dir / "code_summary.json"
 
@@ -56,6 +60,10 @@ class Paths:
     @property
     def test_results_json(self) -> Path:
         return self.tmp_dir / "test_results.json"
+
+    @property
+    def coverage_json(self) -> Path:
+        return self.tmp_dir / "coverage.json"
 
     @property
     def raw_report_md(self) -> Path:

@@ -32,6 +32,20 @@ class Priority(StrEnum):
     LOW = "Low"
 
 
+class TestingApproach(StrEnum):
+    BLACK_BOX = "BLACK_BOX"
+    GRAY_BOX = "GRAY_BOX"
+    WHITE_BOX = "WHITE_BOX"
+
+
+class TestLevel(StrEnum):
+    UNIT = "UNIT"
+    COMPONENT = "COMPONENT"
+    INTEGRATION = "INTEGRATION"
+    SYSTEM = "SYSTEM"
+    E2E = "E2E"
+
+
 # --------------------------------------------------------------------------- #
 # Code analysis
 # --------------------------------------------------------------------------- #
@@ -115,6 +129,10 @@ class PlanCase:
     source_ref: str = ""  # "POST /api/products" or "page:/products/new"
     automation_file: str = ""  # filename of the exported TCxxx.py
     tags: list[str] = field(default_factory=list)  # e.g. ["llm"] for enriched cases
+    testing_approach: TestingApproach = TestingApproach.BLACK_BOX
+    test_level: TestLevel = TestLevel.E2E
+    framework: str = ""
+    strategy_ref: str = ""
 
 
 # --------------------------------------------------------------------------- #
@@ -149,6 +167,9 @@ class TestResult:
     steps: list[StepResult] = field(default_factory=list)
     video_path: str = ""
     screenshot_path: str = ""
+    testing_approach: TestingApproach = TestingApproach.BLACK_BOX
+    test_level: TestLevel = TestLevel.E2E
+    framework: str = ""
 
 
 @dataclass
@@ -167,3 +188,4 @@ class RunSummary:
     ready: bool = False
     ready_detail: str = ""
     startup_log_tail: str = ""
+    coverage: dict[str, object] | None = None

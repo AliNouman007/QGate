@@ -129,6 +129,16 @@ async def presign_get(key: str) -> str:
     settings = get_settings()
     if settings.mode == "local":
         return f"/api/v1/files/raw?key={quote(key, safe='')}"
+    return await presign_s3_get(
+        settings.s3_bucket,
+        key,
+        expires_in=SIGNED_URL_TTL_SECONDS,
+    )
+
+
+async def presign_s3_get(bucket: str, key: str, *, expires_in: int) -> str:
+    """Generate a download URL using the API's canonical S3 configuration."""
+    settings = get_settings()
     async with aioboto3.Session().client(
         "s3",
         endpoint_url=settings.s3_endpoint,
@@ -138,8 +148,8 @@ async def presign_get(key: str) -> str:
     ) as client:
         url: str = await client.generate_presigned_url(
             "get_object",
-            Params={"Bucket": settings.s3_bucket, "Key": key},
-            ExpiresIn=SIGNED_URL_TTL_SECONDS,
+            Params={"Bucket": bucket, "Key": key},
+            ExpiresIn=expires_in,
         )
     return url
 

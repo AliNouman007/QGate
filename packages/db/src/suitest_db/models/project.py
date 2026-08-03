@@ -6,7 +6,9 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, text
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from suitest_shared.domain.enums import TestingApproach
 
 from suitest_db.base import Base, TimestampMixin
 from suitest_db.ids import new_id
@@ -75,6 +77,9 @@ class Suite(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     description: Mapped[str | None] = mapped_column(String(2048))
     order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    default_testing_approach: Mapped[TestingApproach | None] = mapped_column(
+        SAEnum(TestingApproach, name="testing_approach")
+    )
     # M1d: suite-scoped MCP routing override map (precedes workspace override).
     mcp_routing_overrides: Mapped[dict[str, Any]] = mapped_column(
         PortableJSON, nullable=False, default=dict, server_default="'{}'"

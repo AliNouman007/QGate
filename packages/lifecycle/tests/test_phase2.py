@@ -9,10 +9,11 @@ graceful degrade, and runner sidecar/step collection. Run:
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 
 from suitest_lifecycle import publish
-from suitest_lifecycle.config import Config
+from suitest_lifecycle.config import Config, DependencyConfig
 from suitest_lifecycle.enrich import MockLlmClient, enrich_plan
 from suitest_lifecycle.models import (
     CodeSummary,
@@ -28,6 +29,42 @@ from suitest_lifecycle.models import (
 )
 from suitest_lifecycle.paths import build_paths
 from suitest_lifecycle.runner import _collect_steps
+
+
+def test_dependency_startup_is_bounded_and_ordered(monkeypatch) -> None:
+    from suitest_lifecycle import orchestrator
+
+    dependencies = [
+        DependencyConfig(
+            name=f"dep-{index}",
+            start_command="noop",
+            cwd=Path("."),
+            base_url=f"http://localhost:{9000 + index}",
+            ready_path="/health",
+            port=9000 + index,
+        )
+        for index in range(8)
+    ]
+    barrier = threading.Barrier(4)
+    lock = threading.Lock()
+    active = 0
+    peak = 0
+
+    def fake_start(dep: DependencyConfig):
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        barrier.wait(timeout=2)
+        with lock:
+            active -= 1
+        return dep, object(), object(), object()
+
+    monkeypatch.setattr(orchestrator, "_start_dependency", fake_start)
+    started = orchestrator._start_dependencies(dependencies)
+
+    assert peak == 4
+    assert [entry[0].name for entry in started] == [dep.name for dep in dependencies]
 
 
 def _summary() -> CodeSummary:
@@ -87,6 +124,8 @@ def test_publish_case_payload_shape(tmp_path: Path) -> None:
     assert payloads[0]["sourceRef"] == "POST /api/products"
     assert payloads[0]["automationCode"] == "import requests\n"
     assert payloads[0]["priority"] == "P1"
+    assert payloads[0]["testingApproach"] == "BLACK_BOX"
+    assert payloads[0]["testLevel"] == "E2E"
     # Title/slug split: slug keeps the technical key, title is humanized, and
     # name stays the slug (server-side idempotency match for legacy rows).
     assert payloads[0]["slug"] == "post_api_products_with_valid_data_creates_resource"

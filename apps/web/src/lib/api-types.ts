@@ -160,6 +160,9 @@ export interface paths {
         /**
          * Analytics Heatmap
          * @description Run-count grid (day x hour) over the window (docs/API.md §3.8).
+         *
+         *     Accepts ``days=<n>`` (what the web client sends) or ``period=<n>d``; ``days``
+         *     wins when both are present.
          */
         get: operations["analytics_heatmap_api_v1_analytics_heatmap_get"];
         put?: never;
@@ -553,6 +556,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/files/raw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get File Raw
+         * @description Stream one owned object from disk (local mode — the signed-url target).
+         */
+        get: operations["get_file_raw_api_v1_files_raw_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/files/signed-url": {
         parameters: {
             query?: never;
@@ -802,6 +825,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingest/resolve-project": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Project Binding
+         * @description Validate/repair a publisher's project binding (read-only, never creates).
+         */
+        post: operations["resolve_project_binding_api_v1_ingest_resolve_project_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/integrations": {
         parameters: {
             query?: never;
@@ -979,6 +1022,26 @@ export interface paths {
         put?: never;
         /** Revoke Invitation */
         post: operations["revoke_invitation_api_v1_invitations__invitation_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/llm/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Llm Complete
+         * @description Proxy one completion through the workspace's active LLM provider.
+         */
+        post: operations["llm_complete_api_v1_llm_complete_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1311,6 +1374,29 @@ export interface paths {
         patch: operations["update_project_api_v1_projects__project_id__patch"];
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/exports/uat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Uat Document
+         * @description Build a Suitest-branded UAT sign-off PDF from the selected test cases.
+         *
+         *     Each case contributes its latest-run status + screenshot evidence. ZERO-tier,
+         *     deterministic. 404 when any case is outside this project/workspace.
+         */
+        post: operations["export_uat_document_api_v1_projects__project_id__exports_uat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/restore": {
         parameters: {
             query?: never;
@@ -1329,6 +1415,40 @@ export interface paths {
          *     ``POST /suites/:id/restore`` / ``POST /test-cases/:id/restore``.
          */
         post: operations["restore_project_api_v1_projects__project_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/test-strategies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Test Strategies */
+        get: operations["list_test_strategies_api_v1_projects__project_id__test_strategies_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/test-strategies/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Test Strategy Draft */
+        post: operations["create_test_strategy_draft_api_v1_projects__project_id__test_strategies_draft_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1661,7 +1781,7 @@ export interface paths {
         put?: never;
         /**
          * Ingest Completed Run
-         * @description Record an already-completed run (run + run_steps + artifacts). No ARQ enqueue.
+         * @description Start, append to, or finalize an externally-executed run. No ARQ enqueue.
          */
         post: operations["ingest_completed_run_api_v1_runs_ingest_post"];
         delete?: never;
@@ -1757,6 +1877,26 @@ export interface paths {
          *     captured even though the actual fetch happens directly against S3.
          */
         get: operations["get_artifact_signed_url_api_v1_runs__run_id__artifacts__artifact_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/artifacts/{artifact_id}/raw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Artifact Raw
+         * @description Stream one ``local://`` artifact from ``SUITEST_ARTIFACTS_DIR`` (local mode).
+         */
+        get: operations["get_artifact_raw_api_v1_runs__run_id__artifacts__artifact_id__raw_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2280,6 +2420,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/test-cases/{case_id}/self-heal/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Selector Repair
+         * @description Apply a human-approved proposal after autonomy + stale-code checks.
+         */
+        post: operations["apply_selector_repair_api_v1_test_cases__case_id__self_heal_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/test-cases/{case_id}/self-heal/propose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Selector Repair
+         * @description Propose a validated selector-only patch; never mutates the test step.
+         */
+        post: operations["propose_selector_repair_api_v1_test_cases__case_id__self_heal_propose_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/test-cases/{case_id}/steps": {
         parameters: {
             query?: never;
@@ -2326,6 +2506,57 @@ export interface paths {
          * @description Atomic step reorder.
          */
         patch: operations["reorder_test_case_steps_api_v1_test_cases__case_id__steps_reorder_patch"];
+        trace?: never;
+    };
+    "/api/v1/test-strategies/{strategy_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Test Strategy */
+        put: operations["update_test_strategy_api_v1_test_strategies__strategy_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/test-strategies/{strategy_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Test Strategy */
+        post: operations["approve_test_strategy_api_v1_test_strategies__strategy_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/test-strategies/{strategy_id}/enrich": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enrich Test Strategy */
+        post: operations["enrich_test_strategy_api_v1_test_strategies__strategy_id__enrich_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/traceability/matrix": {
@@ -3258,7 +3489,7 @@ export interface components {
          * ArtifactKind
          * @enum {string}
          */
-        ArtifactKind: "SCREENSHOT" | "HAR" | "DOM_SNAPSHOT" | "VIDEO" | "CONSOLE_LOG" | "TRACE" | "CUSTOM";
+        ArtifactKind: "SCREENSHOT" | "HAR" | "DOM_SNAPSHOT" | "VIDEO" | "CONSOLE_LOG" | "TRACE" | "COVERAGE_REPORT" | "CUSTOM";
         /**
          * ArtifactPublic
          * @description One artifact in ``GET /runs/:id/artifacts`` (docs/API.md §3.5).
@@ -3505,12 +3736,30 @@ export interface components {
             /** Cases */
             cases?: components["schemas"]["IngestCase"][];
             /**
+             * Markstale
+             * @default false
+             */
+            markStale: boolean;
+            /**
              * Mode
              * @default backend
              */
             mode: string;
-            /** Projectid */
+            /**
+             * Projectid
+             * @default
+             */
             projectId: string;
+            /**
+             * Projectname
+             * @default
+             */
+            projectName: string;
+            /**
+             * Projectslug
+             * @default
+             */
+            projectSlug: string;
             /** Suitename */
             suiteName: string;
         };
@@ -3518,6 +3767,13 @@ export interface components {
         BulkImportResult: {
             /** Imported */
             imported?: components["schemas"]["ImportedCase"][];
+            /**
+             * Projectid
+             * @default
+             */
+            projectId: string;
+            /** Stale */
+            stale?: string[];
             /** Suiteid */
             suiteId: string;
         };
@@ -4458,6 +4714,8 @@ export interface components {
             category?: string | null;
             /** Description */
             description?: string | null;
+            /** Framework */
+            framework?: string | null;
             /** Generatedby */
             generatedBy?: string | null;
             /** Name */
@@ -4477,8 +4735,14 @@ export interface components {
             sourceRef: string;
             /** Steps */
             steps?: components["schemas"]["IngestStep"][];
+            /** Strategyid */
+            strategyId?: string | null;
+            /** Strategyref */
+            strategyRef?: string | null;
             /** Tags */
             tags?: string[];
+            testLevel?: components["schemas"]["TestLevel"] | null;
+            testingApproach?: components["schemas"]["TestingApproach"] | null;
             /** Title */
             title?: string | null;
         };
@@ -4496,6 +4760,11 @@ export interface components {
              * @default
              */
             error: string;
+            /**
+             * Failurekind
+             * @default
+             */
+            failureKind: string;
             /**
              * Name
              * @default
@@ -4550,6 +4819,11 @@ export interface components {
              * @default
              */
             screenshot: string;
+            /**
+             * Screenshotsizebytes
+             * @default 0
+             */
+            screenshotSizeBytes: number;
             /**
              * Type
              * @default action
@@ -4922,6 +5196,40 @@ export interface components {
             modelEcho?: string | null;
             /** Ok */
             ok: boolean;
+        };
+        /**
+         * LlmCompleteRequest
+         * @description One-shot completion request. Kept deliberately small — this is a proxy
+         *     for lifecycle codegen/enrichment, not a chat surface (that's /agent/chat).
+         */
+        LlmCompleteRequest: {
+            /**
+             * Maxtokens
+             * @default 4096
+             */
+            maxTokens: number;
+            /** Prompt */
+            prompt: string;
+            /** System */
+            system?: string | null;
+            /**
+             * Temperature
+             * @default 0.2
+             */
+            temperature: number;
+        };
+        /** LlmCompleteResponse */
+        LlmCompleteResponse: {
+            /** Content */
+            content: string;
+            /** Costusd */
+            costUsd: number;
+            /** Model */
+            model: string;
+            /** Tokensin */
+            tokensIn: number;
+            /** Tokensout */
+            tokensOut: number;
         };
         /** MatrixCase */
         MatrixCase: {
@@ -5489,6 +5797,15 @@ export interface components {
          * @enum {string}
          */
         Priority: "P0" | "P1" | "P2" | "P3";
+        /** ProjectCandidate */
+        ProjectCandidate: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+        };
         /**
          * ProjectCreate
          * @description Body for ``POST /projects`` (docs/API.md §3.2).
@@ -5908,6 +6225,41 @@ export interface components {
             /** Temporarypassword */
             temporaryPassword: string;
         };
+        /** ResolveProjectBody */
+        ResolveProjectBody: {
+            /**
+             * Projectid
+             * @default
+             */
+            projectId: string;
+            /**
+             * Projectname
+             * @default
+             */
+            projectName: string;
+            /**
+             * Projectslug
+             * @default
+             */
+            projectSlug: string;
+        };
+        /** ResolveProjectResult */
+        ResolveProjectResult: {
+            /** Candidates */
+            candidates?: components["schemas"]["ProjectCandidate"][];
+            /**
+             * Matchedby
+             * @default
+             */
+            matchedBy: string;
+            /**
+             * Projectid
+             * @default
+             */
+            projectId: string;
+            /** Status */
+            status: string;
+        };
         /**
          * Role
          * @enum {string}
@@ -5951,6 +6303,10 @@ export interface components {
             commit_sha?: string | null;
             /** Completed At */
             completed_at?: string | null;
+            /** Coverage Summary */
+            coverage_summary?: {
+                [key: string]: unknown;
+            } | null;
             /**
              * Created At
              * Format: date-time
@@ -5986,17 +6342,44 @@ export interface components {
             branch?: string | null;
             /** Commitsha */
             commitSha?: string | null;
+            /** Coveragesummary */
+            coverageSummary?: {
+                [key: string]: unknown;
+            } | null;
             /**
              * Env
              * @default staging
              */
             env: string;
+            /**
+             * Finalize
+             * @default true
+             */
+            finalize: boolean;
             /** Name */
             name: string;
-            /** Projectid */
+            /**
+             * Projectid
+             * @default
+             */
             projectId: string;
+            /**
+             * Projectname
+             * @default
+             */
+            projectName: string;
+            /**
+             * Projectslug
+             * @default
+             */
+            projectSlug: string;
             /** Results */
             results?: components["schemas"]["IngestResult"][];
+            /**
+             * Runid
+             * @default
+             */
+            runId: string;
             /** Suitename */
             suiteName: string;
         };
@@ -6006,6 +6389,11 @@ export interface components {
             failed: number;
             /** Passed */
             passed: number;
+            /**
+             * Projectid
+             * @default
+             */
+            projectId: string;
             /** Runid */
             runId: string;
             /** Status */
@@ -6298,6 +6686,66 @@ export interface components {
              */
             redacted: boolean;
         };
+        /** SelectorRepairApplied */
+        SelectorRepairApplied: {
+            /**
+             * Applied
+             * @default true
+             */
+            applied: boolean;
+            /** Code */
+            code: string;
+            /** New Selector */
+            new_selector: string;
+            /** Old Selector */
+            old_selector: string;
+            /** Step Id */
+            step_id: string;
+        };
+        /** SelectorRepairApplyRequest */
+        SelectorRepairApplyRequest: {
+            /** Code Sha256 */
+            code_sha256: string;
+            /** New Selector */
+            new_selector: string;
+            /** Old Selector */
+            old_selector: string;
+            /** Rationale */
+            rationale?: string | null;
+            /** Step Id */
+            step_id: string;
+        };
+        /** SelectorRepairPublic */
+        SelectorRepairPublic: {
+            /** Code Sha256 */
+            code_sha256: string;
+            /** Confidence */
+            confidence: number;
+            /**
+             * Failure Kind
+             * @default selector_changed
+             */
+            failure_kind: string;
+            /** New Selector */
+            new_selector: string;
+            /** Old Selector */
+            old_selector: string;
+            /** Rationale */
+            rationale: string;
+            /** Step Id */
+            step_id: string;
+            /** Updated Code */
+            updated_code: string;
+        };
+        /** SelectorRepairRequest */
+        SelectorRepairRequest: {
+            /** Dom Snapshot */
+            dom_snapshot?: string | null;
+            /** Error */
+            error: string;
+            /** Step Id */
+            step_id: string;
+        };
         /**
          * Severity
          * @enum {string}
@@ -6405,6 +6853,22 @@ export interface components {
             requires_tier: "ZERO" | "LOCAL" | "CLOUD";
             strategy: components["schemas"]["RecommendedStrategy"];
         };
+        /** StrategyRisk */
+        StrategyRisk: {
+            /** Failure Modes */
+            failure_modes?: string[];
+            /** Id */
+            id: string;
+            /** Impact */
+            impact: string;
+            /** Likelihood */
+            likelihood: string;
+            recommended_approach: components["schemas"]["TestingApproach"];
+            /** Test Levels */
+            test_levels?: components["schemas"]["TestLevel"][];
+            /** Title */
+            title: string;
+        };
         /**
          * SuiteCreate
          * @description Body for ``POST /suites``.
@@ -6413,6 +6877,7 @@ export interface components {
          *     repository's ``order ASC, created_at DESC`` ordering position the suite.
          */
         SuiteCreate: {
+            defaultTestingApproach?: components["schemas"]["TestingApproach"] | null;
             /** Description */
             description?: string | null;
             /** Name */
@@ -6437,6 +6902,7 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            default_testing_approach?: components["schemas"]["TestingApproach"] | null;
             /** Description */
             description?: string | null;
             /** Id */
@@ -6465,6 +6931,7 @@ export interface components {
         SuiteUpdate: {
             /** Caseorder */
             caseOrder?: string[] | null;
+            defaultTestingApproach?: components["schemas"]["TestingApproach"] | null;
             /** Description */
             description?: string | null;
             /** Name */
@@ -6537,6 +7004,8 @@ export interface components {
         TestCaseCreate: {
             /** Description */
             description?: string | null;
+            /** Framework */
+            framework?: string | null;
             /** Name */
             name: string;
             /** Preconditions */
@@ -6549,10 +7018,14 @@ export interface components {
             status: components["schemas"]["CaseStatus"];
             /** Steps */
             steps?: components["schemas"]["StepCreate"][];
+            /** Strategyid */
+            strategyId?: string | null;
             /** Suiteid */
             suiteId: string;
             /** Tags */
             tags?: string[];
+            testLevel?: components["schemas"]["TestLevel"] | null;
+            testingApproach?: components["schemas"]["TestingApproach"] | null;
         };
         /**
          * TestCaseDetail
@@ -6570,6 +7043,10 @@ export interface components {
             created_at: string;
             /** Description */
             description?: string | null;
+            /** @default BLACK_BOX */
+            effective_testing_approach: components["schemas"]["TestingApproach"];
+            /** Framework */
+            framework?: string | null;
             /** Id */
             id: string;
             /** Last Duration Ms */
@@ -6595,10 +7072,14 @@ export interface components {
             status: components["schemas"]["CaseStatus"];
             /** Steps */
             steps?: components["schemas"]["TestStepPublic"][];
+            /** Strategy Id */
+            strategy_id?: string | null;
             /** Suite Id */
             suite_id: string;
             /** Tags */
             tags?: string[];
+            test_level?: components["schemas"]["TestLevel"] | null;
+            testing_approach?: components["schemas"]["TestingApproach"] | null;
             /** Title */
             title: string;
             /**
@@ -6619,6 +7100,10 @@ export interface components {
             created_at: string;
             /** Description */
             description?: string | null;
+            /** @default BLACK_BOX */
+            effective_testing_approach: components["schemas"]["TestingApproach"];
+            /** Framework */
+            framework?: string | null;
             /** Id */
             id: string;
             /** Last Run Result */
@@ -6634,8 +7119,12 @@ export interface components {
             slug?: string | null;
             source: components["schemas"]["CaseSource"];
             status: components["schemas"]["CaseStatus"];
+            /** Strategy Id */
+            strategy_id?: string | null;
             /** Suite Id */
             suite_id: string;
+            test_level?: components["schemas"]["TestLevel"] | null;
+            testing_approach?: components["schemas"]["TestingApproach"] | null;
             /** Title */
             title: string;
             /**
@@ -6671,17 +7160,28 @@ export interface components {
         TestCaseUpdate: {
             /** Description */
             description?: string | null;
+            /** Framework */
+            framework?: string | null;
             /** Name */
             name?: string | null;
             /** Preconditions */
             preconditions?: string | null;
             priority?: components["schemas"]["Priority"] | null;
             status?: components["schemas"]["CaseStatus"] | null;
+            /** Strategyid */
+            strategyId?: string | null;
             /** Tags */
             tags?: string[] | null;
+            testLevel?: components["schemas"]["TestLevel"] | null;
+            testingApproach?: components["schemas"]["TestingApproach"] | null;
             /** Title */
             title?: string | null;
         };
+        /**
+         * TestLevel
+         * @enum {string}
+         */
+        TestLevel: "UNIT" | "COMPONENT" | "INTEGRATION" | "SYSTEM" | "E2E";
         /** TestStepPublic */
         TestStepPublic: {
             /** Action */
@@ -6706,6 +7206,106 @@ export interface components {
             order: number;
             target_kind: components["schemas"]["TargetKind"];
         };
+        /** TestStrategyDocument */
+        TestStrategyDocument: {
+            /** Access Signals */
+            access_signals?: string[];
+            /** Approach Reason */
+            approach_reason: string;
+            /** Assumptions */
+            assumptions?: string[];
+            /** Coverage Dimensions */
+            coverage_dimensions?: string[];
+            /**
+             * Enrichment
+             * @default DETERMINISTIC
+             */
+            enrichment: string;
+            /** Exclusions */
+            exclusions?: string[];
+            /** Oracles */
+            oracles?: string[];
+            /** Qa Checks */
+            qa_checks?: string[];
+            recommended_approach: components["schemas"]["TestingApproach"];
+            /** Risks */
+            risks?: components["schemas"]["StrategyRisk"][];
+            /**
+             * Schema Version
+             * @default 1
+             */
+            schema_version: string;
+            /** Summary */
+            summary: string;
+        };
+        /** TestStrategyDraftRequest */
+        TestStrategyDraftRequest: {
+            /**
+             * Context
+             * @default
+             */
+            context: string;
+            /**
+             * Hasinternalobservability
+             * @default false
+             */
+            hasInternalObservability: boolean;
+            /**
+             * Hasinternaltestprovider
+             * @default false
+             */
+            hasInternalTestProvider: boolean;
+            /**
+             * Hasrepository
+             * @default false
+             */
+            hasRepository: boolean;
+        };
+        /** TestStrategyPublic */
+        TestStrategyPublic: {
+            /** Agent Session Id */
+            agent_session_id?: string | null;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Approved By */
+            approved_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by?: string | null;
+            document: components["schemas"]["TestStrategyDocument"];
+            /** Id */
+            id: string;
+            /** Project Id */
+            project_id: string;
+            status: components["schemas"]["TestStrategyStatus"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Version */
+            version: number;
+            /** Workspace Id */
+            workspace_id: string;
+        };
+        /**
+         * TestStrategyStatus
+         * @enum {string}
+         */
+        TestStrategyStatus: "DRAFT" | "APPROVED" | "SUPERSEDED";
+        /** TestStrategyUpdateRequest */
+        TestStrategyUpdateRequest: {
+            document: components["schemas"]["TestStrategyDocument"];
+        };
+        /**
+         * TestingApproach
+         * @enum {string}
+         */
+        TestingApproach: "BLACK_BOX" | "GRAY_BOX" | "WHITE_BOX";
         /**
          * Tier
          * @description Capability tier. The env base is always ZERO; LOCAL/CLOUD come from the
@@ -6724,6 +7324,19 @@ export interface components {
             defects?: components["schemas"]["MatrixDefect"][];
             /** Requirements */
             requirements?: components["schemas"]["MatrixRequirement"][];
+        };
+        /** UatExportBody */
+        UatExportBody: {
+            /** Case Ids */
+            case_ids: string[];
+            /**
+             * Locale
+             * @default id
+             * @enum {string}
+             */
+            locale: "id" | "en";
+            /** Title */
+            title: string;
         };
         /**
          * UrlSemanticGenerateRequest
@@ -7488,6 +8101,7 @@ export interface operations {
         parameters: {
             query: {
                 projectId: string;
+                days?: number | null;
                 period?: string;
             };
             header?: {
@@ -8264,6 +8878,41 @@ export interface operations {
             };
         };
     };
+    get_file_raw_api_v1_files_raw_get: {
+        parameters: {
+            query: {
+                /** @description Workspace-scoped object key returned by the upload. */
+                key: string;
+            };
+            header?: {
+                "X-Workspace-Id"?: string | null;
+                "X-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     sign_file_api_v1_files_signed_url_get: {
         parameters: {
             query: {
@@ -8680,6 +9329,42 @@ export interface operations {
             };
         };
     };
+    resolve_project_binding_api_v1_ingest_resolve_project_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-Id"?: string | null;
+                "X-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveProjectBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolveProjectResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_integrations_api_v1_integrations_get: {
         parameters: {
             query?: {
@@ -9064,6 +9749,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    llm_complete_api_v1_llm_complete_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-Id"?: string | null;
+                "X-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LlmCompleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmCompleteResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -9744,6 +10465,41 @@ export interface operations {
             };
         };
     };
+    export_uat_document_api_v1_projects__project_id__exports_uat_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-Id"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UatExportBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     restore_project_api_v1_projects__project_id__restore_post: {
         parameters: {
             query?: never;
@@ -9763,6 +10519,76 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_test_strategies_api_v1_projects__project_id__test_strategies_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-Id"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestStrategyPublic"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_test_strategy_draft_api_v1_projects__project_id__test_strategies_draft_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-Id"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestStrategyDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestStrategyPublic"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -10589,6 +11415,40 @@ export interface operations {
             };
         };
     };
+    get_artifact_raw_api_v1_runs__run_id__artifacts__artifact_id__raw_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-Id"?: string | null;
+            };
+            path: {
+                run_id: string;
+                artifact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     cancel_run_api_v1_runs__run_id__cancel_post: {
         parameters: {
             query?: never;
@@ -11068,6 +11928,7 @@ export interface operations {
                 status?: components["schemas"]["CaseStatus"] | null;
                 source?: components["schemas"]["CaseSource"] | null;
                 priority?: components["schemas"]["Priority"] | null;
+                testingApproach?: components["schemas"]["TestingApproach"] | null;
                 tag?: string | null;
                 q?: string | null;
                 cursor?: string | null;
@@ -11477,6 +12338,80 @@ export interface operations {
             };
         };
     };
+    apply_selector_repair_api_v1_test_cases__case_id__self_heal_apply_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-Id"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SelectorRepairApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SelectorRepairApplied"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    propose_selector_repair_api_v1_test_cases__case_id__self_heal_propose_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-Id"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SelectorRepairRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SelectorRepairPublic"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_test_case_steps_api_v1_test_cases__case_id__steps_get: {
         parameters: {
             query?: never;
@@ -11610,6 +12545,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TestCaseDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_test_strategy_api_v1_test_strategies__strategy_id__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-Id"?: string | null;
+            };
+            path: {
+                strategy_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestStrategyUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestStrategyPublic"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_test_strategy_api_v1_test_strategies__strategy_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-Id"?: string | null;
+            };
+            path: {
+                strategy_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestStrategyPublic"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enrich_test_strategy_api_v1_test_strategies__strategy_id__enrich_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Workspace-Id"?: string | null;
+            };
+            path: {
+                strategy_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestStrategyPublic"];
                 };
             };
             /** @description Validation Error */

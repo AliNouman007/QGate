@@ -18,7 +18,7 @@ import os
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -27,7 +27,7 @@ from fakeredis import aioredis as fake_aioredis
 from redis.asyncio import Redis as AsyncRedis
 from suitest_mcp.errors import McpToolFailed
 from suitest_mcp.models import McpToolResult
-from suitest_shared.domain.enums import RunStatus, StepOutcome, TargetKind, Tier
+from suitest_shared.domain.enums import AutonomyLevel, RunStatus, StepOutcome, TargetKind, Tier
 
 # Disable OpenTelemetry exporter by default in tests — guards against a
 # BatchSpanProcessor thread leaking out of import-time setup.
@@ -100,6 +100,7 @@ def _make_capability(workspace_id: str = "ws-1") -> MagicMock:
     cap = MagicMock()
     cap.workspace_id = workspace_id
     cap.tier = Tier.ZERO
+    cap.autonomy_level = AutonomyLevel.MANUAL
     cap.features_json = {}
     return cap
 
@@ -240,7 +241,7 @@ def _make_invoker(outcomes: list[str]) -> MagicMock:
         state["i"] += 1
         outcome = outcomes[idx] if idx < len(outcomes) else "PASS"
         if outcome == "FAIL":
-            raise McpToolFailed("simulated assertion failed")
+            raise McpToolFailed("Timeout waiting for locator('#submit')")
         return McpToolResult(ok=True, output={}, stdout="{}", duration_ms=10)
 
     inv.invoke = _invoke
@@ -334,12 +335,83 @@ def stub_ctx_empty(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
     return ctx
 
 
+@pytest.fixture()
+def stub_ctx_auto_self_heal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[dict[str, object], _RecordingRedis]:
+    """One selector failure repaired and retried to PASS at CLOUD/auto."""
+    capability = _make_capability()
+    capability.tier = Tier.CLOUD
+    capability.autonomy_level = AutonomyLevel.AUTO
+    capability.features_json = {}
+    step = _make_step(
+        "s0",
+        {"tool": "browser_click", "arguments": {"selector": "#old"}},
+    )
+    step.mcp_provider = "playwright-mcp"
+    step.target_kind = TargetKind.FE_WEB
+    ctx, redis_stub, _ = _build_ctx(
+        monkeypatch,
+        outcomes=["FAIL", "PASS"],
+        steps=[step],
+        capability=capability,
+    )
+
+    async def _repair(**kwargs: object) -> object:
+        from suitest_api.schemas.self_heal import SelectorRepairPublic
+
+        test_step = cast("MagicMock", kwargs["test_step"])
+        test_step.code = '{"tool":"browser_click","arguments":{"selector":"#new"}}'
+        return SelectorRepairPublic(
+            step_id="s0",
+            old_selector="#old",
+            new_selector="#new",
+            updated_code=test_step.code,
+            rationale="stable id",
+            confidence=0.9,
+            code_sha256="a" * 64,
+        )
+
+    async def _persist(**_kwargs: object) -> bool:
+        return True
+
+    import suitest_runner.jobs.run_test_case as job_mod
+
+    monkeypatch.setattr(job_mod, "_try_auto_self_heal", _repair)
+    monkeypatch.setattr(job_mod, "_persist_auto_self_heal", _persist)
+    return ctx, redis_stub
+
+
+@pytest.fixture()
+def stub_ctx_selector_fail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[dict[str, object], _RecordingRedis]:
+    """A non-auto selector failure is classified without mutation or retry."""
+    capability = _make_capability()
+    capability.tier = Tier.CLOUD
+    capability.autonomy_level = AutonomyLevel.SEMI_AUTO
+    step = _make_step(
+        "s0",
+        {"tool": "browser_click", "arguments": {"selector": "#submit"}},
+    )
+    step.target_kind = TargetKind.FE_WEB
+    ctx, redis_stub, _ = _build_ctx(
+        monkeypatch,
+        outcomes=["FAIL"],
+        steps=[step],
+        capability=capability,
+    )
+    return ctx, redis_stub
+
+
 # Re-exports used by tests
 __all__ = [
     "StepOutcome",
     "clean_runner_env",
     "fake_redis",
     "stub_ctx_all_pass",
+    "stub_ctx_auto_self_heal",
     "stub_ctx_empty",
+    "stub_ctx_selector_fail",
     "stub_ctx_with_run",
 ]

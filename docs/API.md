@@ -2,7 +2,7 @@
 
 > REST endpoints + WebSocket events for Suitest OSS. All routes are mounted at `/api/v1/*` unless stated otherwise. Input/output is validated with **Pydantic v2** (see `packages/shared/schemas/`).
 
-> ℹ️ **Built today (M0–M3 foundation):** auth, workspaces, TCM CRUD, runs, defects, requirements, integrations, webhooks, analytics, `/capabilities`, `/auth/me`, `WS /ws`, deterministic generators (M2-1..M2-5), MCP-provider CRUD + `/discover`·`/invoke`·`/routing` (M2-6..M2-9), **`/workspaces/:id/llm-config` (GET/PUT/test/DELETE/models — M3-2/M3-3)**. **Not built (M3–M4 spec):** agent `/agent/*` sessions+replay, eval, sdk, code export. Build truth = `apps/api/src/suitest_api/routers/` + [ROADMAP.md](./ROADMAP.md).
+> ℹ️ **Built today:** auth, workspaces, TCM CRUD, runs, defects, requirements, integrations, webhooks, analytics, capabilities, deterministic generators, MCP-provider CRUD, workspace LLM config, agents/eval, code export, and testing-strategy APIs. Build truth = `apps/api/src/suitest_api/routers/` + [ROADMAP.md](./ROADMAP.md).
 >
 > Cross-links: [DATA_MODEL.md](./DATA_MODEL.md) · [ARCHITECTURE.md](./ARCHITECTURE.md) · [CAPABILITY_TIERS.md](./CAPABILITY_TIERS.md) · [MCP_PLUGINS.md](./MCP_PLUGINS.md) · [AUTONOMY.md](./AUTONOMY.md) · [GENERATORS.md](./GENERATORS.md).
 
@@ -226,6 +226,8 @@ Response:
 | PATCH | `/test-cases/:id/steps` | Replace all steps (atomic, honours `If-Unmodified-Since`) |
 | PATCH | `/test-cases/:id/steps/reorder` | Atomic reorder of existing step ids |
 | POST | `/test-cases/:id/steps` | Append step |
+| POST | `/test-cases/:id/self-heal/propose` | Propose a selector-only repair (LOCAL/CLOUD, autonomy assist+) |
+| POST | `/test-cases/:id/self-heal/apply` | Apply an approved repair with stale-code protection |
 | POST | `/test-cases/bulk-update` | Bulk action across ≤100 cases (single transaction) |
 | POST | `/steps/test-once` | Dispatch a single step through MCP runner; returns inline result + artifact urls (role: QA+) |
 
@@ -256,6 +258,29 @@ Response:
 { "step_ids_in_order": ["step_a", "step_c", "step_b"] }
 ```
 Atomic: every existing step id must appear exactly once; otherwise `400` with `details.missing` / `details.duplicate` / `details.unknown`. Returns the updated step list (same shape as `GET /test-cases/:id`'s `steps`).
+
+**Selector self-heal.** `POST /test-cases/:id/self-heal/propose` accepts:
+
+```json
+{
+  "step_id": "step_a",
+  "error": "Timeout waiting for locator('#submit')",
+  "dom_snapshot": "<button data-testid=\"save\">Save</button>"
+}
+```
+
+The response contains `old_selector`, `new_selector`, `updated_code`, rationale,
+confidence, and a `code_sha256` optimistic-lock fingerprint. The server validates
+that the failure contains selector-drift evidence and that exactly one selector
+field changes; the model cannot replace arbitrary step code.
+
+`POST /test-cases/:id/self-heal/apply` sends the reviewed selector pair plus
+`code_sha256`. It is rejected when autonomy is `manual`, the workspace is ZERO,
+or the step changed after proposal. The mutation is audit-logged. During normal
+runs, full propose → save → one retry happens automatically only at autonomy
+`auto` with effective `exec_self_heal_enabled=true`; assist and semi-auto remain
+human-approved. Auto mode stages the patch in memory first and persists it only
+when the single retry passes.
 
 **POST `/steps/test-once`** body:
 ```json
@@ -1079,3 +1104,25 @@ API-key (or session) authenticated endpoints used by the `suitest test` lifecycl
 | `POST /api/v1/ingest/resolve-project` | Validate/repair a project binding. Body `{projectId?, projectSlug?, projectName?}` → `{status: valid\|repaired\|missing, projectId, matchedBy, candidates[]}`. Read-only — never creates. |
 | `POST /api/v1/test-cases/bulk-import` | Upsert generated cases (idempotent by `(suite, slug)` with `name` fallback; DB guard `uq_test_cases_suite_slug`, migration 0046). Explicit `projectId` must exist (404 otherwise — no implicit recreate); empty id + `projectSlug` find-or-creates. `markStale: true` flags MCP cases missing from the payload as `STALE`; re-importing a STALE case reactivates it. Returns `{suiteId, projectId, imported[], stale[]}`. |
 | `POST /api/v1/runs/ingest` | Record lifecycle results. Backward-compatible single-shot calls omit `runId`/`finalize` and create a completed run. Incremental publishers first send `finalize: false` with no `runId` (creates `RUNNING`), append one result per request with the returned `runId`, then send an empty `finalize: true` request. A `(runId, case)` retry is idempotent. Results carry optional `failureKind` in `run_steps.state_snapshot`. Returns `{runId, projectId, status, total, passed, failed}`. |
+
+Case import accepts `testingApproach`, `testLevel`, `framework`, `strategyId`,
+and `strategyRef`. Run ingest accepts `coverageSummary`; `GET /runs/:id`
+returns it as `coverage_summary`.
+
+---
+
+## 10. Testing strategies
+
+All mutations require QA, ADMIN, or OWNER membership and write an audit event.
+Draft creation and approval work in ZERO. Enrichment requires LOCAL or CLOUD.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /projects/:projectId/test-strategies` | List project strategy versions, newest first. |
+| `POST /projects/:projectId/test-strategies/draft` | Build a deterministic risk-based draft from access signals and project context. |
+| `PUT /test-strategies/:strategyId` | Replace a draft's validated strategy document. |
+| `POST /test-strategies/:strategyId/approve` | Approve a draft and supersede the previous approved version. |
+| `POST /test-strategies/:strategyId/enrich` | Enrich a draft using the workspace LLM through `packages/agent`. |
+
+See [TESTING_APPROACHES.md](./TESTING_APPROACHES.md) for selection and output
+rules.

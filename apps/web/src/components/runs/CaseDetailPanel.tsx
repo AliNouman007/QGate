@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Camera, Download, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,6 +10,7 @@ import {
   fetchTestCaseCode,
   fetchTestCaseDescription,
 } from "@/lib/api-client";
+import { useRunArtifactUrl } from "@/hooks/use-run-artifact-url";
 import type { components } from "@/lib/api-types";
 import { formatDuration } from "@/lib/test-case-format";
 
@@ -45,36 +46,17 @@ export function CaseDetailPanel({
   );
 
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [stepShotUrl, setStepShotUrl] = useState<string | null>(null);
-  const lastResolvedVideoId = useRef<string | null>(null);
 
   // Reset transient preview state when the user switches to another case.
   useEffect(() => {
     setSelectedStepId(null);
-    setVideoUrl(null);
     setStepShotUrl(null);
-    lastResolvedVideoId.current = null;
   }, [group.caseId]);
 
   // Resolve the case's VIDEO artifact for the Preview tab (frontend cases only).
-  useEffect(() => {
-    const video = caseArtifacts.find((a) => a.kind === "VIDEO");
-    if (!video) {
-      setVideoUrl(null);
-      lastResolvedVideoId.current = null;
-      return;
-    }
-    if (lastResolvedVideoId.current === video.id) return;
-    lastResolvedVideoId.current = video.id;
-    let cancelled = false;
-    void fetchRunSignedUrl(runId, video.id).then((signed) => {
-      if (!cancelled) setVideoUrl(signed.url);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [caseArtifacts, runId]);
+  const videoArtifactId = caseArtifacts.find((artifact) => artifact.kind === "VIDEO")?.id ?? null;
+  const videoUrl = useRunArtifactUrl(runId, videoArtifactId);
 
   // Resolve the selected step's SCREENSHOT for the per-step preview.
   useEffect(() => {

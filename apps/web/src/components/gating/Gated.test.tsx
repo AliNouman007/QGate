@@ -128,7 +128,7 @@ describe("<Gated>", () => {
     expect(screen.getByTestId("children")).toBeInTheDocument();
   });
 
-  it("derives autonomy_assist=false when autonomy.available is [manual] only", () => {
+  it("derives autonomy_assist=false when the current autonomy is manual", () => {
     setCaps(ZERO_CAPS);
     render(
       <Gated feature="autonomy_assist" fallback={<span data-testid="fallback">locked</span>}>
@@ -139,7 +139,21 @@ describe("<Gated>", () => {
     expect(screen.queryByTestId("children")).toBeNull();
   });
 
-  it("derives autonomy_assist=true when autonomy.available includes assist", () => {
+  it("does not enable assist merely because the tier makes it available", () => {
+    setCaps({
+      ...CLOUD_CAPS,
+      autonomy: { ...CLOUD_CAPS.autonomy, default: "manual" },
+    });
+    render(
+      <Gated feature="autonomy_assist" fallback={<span data-testid="fallback">locked</span>}>
+        <span data-testid="children">assist</span>
+      </Gated>,
+    );
+    expect(screen.getByTestId("fallback")).toBeInTheDocument();
+    expect(screen.queryByTestId("children")).toBeNull();
+  });
+
+  it("derives autonomy_assist=true when the current autonomy is assist", () => {
     setCaps(CLOUD_CAPS);
     render(
       <Gated feature="autonomy_assist" fallback={<span data-testid="fallback">locked</span>}>

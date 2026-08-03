@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from sqlalchemy.ext.asyncio import AsyncSession
 from suitest_db.repositories.projects import ProjectRepo
 from suitest_db.repositories.suites import SuiteRepo
-from suitest_shared.domain.enums import Role
+from suitest_shared.domain.enums import Role, TestingApproach
 
 from suitest_api.auth.db import get_async_session
 from suitest_api.deps.role import require_role
@@ -66,6 +66,7 @@ async def _suite_public(
     name: str,
     description: str | None,
     order: int,
+    default_testing_approach: TestingApproach | None,
     created_at: datetime,
     updated_at: datetime,
 ) -> SuitePublic:
@@ -77,6 +78,7 @@ async def _suite_public(
         name=name,
         description=description,
         order=order,
+        default_testing_approach=default_testing_approach,
         case_count=counts.get(suite_id, 0),
         created_at=created_at,
         updated_at=updated_at,
@@ -103,6 +105,7 @@ async def list_suites(
             name=s.name,
             description=s.description,
             order=s.order,
+            default_testing_approach=s.default_testing_approach,
             case_count=counts.get(s.id, 0),
             created_at=s.created_at,
             updated_at=s.updated_at,
@@ -131,6 +134,7 @@ async def get_suite(
         name=suite.name,
         description=suite.description,
         order=suite.order,
+        default_testing_approach=suite.default_testing_approach,
         case_count=counts.get(suite.id, 0),
         created_at=suite.created_at,
         updated_at=suite.updated_at,
@@ -143,18 +147,17 @@ async def get_suite(
 
 
 def _raise_case_order_mismatch(exc: CaseOrderMismatchError) -> None:
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail=_error_envelope(
-            "INVALID_CASE_ORDER",
-            "case_order must contain every active case id in the suite exactly once.",
-            {
-                "missing": exc.missing,
-                "unknown": exc.unknown,
-                "duplicate": exc.duplicates,
-            },
-        ),
+    details = {
+        "missing": exc.missing,
+        "unknown": exc.unknown,
+        "duplicate": exc.duplicates,
+    }
+    detail = _error_envelope(
+        "INVALID_CASE_ORDER",
+        "case_order must contain every active case id in the suite exactly once.",
+        details,
     )
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
 
 def _raise_confirm_cascade_required(exc: ConfirmCascadeRequiredError) -> None:
@@ -196,6 +199,7 @@ async def create_suite(
         name=outcome.suite.name,
         description=outcome.suite.description,
         order=outcome.suite.order,
+        default_testing_approach=outcome.suite.default_testing_approach,
         created_at=outcome.suite.created_at,
         updated_at=outcome.suite.updated_at,
     )
@@ -234,6 +238,7 @@ async def update_suite(
         name=outcome.suite.name,
         description=outcome.suite.description,
         order=outcome.suite.order,
+        default_testing_approach=outcome.suite.default_testing_approach,
         created_at=outcome.suite.created_at,
         updated_at=outcome.suite.updated_at,
     )

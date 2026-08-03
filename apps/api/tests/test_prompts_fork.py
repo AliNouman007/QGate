@@ -13,7 +13,8 @@ from typing import TYPE_CHECKING
 import pytest
 from suitest_agent.prompts.loader import list_prompts, read_prompt
 from suitest_api.services.prompt_resolver import resolve_prompt
-from suitest_shared.domain.enums import Role
+from suitest_db.models.workspace_capability import WorkspaceCapability
+from suitest_shared.domain.enums import AutonomyLevel, Role, Tier
 
 if TYPE_CHECKING:
     from api_harness import ApiDb
@@ -31,6 +32,16 @@ async def test_fork_overrides_then_delete_reverts(api_db: ApiDb) -> None:
     user = await api_db.seed_user(email="prompt-admin@example.com")
     ws = await api_db.seed_workspace(slug="prompt-ws", name="Prompt WS")
     await api_db.seed_membership(workspace_id=ws.id, user_id=user.id, role=Role.ADMIN)
+    await api_db.add_all(
+        [
+            WorkspaceCapability(
+                workspace_id=ws.id,
+                tier=Tier.CLOUD,
+                autonomy_level=AutonomyLevel.MANUAL,
+                features_json={},
+            )
+        ]
+    )
     headers = {"X-Workspace-Id": ws.id}
     forked = "You are a FORKED prompt for this workspace.\n"
 

@@ -33,6 +33,9 @@ __all__ = [
     "Severity",
     "StepOutcome",
     "TargetKind",
+    "TestLevel",
+    "TestStrategyStatus",
+    "TestingApproach",
     "Tier",
 ]
 
@@ -103,7 +106,28 @@ class ArtifactKind(StrEnum):
     VIDEO = "VIDEO"
     CONSOLE_LOG = "CONSOLE_LOG"
     TRACE = "TRACE"
+    COVERAGE_REPORT = "COVERAGE_REPORT"
     CUSTOM = "CUSTOM"
+
+
+class TestingApproach(StrEnum):
+    BLACK_BOX = "BLACK_BOX"
+    GRAY_BOX = "GRAY_BOX"
+    WHITE_BOX = "WHITE_BOX"
+
+
+class TestLevel(StrEnum):
+    UNIT = "UNIT"
+    COMPONENT = "COMPONENT"
+    INTEGRATION = "INTEGRATION"
+    SYSTEM = "SYSTEM"
+    E2E = "E2E"
+
+
+class TestStrategyStatus(StrEnum):
+    DRAFT = "DRAFT"
+    APPROVED = "APPROVED"
+    SUPERSEDED = "SUPERSEDED"
 
 
 class Severity(StrEnum):
@@ -148,6 +172,7 @@ class AgentSessionKind(StrEnum):
     EXECUTION = "EXECUTION"
     DIAGNOSIS = "DIAGNOSIS"
     CONVERSATION = "CONVERSATION"
+    STRATEGY = "STRATEGY"
 
 
 class MessageRole(StrEnum):

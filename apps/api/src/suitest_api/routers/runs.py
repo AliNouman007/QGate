@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import aioboto3
 from arq.connections import ArqRedis
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import FileResponse
@@ -44,8 +43,9 @@ from suitest_api.schemas.run import (
     StateChangePublic,
 )
 from suitest_api.schemas.runs import CreateRunBody, CreateSuiteRunBody, RunPublic
+from suitest_api.services.file_storage import presign_s3_get
 from suitest_api.services.junit_report_service import render_junit
-from suitest_api.services.replay_service import compute_state_delta
+from suitest_api.services.replay_service import StateChange, compute_state_delta
 from suitest_api.services.run_service import RunService
 from suitest_api.settings import get_settings
 
@@ -56,6 +56,13 @@ from suitest_api.settings import get_settings
 _RUNS_QUEUE = "suitest:runs"
 
 router = APIRouter(prefix="/api/v1", tags=["runs"])
+
+
+def _public_state_changes(changes: list[StateChange]) -> list[StateChangePublic]:
+    return [
+        StateChangePublic(path=change.path, op=change.op, before=change.before, after=change.after)
+        for change in changes
+    ]
 
 
 async def _project_in_scope(session: AsyncSession, project_id: str, workspace_id: str) -> bool:
@@ -144,6 +151,7 @@ async def get_run(
     run, summary = pair
     if not await _project_in_scope(session, run.project_id, ctx.workspace_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
+    coverage = (run.metadata_json or {}).get("coverageSummary")
     return RunDetail(
         id=run.id,
         public_id=run.public_id,
@@ -166,6 +174,7 @@ async def get_run(
             failed_steps=summary.failed_steps,
             duration_ms=summary.duration_ms,
         ),
+        coverage_summary=coverage if isinstance(coverage, dict) else None,
     )
 
 
@@ -256,10 +265,7 @@ async def get_run_replay(
                 started_at=step.started_at,
                 error_message=step.error_message,
                 state_snapshot=snapshot,
-                delta=[
-                    StateChangePublic(path=c.path, op=c.op, before=c.before, after=c.after)
-                    for c in delta
-                ],
+                delta=_public_state_changes(delta),
             )
         )
         prev_snapshot = snapshot
@@ -344,20 +350,11 @@ async def get_artifact_signed_url(
 
     bucket, key = artifact.url.removeprefix("s3://").split("/", 1)
 
-    settings = get_settings()
-    session_factory = aioboto3.Session()
-    async with session_factory.client(
-        "s3",
-        endpoint_url=settings.s3_endpoint,
-        aws_access_key_id=settings.s3_access_key,
-        aws_secret_access_key=settings.s3_secret_key,
-        region_name=settings.s3_region,
-    ) as client:
-        url = await client.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": bucket, "Key": key},
-            ExpiresIn=_ARTIFACT_SIGNED_URL_TTL_SECONDS,
-        )
+    url = await presign_s3_get(
+        bucket,
+        key,
+        expires_in=_ARTIFACT_SIGNED_URL_TTL_SECONDS,
+    )
 
     await write_audit(
         session,

@@ -13,7 +13,6 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from suitest_core.capabilities import TierFlag
 from suitest_db.audit import write_audit
 from suitest_db.models.case import TestCase, TestStep
@@ -30,6 +29,7 @@ from suitest_shared.schemas.responses import ArtifactOut, RunOut, SignedUrlOut
 
 from suitest_api.deps.scope import TenantContext
 from suitest_api.deps.tier import require_tier
+from suitest_api.services.project_scope import project_belongs_to_workspace
 
 # Bundled MCP provider names always accepted by ``create_run`` even when the
 # workspace has not registered them in ``mcp_providers``. Kept here (vs.
@@ -45,9 +45,8 @@ DEFAULT_SIGNED_URL_TTL = 900
 
 class RunService:
     def __init__(self, ctx: TenantContext, repo: RunRepo, project_repo: ProjectRepo) -> None:
-        self._ctx = ctx
-        self._repo = repo
-        self._project_repo = project_repo
+        self._ctx, self._repo = ctx, repo
+        self._project_repo, self._session = project_repo, repo.session
 
     async def _project_in_scope(self, project_id: str) -> bool:
         project = await self._project_repo.get_by_id(project_id)
@@ -90,11 +89,6 @@ class RunService:
         )
 
     # -- M1c Task 15 mutations ---------------------------------------------
-
-    @property
-    def _session(self) -> AsyncSession:
-        """Session shared with the repos — exposed so ``create_run`` can flush."""
-        return self._repo.session
 
     @require_tier(TierFlag.ANY)
     async def get(self, run_id: str) -> RunRow | None:
@@ -188,27 +182,33 @@ class RunService:
         }
         registered |= set(_BUNDLED_MCP_PROVIDERS)
 
+        case_ids: list[str] = []
         for item in selection:
             case_id_raw = item.get("case_id")
             if not isinstance(case_id_raw, str):
                 raise ValueError("selection item missing caseId")
-            case = await self._session.get(TestCase, case_id_raw)
-            if case is None:
-                raise ValueError(f"case {case_id_raw} not in project")
-            suite = await self._session.get(Suite, case.suite_id)
-            if suite is None or suite.project_id != project_id:
-                raise ValueError(f"case {case_id_raw} not in project")
-            # Load steps via an explicit query — ``case.steps`` is a lazy
-            # relationship which triggers a sync IO callback under asyncpg
-            # and explodes with ``MissingGreenlet``.
-            steps = (
-                await self._session.scalars(select(TestStep).where(TestStep.case_id == case.id))
-            ).all()
-            for step in steps:
-                if step.mcp_provider and step.mcp_provider not in registered:
-                    raise ValueError(
-                        f"step {step.id} references unregistered MCP {step.mcp_provider}"
-                    )
+            case_ids.append(case_id_raw)
+
+        case_rows = await self._session.execute(
+            select(TestCase.id, Suite.project_id)
+            .join(Suite, Suite.id == TestCase.suite_id)
+            .where(TestCase.id.in_(case_ids))
+        )
+        case_projects: dict[str, str] = {
+            case_id: row_project_id for case_id, row_project_id in case_rows
+        }
+        for case_id in case_ids:
+            if case_projects.get(case_id) != project_id:
+                raise ValueError(f"case {case_id} not in project")
+
+        step_rows = await self._session.execute(
+            select(TestStep.id, TestStep.mcp_provider)
+            .where(TestStep.case_id.in_(case_ids))
+            .order_by(TestStep.case_id, TestStep.order)
+        )
+        for step_id, provider_name in step_rows:
+            if provider_name and provider_name not in registered:
+                raise ValueError(f"step {step_id} references unregistered MCP {provider_name}")
 
         capability = await WorkspaceCapabilityRepo(self._session).get(project.workspace_id)
         tier = Tier(capability.tier) if capability is not None else Tier.ZERO
@@ -381,10 +381,9 @@ class RunArtifactSignedUrlService:
 
     async def _run_in_scope(self, run_id: str) -> bool:
         run = await self._repo.get_by_id(run_id)
-        if run is None:
-            return False
-        project = await self._project_repo.get_by_id(run.project_id)
-        return project is not None and project.workspace_id == self._ctx.workspace_id
+        return run is not None and await project_belongs_to_workspace(
+            self._project_repo, run.project_id, self._ctx.workspace_id
+        )
 
     @require_tier(TierFlag.ANY)
     async def list_artifacts(self, run_id: str) -> list[ArtifactOut] | None:

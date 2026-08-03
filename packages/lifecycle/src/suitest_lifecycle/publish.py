@@ -11,6 +11,7 @@ the box. If the server is unavailable, publishing degrades to a clean
 from __future__ import annotations
 
 import os
+import re
 from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
@@ -35,6 +36,10 @@ class Uploader(Protocol):
 
 _PRIORITY = {"High": "P1", "Medium": "P2", "Low": "P3"}
 _MIME = {".webm": "video/webm", ".png": "image/png", ".jpg": "image/jpeg"}
+_CREDENTIAL_REPLACEMENTS = {
+    "USERNAME": 'USERNAME = os.environ.get("SUITEST_TEST_USERNAME", "")\n',
+    "PASSWORD": 'PASSWORD = os.environ.get("SUITEST_TEST_PASSWORD", "")\n',
+}
 
 # PlanCase.title is the generated test function slug (codegen emits
 # ``test_<title>``), so the publish layer is where the human display title is
@@ -44,19 +49,13 @@ _ACRONYMS = frozenset({"api", "url", "id", "ui", "ux", "http", "sql", "ok", "sso
 
 
 def _humanize(slug: str) -> str:
-    words = [w for w in slug.replace("_", " ").replace("-", " ").split() if w]
+    words = list(filter(None, re.split(r"[-_\s]+", slug.strip())))
     if not words:
         return slug.strip()
-    out: list[str] = []
-    for i, word in enumerate(words):
-        lower = word.lower()
-        if lower in _ACRONYMS:
-            out.append(lower.upper())
-        elif i == 0:
-            out.append(word[:1].upper() + word[1:].lower())
-        else:
-            out.append(lower)
-    return " ".join(out)
+    first, *rest = words
+    head = first.upper() if first.lower() in _ACRONYMS else first.capitalize()
+    tail = [word.upper() if word.lower() in _ACRONYMS else word.lower() for word in rest]
+    return " ".join((head, *tail))
 
 
 def _suite_name(config: Config) -> str:
@@ -69,11 +68,12 @@ def _sanitize_automation_code(code: str) -> str:
     replaced = False
     for index, line in enumerate(lines):
         stripped = line.strip()
-        if stripped.startswith("USERNAME =") and "os.environ" not in stripped:
-            lines[index] = 'USERNAME = os.environ.get("SUITEST_TEST_USERNAME", "")\n'
-            replaced = True
-        elif stripped.startswith("PASSWORD =") and "os.environ" not in stripped:
-            lines[index] = 'PASSWORD = os.environ.get("SUITEST_TEST_PASSWORD", "")\n'
+        if "os.environ" in stripped:
+            continue
+        name = stripped.partition(" ")[0]
+        replacement = _CREDENTIAL_REPLACEMENTS.get(name)
+        if replacement is not None and stripped.startswith(f"{name} ="):
+            lines[index] = replacement
             replaced = True
     sanitized = "".join(lines)
     if replaced and not any(line.strip() == "import os" for line in lines):
@@ -107,21 +107,26 @@ def _case_payloads(cases: list[PlanCase], paths: Paths) -> list[dict[str, object
                 "automationFilePath": c.automation_file,
                 "automationCode": code,
                 "generatedBy": "suitest-lifecycle",
-                "steps": [
-                    {
-                        "order": i + 1,
-                        "action": s.description,
-                        # For assertions the description *is* the expectation; for
-                        # actions there's no distinct expected, so leave it blank
-                        # and let the reader derive one.
-                        "expected": s.description if s.type == "assertion" else "",
-                        "code": None,
-                    }
-                    for i, s in enumerate(c.steps)
-                ],
+                "testingApproach": c.testing_approach.value,
+                "testLevel": c.test_level.value,
+                "framework": c.framework or None,
+                "strategyRef": c.strategy_ref or None,
+                "steps": _case_step_payloads(c),
             }
         )
     return out
+
+
+def _case_step_payloads(case: PlanCase) -> list[dict[str, object]]:
+    return [
+        {
+            "order": index + 1,
+            "action": step.description,
+            "expected": step.description if step.type == "assertion" else "",
+            "code": None,
+        }
+        for index, step in enumerate(case.steps)
+    ]
 
 
 def _resolve_url(client: Uploader, path: str, mime: str) -> str:
@@ -226,6 +231,23 @@ def _unlink(path: str) -> None:
         Path(path).unlink(missing_ok=True)
 
 
+def _unlink_matches(root: Path, pattern: str) -> None:
+    for candidate in root.rglob(pattern):
+        _unlink(str(candidate))
+
+
+def _deepest_directories(root: Path) -> list[Path]:
+    directories = [candidate for candidate in root.rglob("*") if candidate.is_dir()]
+    directories.sort(key=lambda path: len(path.parts), reverse=True)
+    return directories
+
+
+def _remove_empty_directories(root: Path) -> None:
+    for directory in _deepest_directories(root):
+        with suppress(OSError):
+            directory.rmdir()
+
+
 def _cleanup_committed_result(result: TestResult, payload: dict[str, object], paths: Paths) -> None:
     """Drop only evidence whose blob URL and result row are both durable."""
     artifacts = payload.get("artifacts")
@@ -240,15 +262,8 @@ def _cleanup_committed_result(result: TestResult, payload: dict[str, object], pa
         video_dir = Path(video_path).parent
         try:
             if video_dir.resolve().is_relative_to(paths.tmp_dir.resolve()):
-                for stale_video in video_dir.rglob("*.webm"):
-                    _unlink(str(stale_video))
-                for directory in sorted(
-                    (p for p in video_dir.rglob("*") if p.is_dir()),
-                    key=lambda p: len(p.parts),
-                    reverse=True,
-                ):
-                    with suppress(OSError):
-                        directory.rmdir()
+                _unlink_matches(video_dir, "*.webm")
+                _remove_empty_directories(video_dir)
                 with suppress(OSError):
                     video_dir.rmdir()
         except OSError:
@@ -270,17 +285,11 @@ def cleanup_transient_media(paths: Paths) -> None:
     """Remove ephemeral browser media after a fully successful publish."""
     if not paths.tmp_dir.is_dir():
         return
-    for pattern in ("*.png", "*.webm", "*.zip"):
-        for candidate in paths.tmp_dir.rglob(pattern):
-            _unlink(str(candidate))
+    _unlink_matches(paths.tmp_dir, "*.png")
+    _unlink_matches(paths.tmp_dir, "*.webm")
+    _unlink_matches(paths.tmp_dir, "*.zip")
     # Bottom-up empty-dir removal; JSON/report files remain untouched.
-    for directory in sorted(
-        (p for p in paths.tmp_dir.rglob("*") if p.is_dir()),
-        key=lambda p: len(p.parts),
-        reverse=True,
-    ):
-        with suppress(OSError):
-            directory.rmdir()
+    _remove_empty_directories(paths.tmp_dir)
 
 
 class PublishSession:
@@ -418,7 +427,7 @@ class PublishSession:
         _cleanup_committed_result(result, payload, self.paths)
         return True
 
-    def finish(self) -> dict[str, object]:
+    def finish(self, *, coverage: dict[str, object] | None = None) -> dict[str, object]:
         """Finalize counters/status after the last result."""
         if self.client is None or not self.run_id:
             return {"published": False, "reason": self.reason or "publish not started"}
@@ -432,6 +441,20 @@ class PublishSession:
                 "partial": self.appended,
             }
         try:
+            coverage_payload = coverage
+            coverage_file = self.config.testing.coverage_file
+            coverage_path = Path(coverage_file)
+            if coverage_file and not coverage_path.is_absolute():
+                coverage_path = self.config.project_path / coverage_path
+            if not coverage_file:
+                coverage_path = self.paths.coverage_json
+            if coverage_path.is_file():
+                coverage_payload = {
+                    **(coverage or {}),
+                    "artifactUrl": self.client.upload_file(
+                        str(coverage_path), content_type="application/json"
+                    ),
+                }
             run = self.client.ingest_run(
                 run_id=self.run_id,
                 finalize=True,
@@ -439,6 +462,7 @@ class PublishSession:
                 suite_name=_suite_name(self.config),
                 name=f"{self.config.project_name} lifecycle",
                 results=[],
+                coverage_summary=coverage_payload,
             )
             self.run_status = str(run.get("status", "") or "")
         except Exception as exc:
@@ -492,7 +516,7 @@ def publish_results(
     for result in summary.results:
         if not session.append(result, classification=kinds.get(result.test_id, "")):
             break
-    return session.finish()
+    return session.finish(coverage=summary.coverage)
 
 
 __all__ = ["PublishSession", "cleanup_transient_media", "publish_results"]

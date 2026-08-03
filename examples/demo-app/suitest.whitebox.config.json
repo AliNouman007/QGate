@@ -1,0 +1,16 @@
+{
+  "mode": "backend",
+  "projectName": "Brewly",
+  "projectPath": ".",
+  "baseUrl": "http://localhost:8089",
+  "server": {
+    "autostart": false
+  },
+  "testing": {
+    "approach": "white-box",
+    "level": "UNIT",
+    "framework": "pytest",
+    "coverageFile": "coverage.json"
+  },
+  "output": "suitest-output"
+}

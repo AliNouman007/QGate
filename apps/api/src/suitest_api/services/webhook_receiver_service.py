@@ -316,7 +316,7 @@ async def resolve_project_from_payload(
 
 async def resolve_gating_selection(
     session: AsyncSession, *, project: Project
-) -> list[dict[str, str]] | None:
+) -> list[dict[str, object]] | None:
     """Return the ``selection`` payload for the gating run, or ``None``."""
     case_ids: list[str] = []
     if project.gating_suite_id is not None:
