@@ -3266,11 +3266,13 @@
       "IngestArtifact": {
         "properties": {
           "kind": {
+            "maxLength": 64,
             "title": "Kind",
             "type": "string"
           },
           "mimeType": {
             "default": "application/octet-stream",
+            "maxLength": 255,
             "title": "Mimetype",
             "type": "string"
           },
@@ -3280,6 +3282,7 @@
             "type": "integer"
           },
           "url": {
+            "maxLength": 4096,
             "title": "Url",
             "type": "string"
           }
@@ -3486,6 +3489,7 @@
             "items": {
               "$ref": "#/components/schemas/IngestArtifact"
             },
+            "maxItems": 100,
             "title": "Artifacts",
             "type": "array"
           },
@@ -3496,41 +3500,49 @@
           },
           "error": {
             "default": "",
+            "maxLength": 1000000,
             "title": "Error",
             "type": "string"
           },
           "failureKind": {
             "default": "",
+            "maxLength": 128,
             "title": "Failurekind",
             "type": "string"
           },
           "name": {
             "default": "",
+            "maxLength": 255,
             "title": "Name",
             "type": "string"
           },
           "outcome": {
             "default": "PASSED",
+            "maxLength": 32,
             "title": "Outcome",
             "type": "string"
           },
           "slug": {
             "default": "",
+            "maxLength": 255,
             "title": "Slug",
             "type": "string"
           },
           "sourceRef": {
             "default": "",
+            "maxLength": 2048,
             "title": "Sourceref",
             "type": "string"
           },
           "stderr": {
             "default": "",
+            "maxLength": 1000000,
             "title": "Stderr",
             "type": "string"
           },
           "stdout": {
             "default": "",
+            "maxLength": 1000000,
             "title": "Stdout",
             "type": "string"
           },
@@ -3538,6 +3550,7 @@
             "items": {
               "$ref": "#/components/schemas/IngestRunStep"
             },
+            "maxItems": 500,
             "title": "Steps",
             "type": "array"
           }
@@ -3549,6 +3562,7 @@
         "properties": {
           "description": {
             "default": "",
+            "maxLength": 16384,
             "title": "Description",
             "type": "string"
           },
@@ -3574,6 +3588,7 @@
           },
           "screenshot": {
             "default": "",
+            "maxLength": 4096,
             "title": "Screenshot",
             "type": "string"
           },
@@ -7195,6 +7210,7 @@
             "items": {
               "$ref": "#/components/schemas/IngestResult"
             },
+            "maxItems": 500,
             "title": "Results",
             "type": "array"
           },
@@ -8504,6 +8520,7 @@
                 "items": {
                   "type": "string"
                 },
+                "maxItems": 1000,
                 "type": "array"
               },
               {
