@@ -78,9 +78,9 @@ export interface Capabilities {
  * Direct keys map 1:1 to `Capabilities.features.*`. Derived keys are computed
  * from other fields:
  *   - `ai_panel`         = any AI feature enabled (ai_generation || ai_conversation)
- *   - `autonomy_assist`  = `autonomy.available.includes("assist")`
- *   - `autonomy_semi_auto` = `autonomy.available.includes("semi_auto")`
- *   - `autonomy_auto`    = `autonomy.available.includes("auto")`
+ *   - `autonomy_assist`  = current level is assist or higher
+ *   - `autonomy_semi_auto` = current level is semi-auto or higher
+ *   - `autonomy_auto`    = current level is auto
  */
 export type FeatureKey =
   | keyof CapabilityFeatures

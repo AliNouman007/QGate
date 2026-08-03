@@ -62,6 +62,8 @@ async def bulk_import(
         result = await bulk_import_cases(session, workspace_id=ctx.workspace_id, body=body)
     except ProjectNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     await write_audit(
         session,
         workspace_id=ctx.workspace_id,

@@ -9,6 +9,7 @@ execution on this path.
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
+from suitest_shared.domain.enums import TestingApproach, TestLevel
 
 
 class _Camel(BaseModel):
@@ -46,6 +47,11 @@ class IngestCase(_Camel):
     automation_file_path: str | None = Field(default=None, alias="automationFilePath")
     automation_code: str | None = Field(default=None, alias="automationCode")
     generated_by: str | None = Field(default=None, alias="generatedBy")
+    testing_approach: TestingApproach | None = Field(default=None, alias="testingApproach")
+    test_level: TestLevel | None = Field(default=None, alias="testLevel")
+    framework: str | None = None
+    strategy_id: str | None = Field(default=None, alias="strategyId")
+    strategy_ref: str | None = Field(default=None, alias="strategyRef")
     steps: list[IngestStep] = Field(default_factory=list)
 
 
@@ -112,34 +118,34 @@ class ResolveProjectResult(_Camel):
 class IngestRunStep(_Camel):
     order: int
     type: str = "action"
-    description: str = ""
+    description: str = Field(default="", max_length=16_384)
     outcome: str = "PASSED"  # PASSED | FAILED | SKIPPED | ERROR
     duration_ms: int | None = Field(default=None, alias="durationMs")
-    screenshot: str = ""  # per-step screenshot URL (drives "Preview: Step N")
+    screenshot: str = Field(default="", max_length=4_096)
     screenshot_size_bytes: int = Field(default=0, alias="screenshotSizeBytes")
 
 
 class IngestArtifact(_Camel):
-    kind: str  # VIDEO | SCREENSHOT | CONSOLE_LOG | ...
-    url: str  # file:// or s3:// already-resolved location
-    mime_type: str = Field(default="application/octet-stream", alias="mimeType")
+    kind: str = Field(max_length=64)  # VIDEO | SCREENSHOT | CONSOLE_LOG | ...
+    url: str = Field(max_length=4_096)  # file:// or s3:// already-resolved location
+    mime_type: str = Field(default="application/octet-stream", alias="mimeType", max_length=255)
     size_bytes: int = Field(default=0, alias="sizeBytes")
 
 
 class IngestResult(_Camel):
-    name: str = ""  # legacy match key (case name); kept for older publishers
-    slug: str = ""  # preferred match key — the case's technical slug
-    source_ref: str = Field(default="", alias="sourceRef")
-    outcome: str = "PASSED"
+    name: str = Field(default="", max_length=255)
+    slug: str = Field(default="", max_length=255)
+    source_ref: str = Field(default="", alias="sourceRef", max_length=2_048)
+    outcome: str = Field(default="PASSED", max_length=32)
     duration_ms: int = Field(default=0, alias="durationMs")
-    error: str = ""
+    error: str = Field(default="", max_length=1_000_000)
     # Structured failure class from the lifecycle classifier (selector_changed,
     # endpoint_not_found, auth_failure, …). Stored in run_step.state_snapshot.
-    failure_kind: str = Field(default="", alias="failureKind")
-    stdout: str = ""
-    stderr: str = ""
-    steps: list[IngestRunStep] = Field(default_factory=list)
-    artifacts: list[IngestArtifact] = Field(default_factory=list)
+    failure_kind: str = Field(default="", alias="failureKind", max_length=128)
+    stdout: str = Field(default="", max_length=1_000_000)
+    stderr: str = Field(default="", max_length=1_000_000)
+    steps: list[IngestRunStep] = Field(default_factory=list, max_length=500)
+    artifacts: list[IngestArtifact] = Field(default_factory=list, max_length=100)
 
 
 class RunIngestBody(_Camel):
@@ -158,7 +164,8 @@ class RunIngestBody(_Camel):
     env: str = "staging"
     branch: str | None = None
     commit_sha: str | None = Field(default=None, alias="commitSha")
-    results: list[IngestResult] = Field(default_factory=list)
+    coverage_summary: dict[str, object] | None = Field(default=None, alias="coverageSummary")
+    results: list[IngestResult] = Field(default_factory=list, max_length=500)
 
 
 class RunIngestResult(_Camel):

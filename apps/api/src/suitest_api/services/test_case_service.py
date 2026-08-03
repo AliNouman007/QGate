@@ -28,7 +28,9 @@ from sqlalchemy import select
 from suitest_core.capabilities import TierFlag
 from suitest_db.audit import coerce_user_id, write_audit
 from suitest_db.models.case import CaseTag, TestCase, TestStep
+from suitest_db.models.project import Suite
 from suitest_db.models.run import Run as RunRow
+from suitest_db.models.test_strategy import TestStrategy
 from suitest_db.public_id import set_workspace_id
 from suitest_db.repositories.mcp_providers import McpProviderRepo
 from suitest_db.repositories.projects import ProjectRepo
@@ -42,12 +44,11 @@ from suitest_shared.text import derive_slug, derive_title
 
 from suitest_api.deps.scope import TenantContext
 from suitest_api.deps.tier import require_tier
+from suitest_api.services.project_scope import project_belongs_to_workspace
 from suitest_api.services.run_service import RunService
 from suitest_api.services.test_case_validator import _StepLike, validate_steps
 
 if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-
     from suitest_api.schemas.test_case import (
         StepAppend,
         StepCreate,
@@ -149,10 +150,9 @@ class TestCaseService:
         suite_repo: SuiteRepo,
         project_repo: ProjectRepo,
     ) -> None:
-        self._ctx = ctx
-        self._repo = repo
-        self._suite_repo = suite_repo
-        self._project_repo = project_repo
+        self._ctx, self._repo = ctx, repo
+        self._suite_repo, self._project_repo = suite_repo, project_repo
+        self._session = repo.session
 
     # ------------------------------------------------------------------
     # Scope guards
@@ -162,8 +162,9 @@ class TestCaseService:
         suite = await self._suite_repo.get_by_id(suite_id)
         if suite is None:
             return False
-        project = await self._project_repo.get_by_id(suite.project_id)
-        return project is not None and project.workspace_id == self._ctx.workspace_id
+        return await project_belongs_to_workspace(
+            self._project_repo, suite.project_id, self._ctx.workspace_id
+        )
 
     async def _load_case_in_scope(self, case_id: str) -> TestCase | None:
         case = await self._repo.get_by_id(case_id)
@@ -184,10 +185,6 @@ class TestCaseService:
         if case is None or not await self._suite_in_scope(case.suite_id):
             return None
         return case
-
-    @property
-    def _session(self) -> AsyncSession:
-        return self._repo.session
 
     # ------------------------------------------------------------------
     # Read path (M1a)
@@ -299,21 +296,8 @@ class TestCaseService:
         await self._session.refresh(case)
         steps = await self._repo.get_steps(case.id)
         detail = TestCaseDetailOut(
-            id=case.id,
-            suite_id=case.suite_id,
-            public_id=case.public_id,
-            name=case.name,
-            title=case.title,
-            slug=case.slug,
-            description=case.description,
-            preconditions=case.preconditions,
-            source=case.source,
-            status=case.status,
-            priority=case.priority,
-            owner_id=case.owner_id,
-            created_at=case.created_at,
-            updated_at=case.updated_at,
-            steps=[TestStepOut.model_validate(s) for s in steps],
+            **TestCaseOut.model_validate(case).model_dump(),
+            steps=[TestStepOut.model_validate(step) for step in steps],
         )
         return detail
 
@@ -329,6 +313,10 @@ class TestCaseService:
         translates this to 404 (NEVER 403, to avoid an enumeration oracle).
         """
         if not await self._suite_in_scope(body.suite_id):
+            return None
+        if body.strategy_id is not None and not await self._strategy_in_scope(
+            body.strategy_id, body.suite_id
+        ):
             return None
 
         tier, strict = await self._resolve_tier_and_settings()
@@ -353,6 +341,10 @@ class TestCaseService:
             priority=body.priority,
             status=body.status,
             source=body.source,
+            testing_approach=body.testing_approach,
+            test_level=body.test_level,
+            framework=body.framework,
+            strategy_id=body.strategy_id,
         )
         set_workspace_id(case, self._ctx.workspace_id)
         self._session.add(case)
@@ -431,7 +423,24 @@ class TestCaseService:
 
         changed_fields: list[str] = []
         payload = body.model_dump(exclude_unset=True)
-        for field in ("name", "title", "description", "preconditions", "status", "priority"):
+        strategy_id = payload.get("strategy_id")
+        if strategy_id is not None and (
+            not isinstance(strategy_id, str)
+            or not await self._strategy_in_scope(strategy_id, case.suite_id)
+        ):
+            return None
+        for field in (
+            "name",
+            "title",
+            "description",
+            "preconditions",
+            "status",
+            "priority",
+            "testing_approach",
+            "test_level",
+            "framework",
+            "strategy_id",
+        ):
             if field in payload:
                 setattr(case, field, payload[field])
                 changed_fields.append(field)
@@ -464,6 +473,20 @@ class TestCaseService:
                 "publicId": case.public_id,
                 "fields": changed_fields,
             },
+        )
+
+    async def _strategy_in_scope(self, strategy_id: str, suite_id: str) -> bool:
+        return (
+            await self._session.scalar(
+                select(TestStrategy.id)
+                .join(Suite, Suite.project_id == TestStrategy.project_id)
+                .where(
+                    TestStrategy.id == strategy_id,
+                    TestStrategy.workspace_id == self._ctx.workspace_id,
+                    Suite.id == suite_id,
+                )
+            )
+            is not None
         )
 
     @require_tier(TierFlag.ANY)
@@ -757,6 +780,10 @@ class TestCaseService:
             priority=case.priority,
             status=case.status,
             source=case.source,
+            testing_approach=case.testing_approach,
+            test_level=case.test_level,
+            framework=case.framework,
+            strategy_id=case.strategy_id,
         )
         set_workspace_id(clone, self._ctx.workspace_id)
         self._session.add(clone)

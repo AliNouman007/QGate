@@ -133,7 +133,8 @@ def _parse_multipart(ctype: str, body: bytes) -> dict[str, tuple[str, bytes]]:
         if not name:
             continue
         filename = part.get_filename() or ""
-        payload = part.get_payload(decode=True) or b""
+        decoded = part.get_payload(decode=True)
+        payload = decoded if isinstance(decoded, bytes) else b""
         out[str(name)] = (filename, payload)
     return out
 

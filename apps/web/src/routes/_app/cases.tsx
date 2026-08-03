@@ -26,6 +26,8 @@ import { CasesSkeleton } from "@/components/cases/skeleton";
 import { StepEditor } from "@/components/cases/StepEditor";
 import type { DraftStep } from "@/components/cases/StepEditor";
 import { StepList } from "@/components/cases/StepList";
+import { TestingApproachBadge } from "@/components/cases/TestingApproachBadge";
+import { TestStrategyDialog } from "@/components/cases/TestStrategyDialog";
 import { BrowserPreview } from "@/components/runs/BrowserPreview";
 import { Gated } from "@/components/gating/Gated";
 import { AgentInsightCallout } from "@/components/shared/AgentInsightCallout";
@@ -71,8 +73,11 @@ import {
   useSuites,
   useTestCase,
   useTestCases,
+  useUpdateTestingMetadata,
 } from "@/hooks/use-test-cases";
+import { useRunArtifactUrl } from "@/hooks/use-run-artifact-url";
 import type { components } from "@/lib/api-types";
+import { caseSourceToPill } from "@/lib/test-case-format";
 import { undoToast } from "@/lib/undo-toast";
 import { cn } from "@/lib/utils";
 
@@ -83,22 +88,39 @@ type CaseDetail = components["schemas"]["TestCaseDetail"];
 type RunStepPublic = components["schemas"]["RunStepPublic"];
 type StepOutcome = components["schemas"]["StepOutcome"];
 type ArtifactPublic = components["schemas"]["ArtifactPublic"];
+type TestingApproach = components["schemas"]["TestingApproach"];
+type TestLevel = components["schemas"]["TestLevel"];
 
 type Tab = "all" | "manual" | "ai" | "mcp" | "failing";
 
 const BULK_LIMIT = 100;
 const PRIORITIES: Priority[] = ["P0", "P1", "P2", "P3"];
 
-function caseSourceToPill(source: Case["source"]): "MANUAL" | "AI" | "MCP" | "IMPORT" {
-  if (source === "AI") return "AI";
-  if (source === "MCP") return "MCP";
-  if (source === "IMPORT" || source === "RECORDER" || source === "HEURISTIC_CRAWL") return "IMPORT";
-  return "MANUAL";
-}
-
 /** A case is "failing" when its last run ended in FAIL or ERROR. */
 function isFailing(c: Case): boolean {
   return c.last_run_result === "FAIL" || c.last_run_result === "ERROR";
+}
+
+function indexSuites(suites: Suite[]): Map<string, Suite> {
+  const indexed = new Map<string, Suite>();
+  for (const suite of suites) indexed.set(suite.id, suite);
+  return indexed;
+}
+
+function assertionExpectations(steps: ReturnType<typeof deriveServerStep>[]): string[] {
+  const expectations: string[] = [];
+  for (const step of steps) {
+    if (step.type === "assertion") expectations.push(step.expected);
+  }
+  return expectations;
+}
+
+function matchesCaseQuery(testCase: Case, query: string): boolean {
+  return (
+    testCase.title.toLowerCase().includes(query) ||
+    testCase.name.toLowerCase().includes(query) ||
+    testCase.public_id.toLowerCase().includes(query)
+  );
 }
 
 interface SearchSchema {
@@ -112,6 +134,7 @@ function CasesHeader({
   showAiTab,
   onGenerate,
   aiEnabled,
+  onStrategy,
 }: {
   active: Tab;
   setActive: (t: Tab) => void;
@@ -119,6 +142,7 @@ function CasesHeader({
   showAiTab: boolean;
   onGenerate: (strategy?: GeneratorStrategy) => void;
   aiEnabled: boolean;
+  onStrategy: () => void;
 }): React.ReactElement {
   const { t } = useTranslation();
   const tabs: Array<{ id: Tab; label: string; show?: boolean }> = [
@@ -158,6 +182,9 @@ function CasesHeader({
         </nav>
       </div>
       <div className="flex items-center gap-2" data-testid="generate-split-button">
+        <Button type="button" size="sm" variant="outline" onClick={onStrategy}>
+          Test strategy
+        </Button>
         <Button
           type="button"
           size="sm"
@@ -432,6 +459,7 @@ function CaseTree({
     }
     return map;
   }, [suites, cases]);
+  const suiteById = useMemo(() => indexSuites(suites), [suites]);
 
   if (cases.length === 0) {
     return (
@@ -481,85 +509,129 @@ function CaseTree({
       </div>
 
       {[...grouped.entries()].map(([suiteId, items]) => {
-        const suite = suites.find((s) => s.id === suiteId);
+        const suite = suiteById.get(suiteId);
         return (
-          <div key={suiteId} data-testid="cases-tree-suite">
-            <div className="mb-1.5 flex items-center gap-1.5 px-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-fg-5">
-              <FolderTree className="h-3 w-3" aria-hidden="true" />
-              {suite?.name ?? "Unassigned"}
-              <span className="font-mono text-[10px] text-fg-5">{items.length}</span>
-              {suite ? (
-                suite.id === gatingSuiteId ? (
-                  <span
-                    data-testid="suite-gating-badge"
-                    className="ml-auto rounded-sm bg-accent/10 px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-accent"
-                  >
-                    Gating
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    data-testid="suite-set-gating-btn"
-                    onClick={() => {
-                      onSetGating(suite.id);
-                    }}
-                    className="ml-auto rounded-sm px-1 text-[9px] font-medium tracking-wide text-fg-4 hover:text-accent"
-                  >
-                    Set gating
-                  </button>
-                )
-              ) : null}
-            </div>
-            <ul className="flex flex-col gap-px">
-              {items.map((c) => (
-                <li key={c.id} className="flex min-w-0 items-center">
-                  <Checkbox
-                    data-testid="case-row-checkbox"
-                    checked={selectedIds.has(c.id)}
-                    aria-label={`Select ${c.public_id}`}
-                    className="ml-1 mr-1.5 shrink-0"
-                    onCheckedChange={() => {
-                      onToggleSelection(c.id);
-                    }}
-                    onClick={(e) => {
-                      // Prevent the checkbox click from bubbling to the row button
-                      e.stopPropagation();
-                    }}
-                  />
-                  <button
-                    type="button"
-                    data-testid="cases-tree-row"
-                    data-public-id={c.public_id}
-                    data-selected={c.public_id === selectedId ? "true" : "false"}
-                    onClick={() => {
-                      onSelect(c.public_id);
-                    }}
-                    className={cn(
-                      "flex min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-md px-2 py-2 text-left text-[12.5px] text-fg-1 hover:bg-bg-elev-2",
-                      c.public_id === selectedId &&
-                        "bg-bg-elev-2 shadow-[inset_2px_0_0_0_theme(colors.accent)]",
-                    )}
-                  >
-                    <SourceDot
-                      status={c.status === "DEPRECATED" || c.status === "STALE" ? "warn" : "pass"}
-                    />
-                    <span className="shrink-0 whitespace-nowrap font-mono text-[10.5px] text-fg-5">
-                      {c.public_id}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate font-medium" title={c.title}>
-                      {c.title || displayTitle(c.name)}
-                    </span>
-                    <span className="shrink-0">
-                      <SourcePill source={caseSourceToPill(c.source)} />
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <CaseTreeSuite
+            key={suiteId}
+            suite={suite}
+            items={items}
+            selectedId={selectedId}
+            selectedIds={selectedIds}
+            gatingSuiteId={gatingSuiteId}
+            onSelect={onSelect}
+            onToggleSelection={onToggleSelection}
+            onSetGating={onSetGating}
+          />
         );
       })}
     </nav>
+  );
+}
+
+function CaseTreeSuite({
+  suite,
+  items,
+  selectedId,
+  selectedIds,
+  gatingSuiteId,
+  onSelect,
+  onToggleSelection,
+  onSetGating,
+}: {
+  suite: Suite | undefined;
+  items: Case[];
+  selectedId: string | null;
+  selectedIds: Set<string>;
+  gatingSuiteId: string | null;
+  onSelect: (publicId: string) => void;
+  onToggleSelection: (id: string) => void;
+  onSetGating: (suiteId: string) => void;
+}): React.ReactElement {
+  return (
+    <div data-testid="cases-tree-suite">
+      <div className="mb-1.5 flex items-center gap-1.5 px-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-fg-5">
+        <FolderTree className="h-3 w-3" aria-hidden="true" />
+        {suite?.name ?? "Unassigned"}
+        <span className="font-mono text-[10px] text-fg-5">{items.length}</span>
+        {suite?.default_testing_approach ? (
+          <TestingApproachBadge
+            approach={suite.default_testing_approach}
+            className="normal-case tracking-normal"
+          />
+        ) : null}
+        {suite ? (
+          suite.id === gatingSuiteId ? (
+            <span
+              data-testid="suite-gating-badge"
+              className="ml-auto rounded-sm bg-accent/10 px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-accent"
+            >
+              Gating
+            </span>
+          ) : (
+            <button
+              type="button"
+              data-testid="suite-set-gating-btn"
+              onClick={() => {
+                onSetGating(suite.id);
+              }}
+              className="ml-auto rounded-sm px-1 text-[9px] font-medium tracking-wide text-fg-4 hover:text-accent"
+            >
+              Set gating
+            </button>
+          )
+        ) : null}
+      </div>
+      <ul className="flex flex-col gap-px">
+        {items.map((c) => (
+          <li key={c.id} className="flex min-w-0 items-center">
+            <Checkbox
+              data-testid="case-row-checkbox"
+              checked={selectedIds.has(c.id)}
+              aria-label={`Select ${c.public_id}`}
+              className="ml-1 mr-1.5 shrink-0"
+              onCheckedChange={() => {
+                onToggleSelection(c.id);
+              }}
+              onClick={(e) => {
+                // Prevent the checkbox click from bubbling to the row button
+                e.stopPropagation();
+              }}
+            />
+            <button
+              type="button"
+              data-testid="cases-tree-row"
+              data-public-id={c.public_id}
+              data-selected={c.public_id === selectedId ? "true" : "false"}
+              onClick={() => {
+                onSelect(c.public_id);
+              }}
+              className={cn(
+                "flex min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-md px-2 py-2 text-left text-[12.5px] text-fg-1 hover:bg-bg-elev-2",
+                c.public_id === selectedId &&
+                  "bg-bg-elev-2 shadow-[inset_2px_0_0_0_theme(colors.accent)]",
+              )}
+            >
+              <SourceDot
+                status={c.status === "DEPRECATED" || c.status === "STALE" ? "warn" : "pass"}
+              />
+              <span className="shrink-0 whitespace-nowrap font-mono text-[10.5px] text-fg-5">
+                {c.public_id}
+              </span>
+              <span className="min-w-0 flex-1 truncate font-medium" title={c.title}>
+                {c.title || displayTitle(c.name)}
+              </span>
+              <TestingApproachBadge
+                approach={c.effective_testing_approach}
+                className="hidden xl:inline-flex"
+              />
+              <span className="shrink-0">
+                <SourcePill source={caseSourceToPill(c.source)} />
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -575,6 +647,7 @@ function CaseDetailPanel({
   const createRun = useCreateRun();
   const deleteCase = useDeleteTestCase();
   const restoreCase = useRestoreTestCase();
+  const updateTesting = useUpdateTestingMetadata(publicId ?? "");
 
   // Local draft state for the step editor — seeded from the server response
   // and kept in sync when the server data refreshes (via key on detail?.id).
@@ -753,6 +826,42 @@ function CaseDetailPanel({
             {detail.public_id}
           </span>
           <SourcePill source={sourcePill} />
+          <TestingApproachBadge approach={detail.effective_testing_approach} />
+          <select
+            aria-label="Testing approach override"
+            value={detail.testing_approach ?? ""}
+            disabled={updateTesting.isPending}
+            onChange={(event) => {
+              updateTesting.mutate({
+                testingApproach: (event.target.value || null) as TestingApproach | null,
+              });
+            }}
+            className="h-6 rounded-md border border-border bg-bg-base px-1.5 font-mono text-[10px] text-fg-3"
+          >
+            <option value="">Suite default</option>
+            <option value="BLACK_BOX">Black-box</option>
+            <option value="GRAY_BOX">Gray-box</option>
+            <option value="WHITE_BOX">White-box</option>
+          </select>
+          <select
+            aria-label="Test level"
+            value={detail.test_level ?? ""}
+            disabled={updateTesting.isPending}
+            onChange={(event) => {
+              updateTesting.mutate({
+                testingApproach: detail.testing_approach ?? null,
+                testLevel: (event.target.value || null) as TestLevel | null,
+              });
+            }}
+            className="h-6 rounded-md border border-border bg-bg-base px-1.5 font-mono text-[10px] text-fg-3"
+          >
+            <option value="">No level</option>
+            <option value="UNIT">Unit</option>
+            <option value="COMPONENT">Component</option>
+            <option value="INTEGRATION">Integration</option>
+            <option value="SYSTEM">System</option>
+            <option value="E2E">E2E</option>
+          </select>
           <span
             data-testid="case-type-badge"
             className="rounded-full border border-border bg-bg-elev-2 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-fg-3"
@@ -906,7 +1015,7 @@ function CaseBasicsTab({
   derivedSteps: ReturnType<typeof deriveServerStep>[];
   slugKey: string | null;
 }): React.ReactElement {
-  const expectations = derivedSteps.filter((s) => s.type === "assertion").map((s) => s.expected);
+  const expectations = assertionExpectations(derivedSteps);
   const tags = detail.tags ?? [];
 
   return (
@@ -1047,32 +1156,16 @@ function EvidencePreview({
     return m;
   }, [runSteps]);
 
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<number | null>(null);
   const [stepShotUrl, setStepShotUrl] = useState<string | null>(null);
-  const lastResolvedVideoId = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!lastRunId) {
-      setVideoUrl(null);
-      return;
-    }
-    const video = artifacts.find((a) => a.kind === "VIDEO" && runStepIds.has(a.run_step_id));
-    if (!video) {
-      setVideoUrl(null);
-      lastResolvedVideoId.current = null;
-      return;
-    }
-    if (lastResolvedVideoId.current === video.id) return;
-    lastResolvedVideoId.current = video.id;
-    let cancelled = false;
-    void fetchRunSignedUrl(lastRunId, video.id).then((signed) => {
-      if (!cancelled) setVideoUrl(signed.url);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [lastRunId, artifacts, runStepIds]);
+  const videoArtifactId = useMemo(
+    () =>
+      artifacts.find(
+        (artifact) => artifact.kind === "VIDEO" && runStepIds.has(artifact.run_step_id),
+      )?.id ?? null,
+    [artifacts, runStepIds],
+  );
+  const videoUrl = useRunArtifactUrl(lastRunId ?? null, videoArtifactId);
 
   useEffect(() => {
     const runStepId = selectedOrder === null ? null : (runStepIdByOrder.get(selectedOrder) ?? null);
@@ -1289,7 +1382,9 @@ function CasesBody(): React.ReactElement {
   const [suiteDialogOpen, setSuiteDialogOpen] = useState(false);
   const [caseDialogOpen, setCaseDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [strategyDialogOpen, setStrategyDialogOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [approachFilter, setApproachFilter] = useState<TestingApproach | "">("");
 
   // GenerateModal state — `null` strategy = open at the target-select step;
   // a concrete strategy deep-links from the split-button dropdown.
@@ -1331,17 +1426,16 @@ function CasesBody(): React.ReactElement {
           return cases.items;
       }
     })();
+    const byApproach =
+      approachFilter === ""
+        ? byTab
+        : byTab.filter((testCase) => testCase.effective_testing_approach === approachFilter);
     const q = query.trim().toLowerCase();
-    if (q === "") return byTab;
+    if (q === "") return byApproach;
     // Client-side, ZERO-friendly search over the loaded cases (title + name +
     // public id) so both human phrasing and the technical key match.
-    return byTab.filter(
-      (c) =>
-        c.title.toLowerCase().includes(q) ||
-        c.name.toLowerCase().includes(q) ||
-        c.public_id.toLowerCase().includes(q),
-    );
-  }, [active, cases, query]);
+    return byApproach.filter((testCase) => matchesCaseQuery(testCase, q));
+  }, [active, approachFilter, cases, query]);
 
   const selectedId = search.case ?? null;
 
@@ -1384,7 +1478,18 @@ function CasesBody(): React.ReactElement {
         showAiTab={aiTabVisible}
         onGenerate={handleGenerate}
         aiEnabled={aiTabVisible}
+        onStrategy={() => {
+          setStrategyDialogOpen(true);
+        }}
       />
+      {projectId ? (
+        <TestStrategyDialog
+          open={strategyDialogOpen}
+          onOpenChange={setStrategyDialogOpen}
+          projectId={projectId}
+          aiEnabled={aiTabVisible}
+        />
+      ) : null}
       {generateOpen ? (
         <GenerateModal
           open={generateOpen}
@@ -1444,16 +1549,31 @@ function CasesBody(): React.ReactElement {
             data-testid="cases-left-pane"
           >
             <div className="flex shrink-0 flex-col gap-2 border-b border-border p-3">
-              <Input
-                value={query}
-                onChange={(event) => {
-                  setQuery(event.target.value);
-                }}
-                placeholder="Search cases…"
-                className="h-8"
-                data-testid="cases-search"
-                aria-label="Search cases"
-              />
+              <div className="flex gap-2">
+                <Input
+                  value={query}
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                  }}
+                  placeholder="Search cases…"
+                  className="h-8 min-w-0 flex-1"
+                  data-testid="cases-search"
+                  aria-label="Search cases"
+                />
+                <select
+                  aria-label="Filter by testing approach"
+                  value={approachFilter}
+                  onChange={(event) => {
+                    setApproachFilter(event.target.value as TestingApproach | "");
+                  }}
+                  className="h-8 rounded-md border border-border bg-bg-base px-2 text-[11px] text-fg-3 outline-none focus:border-accent"
+                >
+                  <option value="">All approaches</option>
+                  <option value="BLACK_BOX">Black-box</option>
+                  <option value="GRAY_BOX">Gray-box</option>
+                  <option value="WHITE_BOX">White-box</option>
+                </select>
+              </div>
               <div className="flex items-center gap-2">
                 <Button
                   type="button"

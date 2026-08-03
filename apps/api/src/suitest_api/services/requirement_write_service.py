@@ -39,9 +39,9 @@ from suitest_db.repositories.test_cases import TestCaseRepo
 
 from suitest_api.deps.scope import TenantContext
 from suitest_api.deps.tier import require_tier
+from suitest_api.services.project_scope import project_belongs_to_workspace
 
 if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
     from suitest_db.models.requirement import Requirement, RequirementLink
     from suitest_db.repositories.projects import ProjectRepo
 
@@ -100,22 +100,18 @@ class RequirementWriteService:
         project_repo: ProjectRepo,
         case_repo: TestCaseRepo,
     ) -> None:
-        self._ctx = ctx
-        self._repo = repo
+        self._ctx, self._repo, self._session = ctx, repo, repo.session
         self._project_repo = project_repo
         self._case_repo = case_repo
-
-    @property
-    def _session(self) -> AsyncSession:
-        return self._repo.session
 
     # ------------------------------------------------------------------
     # Scope guards
     # ------------------------------------------------------------------
 
     async def _project_in_scope(self, project_id: str) -> bool:
-        project = await self._project_repo.get_by_id(project_id)
-        return project is not None and project.workspace_id == self._ctx.workspace_id
+        return await project_belongs_to_workspace(
+            self._project_repo, project_id, self._ctx.workspace_id
+        )
 
     async def _load_in_scope(self, req_id: str) -> Requirement | None:
         """Load a requirement only when its project lives in the current workspace.

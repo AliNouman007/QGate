@@ -8,13 +8,16 @@ append is idempotent by run/case.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from suitest_db.models.case import TestCase, TestStep
+from suitest_db.models.project import Project
 from suitest_db.models.run import Run, RunStep
 from suitest_db.models.run_step_log import RunStepLog
+from suitest_db.models.test_strategy import TestStrategy
 from suitest_db.repositories.run_step_logs import RunStepLogRepo
 from suitest_db.repositories.runs import (
     ArtifactRepo,
@@ -41,6 +44,8 @@ from suitest_api.schemas.ingest import (
     BulkImportBody,
     BulkImportResult,
     ImportedCase,
+    IngestArtifact,
+    IngestResult,
     IngestStep,
     ProjectCandidate,
     ResolveProjectBody,
@@ -98,6 +103,10 @@ def _now() -> datetime:
     return datetime.now(tz=UTC)
 
 
+def _project_candidates(rows: Sequence[Project]) -> list[ProjectCandidate]:
+    return [ProjectCandidate(id=row.id, slug=row.slug, name=row.name) for row in rows]
+
+
 class ProjectNotFoundError(Exception):
     """Explicit projectId does not exist in the caller's workspace.
 
@@ -133,7 +142,6 @@ async def _ensure_project(
     workspace without a human pre-creating the project. Audited on create.
     """
     from suitest_db.audit import write_audit
-    from suitest_db.models.project import Project
 
     if project_id:
         stmt = select(Project).where(
@@ -216,7 +224,7 @@ async def resolve_project(
         if rows:
             return ResolveProjectResult(
                 status="missing",
-                candidates=[ProjectCandidate(id=r.id, slug=r.slug, name=r.name) for r in rows],
+                candidates=_project_candidates(rows),
             )
     return ResolveProjectResult(status="missing")
 
@@ -280,12 +288,28 @@ async def bulk_import_cases(
     case_repo = TestCaseRepo(session)
     target_kind, mcp_provider = _target(body.mode)
     imported: list[ImportedCase] = []
+    strategy_ids = {case.strategy_id for case in body.cases if case.strategy_id}
+    if strategy_ids:
+        valid_strategy_ids = set(
+            (
+                await session.scalars(
+                    select(TestStrategy.id).where(
+                        TestStrategy.id.in_(strategy_ids),
+                        TestStrategy.workspace_id == workspace_id,
+                        TestStrategy.project_id == project_id,
+                    )
+                )
+            ).all()
+        )
+        if valid_strategy_ids != strategy_ids:
+            raise ValueError("strategyId must belong to the target project")
 
     for c in body.cases:
         gen_from: dict[str, object] = {
             "source_ref": c.source_ref,
             "category": c.category,
             "tags": list(c.tags),
+            **({"strategy_ref": c.strategy_ref} if c.strategy_ref else {}),
         }
         # Server-authoritative title/slug: prefer explicit payload fields, fall
         # back to deriving from the legacy ``name`` (docs/DATA_MODEL.md §3.4).
@@ -304,6 +328,10 @@ async def bulk_import_cases(
                     source=_source(c.source),
                     automation_file_path=c.automation_file_path,
                     automation_code=_sanitize_automation_code(c.automation_code),
+                    testing_approach=c.testing_approach,
+                    test_level=c.test_level,
+                    framework=c.framework,
+                    strategy_id=c.strategy_id,
                     # A re-generated case is alive again; only STALE flips back —
                     # human decisions (DEPRECATED/ARCHIVED) are never overridden.
                     status=(CaseStatus.ACTIVE if existing.status is CaseStatus.STALE else None),
@@ -337,6 +365,10 @@ async def bulk_import_cases(
                 generated_from=gen_from,
                 automation_file_path=c.automation_file_path,
                 automation_code=_sanitize_automation_code(c.automation_code),
+                testing_approach=c.testing_approach,
+                test_level=c.test_level,
+                framework=c.framework,
+                strategy_id=c.strategy_id,
             ),
             workspace_id=workspace_id,
         )
@@ -383,6 +415,103 @@ def _steps(
     ]
 
 
+async def _append_recorded_steps(
+    *,
+    result: IngestResult,
+    case: TestCase,
+    run: Run,
+    now: datetime,
+    step_seq: int,
+    step_repo: RunStepRepo,
+    artifact_repo: ArtifactRepo,
+) -> tuple[int, str | None]:
+    first_run_step_id: str | None = None
+    for step in result.steps:
+        step_seq += 1
+        row = await step_repo.create_step(
+            run_id=run.id,
+            case_id=case.id,
+            step_order=step_seq,
+            outcome=_OUTCOME.get(step.outcome, StepOutcome.ERROR),
+            started_at=None,
+            completed_at=now,
+            duration_ms=step.duration_ms,
+            stdout=None,
+            stderr=None,
+            error_message=(result.error or None if step.outcome in ("FAILED", "ERROR") else None),
+            state_snapshot={
+                "type": step.type,
+                "description": step.description,
+                **(
+                    {"failureKind": result.failure_kind}
+                    if result.failure_kind and step.outcome in ("FAILED", "ERROR")
+                    else {}
+                ),
+            },
+        )
+        if step.screenshot:
+            await artifact_repo.create_artifact(
+                run_step_id=row.id,
+                kind="SCREENSHOT",
+                url=step.screenshot,
+                size_bytes=step.screenshot_size_bytes,
+                mime_type="image/png",
+                metadata=None,
+            )
+        if first_run_step_id is None:
+            first_run_step_id = row.id
+    return step_seq, first_run_step_id
+
+
+def _nonblank_lines(value: str, level: str) -> list[tuple[str, str]]:
+    return [(level, line) for line in value.splitlines() if line.strip()]
+
+
+def _result_log_lines(result: IngestResult) -> list[tuple[str, str]]:
+    lines = _nonblank_lines(result.stdout, "info")
+    lines.extend(_nonblank_lines(result.stderr, "error"))
+    if result.error and not result.stderr:
+        lines.extend(_nonblank_lines(result.error, "error"))
+    return lines
+
+
+async def _append_result_logs(
+    *,
+    lines: Sequence[tuple[str, str]],
+    run_id: str,
+    run_step_id: str | None,
+    log_seq: int,
+    log_repo: RunStepLogRepo,
+) -> int:
+    for level, message in lines:
+        log_seq += 1
+        await log_repo.append(
+            run_id=run_id,
+            run_step_id=run_step_id,
+            level=level,
+            message=message,
+            seq=log_seq,
+        )
+    return log_seq
+
+
+async def _append_result_artifacts(
+    *,
+    artifacts: Sequence[IngestArtifact],
+    run_step_id: str,
+    artifact_repo: ArtifactRepo,
+) -> None:
+    for artifact in artifacts:
+        await artifact_repo.create_artifact(
+            run_step_id=run_step_id,
+            kind=artifact.kind,
+            url=artifact.url,
+            size_bytes=artifact.size_bytes,
+            mime_type=artifact.mime_type,
+            metadata=None,
+        )
+
+
 async def ingest_run(
     session: AsyncSession, *, workspace_id: str, body: RunIngestBody
 ) -> RunIngestResult:
@@ -417,6 +546,11 @@ async def ingest_run(
                 branch=body.branch,
                 commit_sha=body.commit_sha,
                 status=RunStatus.RUNNING,
+                metadata_json=(
+                    {"coverage": body.coverage_summary}
+                    if body.coverage_summary is not None
+                    else None
+                ),
             ),
             workspace_id=workspace_id,
         )
@@ -468,45 +602,17 @@ async def ingest_run(
 
         # One run_step PER recorded step so the web Steps panel is granular
         # ("Step 1 … PASS, Step 2 … PASS"), not a single row per case.
-        recorded = r.steps or []
         first_run_step_id: str | None = None
-        if recorded:
-            for s in recorded:
-                step_seq += 1
-                rs = await step_repo.create_step(
-                    run_id=run.id,
-                    case_id=case.id,
-                    step_order=step_seq,
-                    outcome=_OUTCOME.get(s.outcome, StepOutcome.ERROR),
-                    started_at=None,
-                    completed_at=now,
-                    duration_ms=s.duration_ms,
-                    stdout=None,
-                    stderr=None,
-                    error_message=r.error or None if s.outcome in ("FAILED", "ERROR") else None,
-                    state_snapshot={
-                        "type": s.type,
-                        "description": s.description,
-                        **(
-                            {"failureKind": r.failure_kind}
-                            if r.failure_kind and s.outcome in ("FAILED", "ERROR")
-                            else {}
-                        ),
-                    },
-                )
-                # Per-step screenshot → SCREENSHOT artifact on THIS run_step, so
-                # the web can show "Preview: Step N" when the step row is clicked.
-                if s.screenshot:
-                    await artifact_repo.create_artifact(
-                        run_step_id=rs.id,
-                        kind="SCREENSHOT",
-                        url=s.screenshot,
-                        size_bytes=s.screenshot_size_bytes,
-                        mime_type="image/png",
-                        metadata=None,
-                    )
-                if first_run_step_id is None:
-                    first_run_step_id = rs.id
+        if r.steps:
+            step_seq, first_run_step_id = await _append_recorded_steps(
+                result=r,
+                case=case,
+                run=run,
+                now=now,
+                step_seq=step_seq,
+                step_repo=step_repo,
+                artifact_repo=artifact_repo,
+            )
         else:
             step_seq += 1
             rs = await step_repo.create_step(
@@ -527,12 +633,7 @@ async def ingest_run(
         # Persist captured output as the run's log stream (feeds the Logs tab —
         # GET /runs/:id/logs reads run_step_logs, which only the ARQ orchestrator
         # wrote before; ingested runs were always "No logs recorded").
-        log_lines: list[tuple[str, str]] = [
-            *[("info", line) for line in (r.stdout or "").splitlines() if line.strip()],
-            *[("error", line) for line in (r.stderr or "").splitlines() if line.strip()],
-        ]
-        if r.error and not r.stderr:
-            log_lines.extend(("error", line) for line in r.error.splitlines() if line.strip())
+        log_lines = _result_log_lines(r)
         if log_lines:
             log_seq += 1
             await log_repo.append(
@@ -542,27 +643,21 @@ async def ingest_run(
                 message=f"=== {case.public_id} {r.slug or r.name} ({r.outcome}) ===",
                 seq=log_seq,
             )
-            for level, message in log_lines:
-                log_seq += 1
-                await log_repo.append(
-                    run_id=run.id,
-                    run_step_id=first_run_step_id,
-                    level=level,
-                    message=message,
-                    seq=log_seq,
-                )
+            log_seq = await _append_result_logs(
+                lines=log_lines,
+                run_id=run.id,
+                run_step_id=first_run_step_id,
+                log_seq=log_seq,
+                log_repo=log_repo,
+            )
 
         # Attach the case's video/screenshot to its first run step.
-        for a in r.artifacts:
-            if first_run_step_id is not None:
-                await artifact_repo.create_artifact(
-                    run_step_id=first_run_step_id,
-                    kind=a.kind,
-                    url=a.url,
-                    size_bytes=a.size_bytes,
-                    mime_type=a.mime_type,
-                    metadata=None,
-                )
+        if first_run_step_id is not None:
+            await _append_result_artifacts(
+                artifacts=r.artifacts,
+                run_step_id=first_run_step_id,
+                artifact_repo=artifact_repo,
+            )
 
         await case_repo.update(
             case.id,
@@ -592,6 +687,14 @@ async def ingest_run(
             total_steps=total,
             passed_steps=passed,
             failed_steps=failed,
+            metadata_json=(
+                {
+                    **(run.metadata_json or {}),
+                    "coverage": body.coverage_summary,
+                }
+                if body.coverage_summary is not None
+                else run.metadata_json
+            ),
         ),
     )
     return RunIngestResult(

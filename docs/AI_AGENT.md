@@ -637,7 +637,7 @@ Autonomy effect on EXECUTION:
 | `manual` | Run never engages agent. Only `step.code` paths execute; agentic steps marked `SKIPPED_NO_AUTONOMY`. |
 | `assist` | Each agentic step pauses run, emits `agent.step.confirm_required` WS event, awaits user click. 5-minute timeout → mark SKIPPED. |
 | `semi_auto` | Agentic steps run through without prompt. On failure, diagnosis runs in shadow but defect stays DRAFT for P0/P1. |
-| `auto` | Full agentic + (in v1.x) self-heal: agent re-generates selectors when DOM drift detected, retries once. |
+| `auto` | Full agentic + M11 self-heal: agent proposes a validated selector-only patch, retries once in memory, and persists it with audit only after PASS. |
 
 ---
 

@@ -7,33 +7,13 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 from suitest_shared.domain.enums import (
     ArtifactKind,
-    RunStatus,
-    RunTrigger,
     StepOutcome,
-    Tier,
 )
+from suitest_shared.schemas.responses import RunListOut
 
 
-class RunListItem(BaseModel):
+class RunListItem(RunListOut):
     """List row for ``GET /runs`` (docs/API.md §3.5)."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    public_id: str
-    project_id: str
-    name: str
-    branch: str | None = None
-    commit_sha: str | None = None
-    env: str
-    trigger: RunTrigger
-    status: RunStatus
-    tier_at_runtime: Tier
-    started_at: datetime | None = None
-    completed_at: datetime | None = None
-    duration_ms: int | None = None
-    created_at: datetime
-    updated_at: datetime
 
 
 class RunSummary(BaseModel):
@@ -49,6 +29,7 @@ class RunDetail(RunListItem):
     """Detail for ``GET /runs/:id`` — adds the computed summary."""
 
     summary: RunSummary
+    coverage_summary: dict[str, object] | None = None
 
 
 class RunStepPublic(BaseModel):

@@ -34,7 +34,11 @@ describe("CreateSuiteDialog", () => {
 
   it("creates a suite under the active project and closes", async () => {
     const user = userEvent.setup();
-    let captured: { projectId?: string; name?: string } = {};
+    let captured: {
+      projectId?: string;
+      name?: string;
+      defaultTestingApproach?: string;
+    } = {};
     server.use(
       http.post("*/api/v1/suites", async ({ request }) => {
         captured = (await request.json()) as { projectId?: string; name?: string };
@@ -63,6 +67,7 @@ describe("CreateSuiteDialog", () => {
     });
     expect(captured.projectId).toBe("prj_demo");
     expect(captured.name).toBe("Login flow");
+    expect(captured.defaultTestingApproach).toBe("BLACK_BOX");
   });
 
   it("surfaces an error when the backend rejects the create", async () => {

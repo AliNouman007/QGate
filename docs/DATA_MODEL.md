@@ -2,7 +2,7 @@
 
 > SQLAlchemy 2.0 (async) schema + Pydantic v2 domain models for Suitest OSS. **Source of truth** — when adding/changing a model, update this doc in the same PR.
 
-> ℹ️ **Built today:** schema through Alembic migration `0028` (M1e), incl. `run_step_logs` and `oauth_accounts` (FastAPI-Users). **Not built (M3–M4 spec):** `llm_config`, `agent_sessions`, eval tables, `webhook_dispatch_attempts`. Verify against `packages/db/alembic/versions/`.
+> ℹ️ **Built today:** schema through Alembic migration `0047`, including testing approaches and versioned test strategies. Verify against `packages/db/alembic/versions/`.
 >
 > Stack: Python 3.12 · FastAPI · Pydantic v2 · SQLAlchemy 2.0 (async) · Alembic · Postgres 16 + `pgvector`. **Postgres-only.** Tidak ada dukungan SQLite/MySQL/Mongo di OSS v1.0.
 >
@@ -1712,3 +1712,23 @@ async def set_llm_config(db, workspace_id, write: LLMConfigWrite) -> LLMConfigPu
 ## 14. Glossary references
 
 See [CLAUDE.md](../CLAUDE.md) §7 for product terms (TCM, MCP, Run, Suite, Gating, Flaky, Traceability, Defect, Artifact). Tier/Autonomy/MCP-specific terms live in their respective docs: [CAPABILITY_TIERS.md](./CAPABILITY_TIERS.md), [AUTONOMY.md](./AUTONOMY.md), [MCP_PLUGINS.md](./MCP_PLUGINS.md).
+
+---
+
+## 15. Testing intelligence
+
+Migration `0047_testing_intelligence` adds:
+
+- `testing_approach`: `BLACK_BOX | GRAY_BOX | WHITE_BOX`;
+- `test_level`: `UNIT | COMPONENT | INTEGRATION | SYSTEM | E2E`;
+- nullable `suites.default_testing_approach`;
+- nullable `test_cases.testing_approach`, `test_level`, `framework`, and
+  `strategy_id`;
+- `test_strategies` with workspace/project, monotonic project version,
+  `DRAFT | APPROVED | SUPERSEDED` status, validated JSON document, optional
+  agent session, creator/approver, and approval timestamp.
+
+`test_cases.strategy_id` uses `ON DELETE SET NULL`; project/workspace strategy
+ownership cascades. A project has at most one version number through
+`UNIQUE(project_id, version)`. Effective case approach is computed by the API
+from case override, suite default, then `BLACK_BOX`.

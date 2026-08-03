@@ -10,11 +10,29 @@ from __future__ import annotations
 
 import argparse
 import sys
+from typing import TYPE_CHECKING, TypedDict
 
 from suitest_lifecycle.ci_report import render_pr_comment
 from suitest_lifecycle.publishers import make_publisher
 
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
 _PASS_STATES = ("PASSED", "PASS")
+
+
+class SummaryView(TypedDict):
+    total_steps: int
+    passed_steps: int
+    failed_steps: int
+    duration_ms: int | None
+
+
+def _as_int(value: object) -> int:
+    try:
+        return int(value) if isinstance(value, (str, bytes, int, float)) else 0
+    except ValueError:
+        return 0
 
 
 def exit_code_for(*, failed: int, infra_error: bool) -> int:
@@ -23,17 +41,20 @@ def exit_code_for(*, failed: int, infra_error: bool) -> int:
     return 1 if failed else 0
 
 
-def build_comment_from_run(summary: dict, cases: list[dict], *, dashboard_url: str) -> str:
+def build_comment_from_run(
+    summary: Mapping[str, object], cases: list[dict[str, object]], *, dashboard_url: str
+) -> str:
+    duration = summary.get("duration_ms")
     return render_pr_comment(
         cases=cases,
-        passed=int(summary.get("passed_steps", 0)),
-        failed=int(summary.get("failed_steps", 0)),
-        duration_ms=summary.get("duration_ms"),
+        passed=_as_int(summary.get("passed_steps")),
+        failed=_as_int(summary.get("failed_steps")),
+        duration_ms=duration if isinstance(duration, int) else None,
         dashboard_url=dashboard_url,
     )
 
 
-def _summary_view(data: dict) -> dict:
+def _summary_view(data: dict[str, object]) -> SummaryView:
     """Normalize the run_tests envelope's ``data`` into the flat shape the
     renderer contract wants (passed_steps/failed_steps/duration_ms).
 
@@ -41,16 +62,18 @@ def _summary_view(data: dict) -> dict:
     ``data`` directly as ``summary_to_json`` (``totals``/``durationMs``), NOT
     ``data["run"]`` with ``*_steps`` keys as the plan draft assumed.
     """
-    totals = data.get("totals") or {}
+    raw_totals = data.get("totals")
+    totals = raw_totals if isinstance(raw_totals, dict) else {}
+    raw_duration = data.get("durationMs")
     return {
-        "total_steps": int(totals.get("total", 0)),
-        "passed_steps": int(totals.get("passed", 0)),
-        "failed_steps": int(totals.get("failed", 0)) + int(totals.get("errored", 0)),
-        "duration_ms": data.get("durationMs"),
+        "total_steps": _as_int(totals.get("total")),
+        "passed_steps": _as_int(totals.get("passed")),
+        "failed_steps": _as_int(totals.get("failed")) + _as_int(totals.get("errored")),
+        "duration_ms": raw_duration if isinstance(raw_duration, int) else None,
     }
 
 
-def _collect_cases(data: dict, config_path: str) -> list[dict]:
+def _collect_cases(data: dict[str, object], config_path: str) -> list[dict[str, object]]:
     """One row per case (pass AND fail) from the last run's results, enriched
     with a failure excerpt (plan #4) for the failing ones.
 
@@ -59,13 +82,14 @@ def _collect_cases(data: dict, config_path: str) -> list[dict]:
     by title. Evidence links degrade to empty in CI-pure mode (no server URL).
     """
     excerpts = _failure_excerpts(config_path)
-    cases: list[dict] = []
-    for r in data.get("results") or []:
+    cases: list[dict[str, object]] = []
+    results = data.get("results")
+    for r in results if isinstance(results, list) else []:
         if not isinstance(r, dict):
             continue
         title = str(r.get("title") or r.get("testId") or "untitled")
         status = "PASS" if str(r.get("status", "")).upper() in _PASS_STATES else "FAIL"
-        row: dict = {"title": title, "status": status, "evidence_url": ""}
+        row: dict[str, object] = {"title": title, "status": status, "evidence_url": ""}
         if status == "FAIL" and title in excerpts:
             row["failure_excerpt"] = excerpts[title]
         cases.append(row)
@@ -101,7 +125,8 @@ def main(argv: list[str] | None = None) -> int:
     envelope = run_tests(args.config)
     if not isinstance(envelope, dict):
         return 2
-    data = envelope.get("data") or {}
+    raw_data = envelope.get("data")
+    data = raw_data if isinstance(raw_data, dict) else {}
     # infra error = gagal sebelum test jalan (no totals/results produced)
     infra_error = not envelope.get("success") and not data.get("totals")
 

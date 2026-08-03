@@ -6,11 +6,12 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, cast
 
 from pydantic import BaseModel
-from sqlalchemy import func, select, update
+from sqlalchemy import case, func, select, update
 from suitest_db.models.case import TestCase
 from suitest_db.models.project import Suite
 from suitest_db.models.requirement import RequirementLink
 from suitest_db.repositories.base import AsyncRepository
+from suitest_shared.domain.enums import TestingApproach
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -21,12 +22,14 @@ class SuiteCreate(BaseModel):
     name: str
     description: str | None = None
     order: int = 0
+    default_testing_approach: TestingApproach | None = None
 
 
 class SuiteUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     order: int | None = None
+    default_testing_approach: TestingApproach | None = None
 
 
 class SuiteRepo(AsyncRepository[Suite, SuiteCreate, SuiteUpdate]):
@@ -120,26 +123,19 @@ class SuiteRepo(AsyncRepository[Suite, SuiteCreate, SuiteUpdate]):
 
         Caller must have already verified the submitted set matches the live
         set (via :meth:`active_case_ids_in_order`); this helper trusts the
-        input. Single transaction — one ``UPDATE`` per case keyed on the
-        ``(suite_id, id)`` pair so a foreign id silently no-ops rather than
-        bleeding into another suite.
-
-        The plan-05b ``UPDATE … FROM unnest(...)`` pattern is equivalent to
-        this loop for the M1d-4 row counts (single-digit cases per suite in
-        the typical TCM workflow). We keep the loop because SQLAlchemy 2's
-        async API does not expose a portable ``unnest(text[], int[])`` form
-        without resorting to raw SQL — and raw SQL is forbidden by CLAUDE
-        §2.2 outside performance-critical hot paths.
+        input. A SQL ``CASE`` expression applies every rank in one portable
+        update while the suite predicate prevents cross-suite writes.
         """
-        for new_rank, case_id in enumerate(ordered_case_ids):
+        ranks = {case_id: new_rank for new_rank, case_id in enumerate(ordered_case_ids)}
+        if ranks:
             await self.session.execute(
                 update(TestCase)
                 .where(
-                    TestCase.id == case_id,
+                    TestCase.id.in_(ranks),
                     TestCase.suite_id == suite_id,
                     TestCase.deleted_at.is_(None),
                 )
-                .values(order_in_suite=new_rank)
+                .values(order_in_suite=case(ranks, value=TestCase.id))
             )
         await self.session.flush()
 

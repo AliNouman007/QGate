@@ -52,18 +52,31 @@ class CrawlResult:
     # Per-route interactive-element digest ({"inputs": [...], "buttons": [...]})
     # — feeds LLM codegen so generated Playwright uses REAL selectors even on
     # apps with no data-testid convention.
-    page_elements: dict[str, dict] = field(default_factory=dict)
+    page_elements: dict[str, dict[str, object]] = field(default_factory=dict)
 
 
-def _pick_testid(items: list[dict], *needles: str) -> str:
+def _pick_testid(items: list[dict[str, object]], *needles: str) -> str:
     """Best data-testid match by needle in testid/name/type/autocomplete."""
     for it in items:
-        hay = " ".join(
-            str(it.get(k, "")) for k in ("testid", "name", "type", "autocomplete", "placeholder")
-        ).lower()
-        if it.get("testid") and all(n in hay for n in needles):
+        hay = _element_search_text(it)
+        if it.get("testid") and _contains_all(hay, needles):
             return str(it["testid"])
     return ""
+
+
+def _element_search_text(item: dict[str, object]) -> str:
+    fields = ("testid", "name", "type", "autocomplete", "placeholder")
+    return " ".join(str(item.get(field, "")) for field in fields).lower()
+
+
+def _contains_all(haystack: str, needles: tuple[str, ...]) -> bool:
+    return all(needle in haystack for needle in needles)
+
+
+def _enqueue_links(queue: list[str], links: list[str], visited: set[str], limit: int) -> None:
+    for link in links:
+        if link not in visited and len(queue) < limit:
+            queue.append(link)
 
 
 async def _crawl(base_url: str, username: str, password: str, max_pages: int) -> CrawlResult:
@@ -72,9 +85,10 @@ async def _crawl(base_url: str, username: str, password: str, max_pages: int) ->
     base = base_url.rstrip("/")
     pages: list[Page] = []
     page_testids: dict[str, list[str]] = {}
-    page_elements: dict[str, dict] = {}
+    page_elements: dict[str, dict[str, object]] = {}
     login = LoginSelectors()
     visited: set[str] = set()
+    page_routes: set[str] = set()
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -103,6 +117,7 @@ async def _crawl(base_url: str, username: str, password: str, max_pages: int) ->
                     route=route or "/login", name="LoginPage", protected=False, source_file="crawl"
                 )
             )
+            page_routes.add(route or "/login")
             page_testids[route or "/login"] = data["testids"]
             page_elements[route or "/login"] = {
                 "inputs": data["inputs"],
@@ -139,7 +154,7 @@ async def _crawl(base_url: str, username: str, password: str, max_pages: int) ->
             d = await page.evaluate(_EXTRACT_JS)
             protected = landed != href and ("login" in landed.lower())  # redirected to login
             name = _name_of(href)
-            if not any(pg.route == href for pg in pages):
+            if href not in page_routes:
                 pages.append(
                     Page(
                         route=href,
@@ -148,11 +163,10 @@ async def _crawl(base_url: str, username: str, password: str, max_pages: int) ->
                         source_file="crawl",
                     )
                 )
+                page_routes.add(href)
             page_testids[href] = d["testids"]
             page_elements[href] = {"inputs": d["inputs"], "buttons": d["buttons"]}
-            for ln in d["links"]:
-                if ln not in visited and len(queue) < max_pages * 2:
-                    queue.append(ln)
+            _enqueue_links(queue, d["links"], visited, max_pages * 2)
 
         await browser.close()
 

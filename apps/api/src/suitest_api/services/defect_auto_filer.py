@@ -597,11 +597,10 @@ def build_llm_diagnoser() -> DefectDiagnoser:
         llm = await LLMConfigRepo(session).get_active(workspace_id)
         if llm is None:
             return None
-        base_url = llm.config_json.get("base_url")
         provider = get_provider(
             llm.provider,
             api_key=llm.api_key_encrypted,
-            base_url=base_url if isinstance(base_url, str) else None,
+            base_url=llm.base_url,
         )
         graph = build_diagnosis_graph(provider)
         state = await graph.ainvoke({"evidence": evidence, "model": llm.model})

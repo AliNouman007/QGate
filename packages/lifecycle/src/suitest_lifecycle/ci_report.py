@@ -10,7 +10,7 @@ _EXCERPT_LIMIT = 1500  # per failing case di comment; bundle penuh via get_failu
 
 def render_pr_comment(
     *,
-    cases: list[dict],
+    cases: list[dict[str, object]],
     passed: int,
     failed: int,
     duration_ms: int | None,

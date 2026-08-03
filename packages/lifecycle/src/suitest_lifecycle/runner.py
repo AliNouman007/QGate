@@ -22,6 +22,10 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+def _artifact_paths(video: str, screenshot: str) -> list[str]:
+    return [path for path in (video, screenshot) if path]
+
+
 def _collect_steps(
     case: PlanCase, test_dir: Path, outcome: TestOutcome
 ) -> tuple[list[StepResult], str, str]:
@@ -131,6 +135,9 @@ def run_tests(
                 status=TestOutcome.SKIPPED,
                 duration_ms=0,
                 error="no automation file exported",
+                testing_approach=case.testing_approach,
+                test_level=case.test_level,
+                framework=case.framework,
             )
             results.append(result)
             if on_result is not None:
@@ -141,7 +148,7 @@ def run_tests(
             file_path, interpreter, timeout_sec, env
         )
         steps, video, screenshot = _collect_steps(case, test_dir, outcome)
-        artifacts = [p for p in (video, screenshot) if p]
+        artifacts = _artifact_paths(video, screenshot)
         result = TestResult(
             test_id=case.id,
             title=case.title,
@@ -156,6 +163,9 @@ def run_tests(
             video_path=video,
             screenshot_path=screenshot,
             artifacts=artifacts,
+            testing_approach=case.testing_approach,
+            test_level=case.test_level,
+            framework=case.framework,
         )
         results.append(result)
         if on_result is not None:

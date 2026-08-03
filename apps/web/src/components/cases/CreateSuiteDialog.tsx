@@ -12,6 +12,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCreateSuite } from "@/hooks/use-test-cases";
+import type { components } from "@/lib/api-types";
+
+type TestingApproach = components["schemas"]["TestingApproach"];
 
 export interface CreateSuiteDialogProps {
   open: boolean;
@@ -26,10 +29,12 @@ export interface CreateSuiteDialogProps {
  */
 export function CreateSuiteDialog({ open, onClose }: CreateSuiteDialogProps): React.ReactElement {
   const [name, setName] = useState("");
+  const [approach, setApproach] = useState<TestingApproach>("BLACK_BOX");
   const createSuite = useCreateSuite();
 
   const reset = (): void => {
     setName("");
+    setApproach("BLACK_BOX");
     createSuite.reset();
   };
 
@@ -43,7 +48,7 @@ export function CreateSuiteDialog({ open, onClose }: CreateSuiteDialogProps): Re
     const trimmed = name.trim();
     if (trimmed.length === 0) return;
     createSuite.mutate(
-      { name: trimmed },
+      { name: trimmed, defaultTestingApproach: approach },
       {
         onSuccess: () => {
           close();
@@ -78,6 +83,21 @@ export function CreateSuiteDialog({ open, onClose }: CreateSuiteDialogProps): Re
               }}
               placeholder="e.g. Login flow"
             />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="create-suite-approach">Default testing approach</Label>
+            <select
+              id="create-suite-approach"
+              value={approach}
+              onChange={(event) => {
+                setApproach(event.target.value as TestingApproach);
+              }}
+              className="h-9 rounded-md border border-border bg-bg-base px-3 text-[13px] text-fg-2 outline-none focus:border-accent"
+            >
+              <option value="BLACK_BOX">Black-box — public behavior only</option>
+              <option value="GRAY_BOX">Gray-box — public behavior + internal context</option>
+              <option value="WHITE_BOX">White-box — internal tests and coverage</option>
+            </select>
           </div>
           {createSuite.isError ? (
             <p data-testid="create-suite-error" className="text-[12.5px] text-red">

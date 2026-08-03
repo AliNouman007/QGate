@@ -32,8 +32,12 @@ class CommentPublisher(Protocol):
         ...
 
 
-def _default_http(token: str):
-    def _request(method: str, url: str, body: dict | None = None) -> object:
+class HttpClient(Protocol):
+    def __call__(self, method: str, url: str, body: dict[str, object] | None = None) -> object: ...
+
+
+def _default_http(token: str) -> HttpClient:
+    def _request(method: str, url: str, body: dict[str, object] | None = None) -> object:
         data = json.dumps(body).encode() if body is not None else None
         req = urllib.request.Request(
             url,
@@ -61,7 +65,7 @@ class GitHubPublisher:
         repo: str,
         pr_number: int,
         api_base: str = "https://api.github.com",
-        http=None,
+        http: HttpClient | None = None,
     ) -> None:
         self._base = f"{api_base}/repos/{repo}/issues/{pr_number}/comments"
         self._http = http or _default_http(token)
@@ -69,10 +73,13 @@ class GitHubPublisher:
         self._repo = repo
 
     def publish(self, markdown: str) -> None:
-        existing = self._http("GET", self._base) or []
+        response = self._http("GET", self._base)
+        existing = response if isinstance(response, list) else []
         for comment in existing:
+            if not isinstance(comment, dict):
+                continue
             if COMMENT_MARKER in str(comment.get("body", "")):
-                url = f"{self._api_base}/repos/{self._repo}/issues/comments/{comment['id']}"
+                url = f"{self._api_base}/repos/{self._repo}/issues/comments/{comment.get('id')}"
                 self._http("PATCH", url, {"body": markdown})
                 return
         self._http("POST", self._base, {"body": markdown})

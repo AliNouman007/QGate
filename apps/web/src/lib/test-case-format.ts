@@ -23,6 +23,13 @@ export type StepType = "navigation" | "action" | "assertion" | "wait" | "api";
 /** Frontend-facing case type derived from a case's step target kinds. */
 export type CaseType = "frontend" | "backend" | "api" | "e2e";
 
+export type SourceKind = "MANUAL" | "AI" | "MCP" | "IMPORT";
+
+export function caseSourceToPill(source: SourceKind | "RECORDER" | "HEURISTIC_CRAWL"): SourceKind {
+  if (source === "RECORDER" || source === "HEURISTIC_CRAWL") return "IMPORT";
+  return source;
+}
+
 /** A derived, presentation-ready step. Independent of whether it came from the
  *  server or a fallback generator. */
 export interface DerivedStep {

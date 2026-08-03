@@ -46,6 +46,8 @@ dev-dependencies = [
   # Task 6 — litellm+langgraph moved to suitest-agent[cloud] optional extra;
   # dev env opts in so test_providers.py + test_graphs.py keep working.
   "suitest-agent[cloud]",
+  # Lifecycle browser modules are type-checked and tested from the root dev env.
+  "suiflex-suitest-lifecycle[frontend]",
 ]
 
 [tool.uv.sources]

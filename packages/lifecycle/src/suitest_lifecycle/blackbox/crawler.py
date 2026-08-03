@@ -15,7 +15,7 @@ import asyncio
 import contextlib
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from suitest_lifecycle.blackbox.detector import detect_login_form, detect_page_pattern
 from suitest_lifecycle.blackbox.models import (
@@ -27,7 +27,7 @@ from suitest_lifecycle.blackbox.models import (
 )
 
 if TYPE_CHECKING:
-    from playwright.async_api import Page
+    from playwright.async_api import Locator, Page
 
 # Rich per-element capture: every attribute the selector strategy ranks.
 _EXTRACT_JS = r"""
@@ -311,12 +311,29 @@ async def _discover(cfg: BlackboxUiConfig, evidence_dir: Path) -> DiscoveryResul
             )
             info.protected = landed != route and "login" in landed.lower()
             result.pages.append(info)
-            for href in info.nav_routes:
-                if href not in visited and len(queue) < cfg.crawl.max_routes * 3:
-                    queue.append((href, depth + 1))
+            _enqueue_routes(
+                queue,
+                info.nav_routes,
+                visited,
+                depth=depth + 1,
+                limit=cfg.crawl.max_routes * 3,
+            )
 
         await browser.close()
     return result
+
+
+def _enqueue_routes(
+    queue: list[tuple[str, int]],
+    routes: list[str],
+    visited: set[str],
+    *,
+    depth: int,
+    limit: int,
+) -> None:
+    for route in routes:
+        if route not in visited and len(queue) < limit:
+            queue.append((route, depth))
 
 
 def _shot_name(route: str) -> str:
@@ -330,14 +347,14 @@ def _as_locator(expr: str) -> str:
     return e if e.startswith("page.") else f'page.locator("{e}")'
 
 
-def _eval_locator(page: Page, expr: str):
+def _eval_locator(page: Page, expr: str) -> Locator:
     """Resolve a stored locator EXPRESSION on a live page.
 
     The expression grammar is our own output (``build_locator``/`_as_locator``),
     so evaluating it against the page object is safe and keeps one single
     source of truth between discovery-time interaction and generated code.
     """
-    return eval(expr, {"page": page})
+    return cast("Locator", eval(expr, {"page": page}))
 
 
 def discover(cfg: BlackboxUiConfig, evidence_dir: str | Path) -> DiscoveryResult:

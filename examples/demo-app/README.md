@@ -25,6 +25,17 @@ docker build -t brewly . && docker run -p 8089:8089 brewly
 PYTHONPATH=. uvx --with fastapi --with httpx pytest test_app.py
 ```
 
+Suitest white-box lifecycle (keeps the normal `suitest-output/backend`
+structure):
+
+```bash
+suitest test --config suitest.whitebox.config.json
+```
+
+The generated strategy, plan, native `TCxxx` test source, results, TCM mirror,
+reports, and normalized coverage all use the same output and publish pipeline
+as black-box and gray-box runs.
+
 ## Determinism
 
 `POST /api/reset` restores seed data (4 items, stock 10 each) so demo runs are

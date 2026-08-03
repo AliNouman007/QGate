@@ -15,7 +15,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from suitest_lifecycle.models import Mode
+from suitest_lifecycle.models import Mode, TestLevel
 
 
 class ConfigError(ValueError):
@@ -47,8 +47,8 @@ class ServerConfig:
 @dataclass
 class DependencyConfig:
     """A supporting service to start before the main target (e.g. the backend a
-    frontend run depends on for login/API). Started + readiness-gated in order,
-    torn down after the run."""
+    frontend run depends on for login/API). Startup/readiness uses bounded
+    concurrency; results are handled in config order and torn down after the run."""
 
     name: str
     start_command: str
@@ -81,6 +81,15 @@ class PublishConfig:
     # (config keys ``recreateProject``/``resetProjectBinding``, env
     # SUITEST_RECREATE_PROJECT=1, or the MCP tool arg ``recreate_project``).
     recreate: bool = False
+
+
+@dataclass
+class TestingConfig:
+    approach: str = "auto"
+    level: TestLevel = TestLevel.E2E
+    framework: str = ""
+    command: list[str] = field(default_factory=list)
+    coverage_file: str = ""
 
 
 @dataclass
@@ -123,6 +132,7 @@ class Config:
     #   deterministic — archetypes only (ZERO baseline; unknown cases fail loud).
     codegen: str = "auto"
     publish: PublishConfig = field(default_factory=PublishConfig)
+    testing: TestingConfig = field(default_factory=TestingConfig)
     output_dir: Path = field(default_factory=lambda: Path("suitest-output"))
     config_path: Path = field(default_factory=lambda: Path("suitest.config.json"))
 
@@ -142,6 +152,12 @@ def _port_from_url(url: str) -> int:
     tail = url.rsplit(":", 1)[-1]
     digits = "".join(ch for ch in tail if ch.isdigit())
     return int(digits) if digits else (443 if url.startswith("https") else 80)
+
+
+def _string_dict(value: object) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    return {str(key): str(item) for key, item in value.items()}
 
 
 def load_config(path: str | Path) -> Config:
@@ -246,11 +262,7 @@ def load_config(path: str | Path) -> Config:
                 raise ConfigError("dependencies[].baseUrl is required")
             dep_cwd = (base_dir / str(entry.get("cwd", "."))).resolve()
             dep_env_raw = entry.get("env", {})
-            dep_env = (
-                {str(k): str(v) for k, v in dep_env_raw.items()}
-                if isinstance(dep_env_raw, dict)
-                else {}
-            )
+            dep_env = _string_dict(dep_env_raw)
             dependencies.append(
                 DependencyConfig(
                     name=str(entry.get("name", dep_cwd.name)),
@@ -283,6 +295,31 @@ def load_config(path: str | Path) -> Config:
                 or pub_raw.get("resetProjectBinding", False)
                 or os.environ.get("SUITEST_RECREATE_PROJECT", "") in ("1", "true")
             ),
+        )
+
+    testing = TestingConfig()
+    testing_raw = raw.get("testing", {})
+    if isinstance(testing_raw, dict):
+        approach = str(testing_raw.get("approach", "auto")).lower()
+        if approach not in {"auto", "black-box", "gray-box", "white-box"}:
+            raise ConfigError("testing.approach must be auto, black-box, gray-box, or white-box")
+        level_raw = str(testing_raw.get("level", "E2E")).upper()
+        try:
+            level = TestLevel(level_raw)
+        except ValueError as exc:
+            raise ConfigError(
+                "testing.level must be UNIT, COMPONENT, INTEGRATION, SYSTEM, or E2E"
+            ) from exc
+        command_raw = testing_raw.get("command", [])
+        if isinstance(command_raw, str):
+            raise ConfigError("testing.command must be a JSON string array")
+        command = [str(part) for part in command_raw] if isinstance(command_raw, list) else []
+        testing = TestingConfig(
+            approach=approach,
+            level=level,
+            framework=str(testing_raw.get("framework", "")),
+            command=command,
+            coverage_file=str(testing_raw.get("coverageFile", "")),
         )
 
     ids_raw = raw.get("testIds", [])
@@ -321,6 +358,7 @@ def load_config(path: str | Path) -> Config:
         prd_file=str((base_dir / str(raw["prdFile"])).resolve()) if raw.get("prdFile") else "",
         codegen=str(raw.get("codegen", "auto")).lower(),
         publish=publish,
+        testing=testing,
         output_dir=output_dir,
         config_path=cfg_path,
     )

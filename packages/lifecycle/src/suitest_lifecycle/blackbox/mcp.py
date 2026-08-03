@@ -21,27 +21,54 @@ from typing import TYPE_CHECKING, Any
 
 from suitest_lifecycle.blackbox.models import BlackboxUiConfig, DiscoveryResult
 from suitest_lifecycle.frontend_runtime import ensure_browser
-from suitest_lifecycle.models import Mode
+from suitest_lifecycle.models import Mode, PlanCase, PlanStep, Priority
 from suitest_lifecycle.paths import Paths, build_paths
+from suitest_lifecycle.tool_result import envelope as _envelope
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-def _envelope(
-    success: bool,
-    summary: str,
-    data: dict[str, Any] | None = None,
-    artifacts: list[str] | None = None,
-    errors: list[str] | None = None,
-) -> dict[str, Any]:
-    return {
-        "success": success,
-        "summary": summary,
-        "data": data or {},
-        "artifacts": artifacts or [],
-        "errors": errors or [],
-    }
+def _plan_steps(raw_steps: list[dict[str, object]]) -> list[PlanStep]:
+    return [
+        PlanStep(type=str(step["type"]), description=str(step["description"])) for step in raw_steps
+    ]
+
+
+def _string_tags(raw_tags: list[object]) -> list[str]:
+    return [str(tag) for tag in raw_tags]
+
+
+def _case_steps_payload(raw_steps: list[dict[str, object]]) -> list[dict[str, object]]:
+    return [
+        {
+            "order": index + 1,
+            "action": step["description"],
+            "expected": step["description"] if step["type"] == "assertion" else "",
+        }
+        for index, step in enumerate(raw_steps)
+    ]
+
+
+def _result_steps_payload(
+    raw_steps: list[dict[str, Any]], upload: Callable[[str, str], str]
+) -> list[dict[str, object]]:
+    payload: list[dict[str, object]] = []
+    for index, step in enumerate(raw_steps):
+        screenshot = step.get("screenshot")
+        screenshot_url = ""
+        if isinstance(screenshot, str) and Path(screenshot).is_file():
+            screenshot_url = upload(screenshot, "image/png")
+        payload.append(
+            {
+                "order": step.get("index", index + 1),
+                "type": step.get("type", "action"),
+                "description": step.get("description", ""),
+                "outcome": step.get("status", "PASSED"),
+                "screenshot": screenshot_url,
+            }
+        )
+    return payload
 
 
 def _resolve(
@@ -264,7 +291,7 @@ def blackbox_generate_playwright_tests(**kwargs: Any) -> dict[str, Any]:
 
 def blackbox_run_playwright_tests(**kwargs: Any) -> dict[str, Any]:
     """Execute the generated tests; returns per-case outcomes + evidence."""
-    from suitest_lifecycle.models import PlanCase, PlanStep, Priority, TestResult
+    from suitest_lifecycle.models import TestResult
     from suitest_lifecycle.publish import PublishSession
     from suitest_lifecycle.retest import resolve_binding
     from suitest_lifecycle.runner import run_tests
@@ -283,12 +310,9 @@ def blackbox_run_playwright_tests(**kwargs: Any) -> dict[str, Any]:
             category=str(item.get("category", "Blackbox")),
             priority=Priority(str(item.get("priority", "Medium"))),
             source_ref=str(item.get("source_ref", "bb:run")),
-            steps=[
-                PlanStep(type=str(step["type"]), description=str(step["description"]))
-                for step in item.get("steps", [])
-            ],
+            steps=_plan_steps(item.get("steps", [])),
             automation_file=str(item.get("automation_file", "")),
-            tags=[str(tag) for tag in item.get("tags", [])],
+            tags=_string_tags(item.get("tags", [])),
         )
         for item in plan
     ]
@@ -573,14 +597,7 @@ def blackbox_publish_results(**kwargs: Any) -> dict[str, Any]:
                         "automationFilePath": c.get("automation_file", ""),
                         "automationCode": code,
                         "generatedBy": "suitest-blackbox",
-                        "steps": [
-                            {
-                                "order": i + 1,
-                                "action": st["description"],
-                                "expected": st["description"] if st["type"] == "assertion" else "",
-                            }
-                            for i, st in enumerate(c.get("steps", []))
-                        ],
+                        "steps": _case_steps_payload(c.get("steps", [])),
                     }
                 )
                 side = _sidecar(str(c["id"]))
@@ -606,20 +623,7 @@ def blackbox_publish_results(**kwargs: Any) -> dict[str, Any]:
                         "outcome": str(side.get("status", "PASSED")),
                         "durationMs": 0,
                         "error": str(side.get("error", "")),
-                        "steps": [
-                            {
-                                "order": st.get("index", i + 1),
-                                "type": st.get("type", "action"),
-                                "description": st.get("description", ""),
-                                "outcome": st.get("status", "PASSED"),
-                                "screenshot": (
-                                    _up(st["screenshot"], "image/png")
-                                    if st.get("screenshot") and Path(st["screenshot"]).is_file()
-                                    else ""
-                                ),
-                            }
-                            for i, st in enumerate(side.get("steps", []))
-                        ],
+                        "steps": _result_steps_payload(side.get("steps", []), _up),
                         "artifacts": artifacts,
                     }
                 )

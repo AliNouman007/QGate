@@ -18,6 +18,8 @@ type CasesPage = components["schemas"]["Page_TestCaseListItem_"];
 type CaseDetail = components["schemas"]["TestCaseDetail"];
 type SuitesPage = { items: components["schemas"]["SuitePublic"][] };
 type TargetKind = components["schemas"]["TargetKind"];
+type TestingApproach = components["schemas"]["TestingApproach"];
+type TestLevel = components["schemas"]["TestLevel"];
 
 export function useSuites(): UseSuspenseQueryResult<SuitesPage> {
   const projectId = useActiveProject((s) => s.projectId);
@@ -39,6 +41,7 @@ type SuitePublic = components["schemas"]["SuitePublic"];
 export interface CreateSuiteInput {
   name: string;
   description?: string;
+  defaultTestingApproach?: TestingApproach;
 }
 
 /**
@@ -55,6 +58,9 @@ export function useCreateSuite(): UseMutationResult<SuitePublic, Error, CreateSu
         projectId,
         name: input.name,
         ...(input.description ? { description: input.description } : {}),
+        ...(input.defaultTestingApproach
+          ? { defaultTestingApproach: input.defaultTestingApproach }
+          : {}),
       });
       return res.data;
     },
@@ -115,6 +121,25 @@ export function useTestCase(caseId: string | undefined): UseQueryResult<CaseDeta
     queryFn: async () => {
       const res = await api.get<CaseDetail>(`/test-cases/${caseId ?? ""}`);
       return res.data;
+    },
+  });
+}
+
+export function useUpdateTestingMetadata(
+  caseId: string,
+): UseMutationResult<
+  CaseDetail,
+  Error,
+  { testingApproach: TestingApproach | null; testLevel?: TestLevel | null }
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (body) => (await api.patch<CaseDetail>(`/test-cases/${caseId}`, body)).data,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["test-cases", caseId] }),
+        queryClient.invalidateQueries({ queryKey: ["test-cases"] }),
+      ]);
     },
   });
 }

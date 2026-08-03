@@ -101,9 +101,9 @@ def analyze_postman(collection: dict[str, object], project_name: str) -> CodeSum
     seen: set[tuple[str, str]] = set()
     unique: list[Endpoint] = []
     for ep in endpoints:
-        key = (ep.method, ep.path)
-        if key not in seen:
-            seen.add(key)
+        endpoint_key = (ep.method, ep.path)
+        if endpoint_key not in seen:
+            seen.add(endpoint_key)
             unique.append(ep)
     unique.sort(key=lambda e: (e.path, e.method))
 
@@ -111,22 +111,31 @@ def analyze_postman(collection: dict[str, object], project_name: str) -> CodeSum
     name = info.get("name", project_name) if isinstance(info, dict) else project_name
     groups: dict[str, int] = {}
     for ep in unique:
-        parts = [
-            p for p in ep.path.strip("/").split("/") if p and not p.startswith(":") and p != "api"
-        ]
-        key = parts[0] if parts else "root"
-        groups[key] = groups.get(key, 0) + 1
+        group = _path_group(ep.path)
+        groups[group] = groups.get(group, 0) + 1
 
     return CodeSummary(
         project_name=str(name) or project_name,
         mode=Mode.BACKEND,
         tech_stack=["Postman", "HTTP API"],
         endpoints=unique,
-        features=[k for k, _ in sorted(groups.items(), key=lambda kv: (-kv[1], kv[0]))],
+        features=_ranked_groups(groups),
         auth_flow="Auth inferred from Authorization header / auth block."
         if any(e.auth_required for e in unique)
         else "",
     )
+
+
+def _path_group(path: str) -> str:
+    parts = path.strip("/").split("/")
+    meaningful = [part for part in parts if part and not part.startswith(":") and part != "api"]
+    return meaningful[0] if meaningful else "root"
+
+
+def _ranked_groups(groups: dict[str, int]) -> list[str]:
+    ranked = list(groups.items())
+    ranked.sort(key=lambda item: (-item[1], item[0]))
+    return [name for name, _count in ranked]
 
 
 __all__ = ["analyze_postman", "load_collection"]

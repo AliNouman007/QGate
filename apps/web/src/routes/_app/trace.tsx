@@ -12,22 +12,17 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { useTraceabilityMatrix } from "@/hooks/use-traceability";
 import type { components } from "@/lib/api-types";
+import { caseSourceToPill } from "@/lib/test-case-format";
 import { cn } from "@/lib/utils";
 
 type Matrix = components["schemas"]["TraceabilityMatrix"];
-type Case = components["schemas"]["MatrixCase"];
-
-function caseSourceToPill(source: Case["source"]): "MANUAL" | "AI" | "MCP" | "IMPORT" {
-  if (source === "AI") return "AI";
-  if (source === "MCP") return "MCP";
-  if (source === "IMPORT" || source === "RECORDER" || source === "HEURISTIC_CRAWL") return "IMPORT";
-  return "MANUAL";
-}
 
 function CalloutBar({ matrix }: { matrix: Matrix }): React.ReactElement {
   const total = matrix.requirements?.length ?? 0;
   const linked = (matrix.requirements ?? []).filter((r) => (r.tests ?? []).length > 0).length;
-  const withDefects = (matrix.requirements ?? []).filter((r) => (r.defects ?? []).length > 0).length;
+  const withDefects = (matrix.requirements ?? []).filter(
+    (r) => (r.defects ?? []).length > 0,
+  ).length;
 
   return (
     <div
@@ -134,7 +129,10 @@ function MatrixBody(): React.ReactElement {
                     </div>
                     <div className="flex items-center gap-1.5">
                       <SourcePill source={caseSourceToPill(c.source)} />
-                      <StatusBadge status={c.status === "ACTIVE" ? "pass" : "neutral"} label={c.status} />
+                      <StatusBadge
+                        status={c.status === "ACTIVE" ? "pass" : "neutral"}
+                        label={c.status}
+                      />
                     </div>
                   </div>
                 </li>
@@ -216,7 +214,9 @@ function Trace(): React.ReactElement {
   return (
     <section className="flex flex-col gap-4" data-testid="trace-screen">
       <header>
-        <h2 className="text-[20px] font-semibold tracking-[-.01em] text-fg-1">{t("trace.title")}</h2>
+        <h2 className="text-[20px] font-semibold tracking-[-.01em] text-fg-1">
+          {t("trace.title")}
+        </h2>
       </header>
       <ErrorBoundary fallback={({ reset }) => <TraceError reset={reset} />}>
         <Suspense fallback={<TraceSkeleton />}>

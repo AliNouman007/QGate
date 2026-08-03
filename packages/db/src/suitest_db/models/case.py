@@ -15,7 +15,14 @@ from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, Uniqu
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from suitest_shared.domain.enums import CaseSource, CaseStatus, Priority, TargetKind
+from suitest_shared.domain.enums import (
+    CaseSource,
+    CaseStatus,
+    Priority,
+    TargetKind,
+    TestingApproach,
+    TestLevel,
+)
 from suitest_shared.text import derive_slug, derive_title
 
 from suitest_db.base import Base, TimestampMixin
@@ -89,6 +96,14 @@ class TestCase(Base, TimestampMixin):
     owner_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     generated_by: Mapped[str | None] = mapped_column(String(64))
     generated_from: Mapped[dict[str, Any] | None] = mapped_column(PortableJSON)
+    testing_approach: Mapped[TestingApproach | None] = mapped_column(
+        SAEnum(TestingApproach, name="testing_approach")
+    )
+    test_level: Mapped[TestLevel | None] = mapped_column(SAEnum(TestLevel, name="test_level"))
+    framework: Mapped[str | None] = mapped_column(String(64))
+    strategy_id: Mapped[str | None] = mapped_column(
+        ForeignKey("test_strategies.id", ondelete="SET NULL")
+    )
     estimated_ms: Mapped[int | None] = mapped_column(Integer)
     # Phase 2 (lifecycle ingest): link a case to its exported runnable test file
     # and persist the full generated source so the web Code tab works even when
@@ -135,6 +150,8 @@ class TestCase(Base, TimestampMixin):
         Index("ix_test_cases_deleted_at", "deleted_at"),
         Index("ix_test_cases_suite_order", "suite_id", "order_in_suite"),
         Index("ix_test_cases_suite_slug", "suite_id", "slug"),
+        Index("ix_test_cases_testing_approach", "testing_approach"),
+        Index("ix_test_cases_strategy_id", "strategy_id"),
     )
 
 

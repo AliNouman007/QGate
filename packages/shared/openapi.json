@@ -494,6 +494,7 @@
           "VIDEO",
           "CONSOLE_LOG",
           "TRACE",
+          "COVERAGE_REPORT",
           "CUSTOM"
         ],
         "title": "ArtifactKind",
@@ -3336,6 +3337,17 @@
             ],
             "title": "Description"
           },
+          "framework": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Framework"
+          },
           "generatedBy": {
             "anyOf": [
               {
@@ -3400,12 +3412,54 @@
             "title": "Steps",
             "type": "array"
           },
+          "strategyId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategyid"
+          },
+          "strategyRef": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategyref"
+          },
           "tags": {
             "items": {
               "type": "string"
             },
             "title": "Tags",
             "type": "array"
+          },
+          "testLevel": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "testingApproach": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestingApproach"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "title": {
             "anyOf": [
@@ -6978,6 +7032,18 @@
             ],
             "title": "Completed At"
           },
+          "coverage_summary": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage Summary"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -7083,6 +7149,18 @@
               }
             ],
             "title": "Commitsha"
+          },
+          "coverageSummary": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coveragesummary"
           },
           "env": {
             "default": "staging",
@@ -7847,6 +7925,165 @@
         "title": "SecretsHint",
         "type": "object"
       },
+      "SelectorRepairApplied": {
+        "properties": {
+          "applied": {
+            "default": true,
+            "title": "Applied",
+            "type": "boolean"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "new_selector": {
+            "title": "New Selector",
+            "type": "string"
+          },
+          "old_selector": {
+            "title": "Old Selector",
+            "type": "string"
+          },
+          "step_id": {
+            "title": "Step Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step_id",
+          "code",
+          "old_selector",
+          "new_selector"
+        ],
+        "title": "SelectorRepairApplied",
+        "type": "object"
+      },
+      "SelectorRepairApplyRequest": {
+        "properties": {
+          "code_sha256": {
+            "maxLength": 64,
+            "minLength": 64,
+            "title": "Code Sha256",
+            "type": "string"
+          },
+          "new_selector": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "New Selector",
+            "type": "string"
+          },
+          "old_selector": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Old Selector",
+            "type": "string"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
+          "step_id": {
+            "title": "Step Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step_id",
+          "old_selector",
+          "new_selector",
+          "code_sha256"
+        ],
+        "title": "SelectorRepairApplyRequest",
+        "type": "object"
+      },
+      "SelectorRepairPublic": {
+        "properties": {
+          "code_sha256": {
+            "title": "Code Sha256",
+            "type": "string"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "failure_kind": {
+            "default": "selector_changed",
+            "title": "Failure Kind",
+            "type": "string"
+          },
+          "new_selector": {
+            "title": "New Selector",
+            "type": "string"
+          },
+          "old_selector": {
+            "title": "Old Selector",
+            "type": "string"
+          },
+          "rationale": {
+            "title": "Rationale",
+            "type": "string"
+          },
+          "step_id": {
+            "title": "Step Id",
+            "type": "string"
+          },
+          "updated_code": {
+            "title": "Updated Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step_id",
+          "old_selector",
+          "new_selector",
+          "updated_code",
+          "rationale",
+          "confidence",
+          "code_sha256"
+        ],
+        "title": "SelectorRepairPublic",
+        "type": "object"
+      },
+      "SelectorRepairRequest": {
+        "properties": {
+          "dom_snapshot": {
+            "anyOf": [
+              {
+                "maxLength": 100000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dom Snapshot"
+          },
+          "error": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Error",
+            "type": "string"
+          },
+          "step_id": {
+            "title": "Step Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step_id",
+          "error"
+        ],
+        "title": "SelectorRepairRequest",
+        "type": "object"
+      },
       "Severity": {
         "enum": [
           "CRITICAL",
@@ -8094,10 +8331,66 @@
         "title": "StrategyAlternative",
         "type": "object"
       },
+      "StrategyRisk": {
+        "properties": {
+          "failure_modes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Failure Modes",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "impact": {
+            "title": "Impact",
+            "type": "string"
+          },
+          "likelihood": {
+            "title": "Likelihood",
+            "type": "string"
+          },
+          "recommended_approach": {
+            "$ref": "#/components/schemas/TestingApproach"
+          },
+          "test_levels": {
+            "items": {
+              "$ref": "#/components/schemas/TestLevel"
+            },
+            "title": "Test Levels",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "impact",
+          "likelihood",
+          "recommended_approach"
+        ],
+        "title": "StrategyRisk",
+        "type": "object"
+      },
       "SuiteCreate": {
         "additionalProperties": false,
         "description": "Body for ``POST /suites``.\n\n``order`` defaults to ``0``; callers usually leave it blank and let the\nrepository's ``order ASC, created_at DESC`` ordering position the suite.",
         "properties": {
+          "defaultTestingApproach": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestingApproach"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "description": {
             "anyOf": [
               {
@@ -8145,6 +8438,16 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "default_testing_approach": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestingApproach"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "description": {
             "anyOf": [
@@ -8208,6 +8511,16 @@
               }
             ],
             "title": "Caseorder"
+          },
+          "defaultTestingApproach": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestingApproach"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "description": {
             "anyOf": [
@@ -8350,6 +8663,19 @@
             ],
             "title": "Description"
           },
+          "framework": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Framework"
+          },
           "name": {
             "maxLength": 255,
             "minLength": 1,
@@ -8386,6 +8712,17 @@
             "title": "Steps",
             "type": "array"
           },
+          "strategyId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategyid"
+          },
           "suiteId": {
             "minLength": 1,
             "title": "Suiteid",
@@ -8397,6 +8734,26 @@
             },
             "title": "Tags",
             "type": "array"
+          },
+          "testLevel": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "testingApproach": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestingApproach"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -8446,6 +8803,21 @@
               }
             ],
             "title": "Description"
+          },
+          "effective_testing_approach": {
+            "$ref": "#/components/schemas/TestingApproach",
+            "default": "BLACK_BOX"
+          },
+          "framework": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Framework"
           },
           "id": {
             "title": "Id",
@@ -8554,6 +8926,17 @@
             "title": "Steps",
             "type": "array"
           },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Id"
+          },
           "suite_id": {
             "title": "Suite Id",
             "type": "string"
@@ -8564,6 +8947,26 @@
             },
             "title": "Tags",
             "type": "array"
+          },
+          "test_level": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "testing_approach": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestingApproach"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "title": {
             "title": "Title",
@@ -8608,6 +9011,21 @@
               }
             ],
             "title": "Description"
+          },
+          "effective_testing_approach": {
+            "$ref": "#/components/schemas/TestingApproach",
+            "default": "BLACK_BOX"
+          },
+          "framework": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Framework"
           },
           "id": {
             "title": "Id",
@@ -8664,9 +9082,40 @@
           "status": {
             "$ref": "#/components/schemas/CaseStatus"
           },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Id"
+          },
           "suite_id": {
             "title": "Suite Id",
             "type": "string"
+          },
+          "test_level": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "testing_approach": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestingApproach"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "title": {
             "title": "Title",
@@ -8737,6 +9186,19 @@
             ],
             "title": "Description"
           },
+          "framework": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Framework"
+          },
           "name": {
             "anyOf": [
               {
@@ -8781,6 +9243,17 @@
               }
             ]
           },
+          "strategyId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategyid"
+          },
           "tags": {
             "anyOf": [
               {
@@ -8794,6 +9267,26 @@
               }
             ],
             "title": "Tags"
+          },
+          "testLevel": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "testingApproach": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestingApproach"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "title": {
             "anyOf": [
@@ -8811,6 +9304,17 @@
         },
         "title": "TestCaseUpdate",
         "type": "object"
+      },
+      "TestLevel": {
+        "enum": [
+          "UNIT",
+          "COMPONENT",
+          "INTEGRATION",
+          "SYSTEM",
+          "E2E"
+        ],
+        "title": "TestLevel",
+        "type": "string"
       },
       "TestStepPublic": {
         "properties": {
@@ -8881,6 +9385,241 @@
         ],
         "title": "TestStepPublic",
         "type": "object"
+      },
+      "TestStrategyDocument": {
+        "properties": {
+          "access_signals": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Access Signals",
+            "type": "array"
+          },
+          "approach_reason": {
+            "title": "Approach Reason",
+            "type": "string"
+          },
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "coverage_dimensions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Coverage Dimensions",
+            "type": "array"
+          },
+          "enrichment": {
+            "default": "DETERMINISTIC",
+            "title": "Enrichment",
+            "type": "string"
+          },
+          "exclusions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Exclusions",
+            "type": "array"
+          },
+          "oracles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Oracles",
+            "type": "array"
+          },
+          "qa_checks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Qa Checks",
+            "type": "array"
+          },
+          "recommended_approach": {
+            "$ref": "#/components/schemas/TestingApproach"
+          },
+          "risks": {
+            "items": {
+              "$ref": "#/components/schemas/StrategyRisk"
+            },
+            "title": "Risks",
+            "type": "array"
+          },
+          "schema_version": {
+            "default": "1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "summary",
+          "recommended_approach",
+          "approach_reason"
+        ],
+        "title": "TestStrategyDocument",
+        "type": "object"
+      },
+      "TestStrategyDraftRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "default": "",
+            "maxLength": 4000,
+            "title": "Context",
+            "type": "string"
+          },
+          "hasInternalObservability": {
+            "default": false,
+            "title": "Hasinternalobservability",
+            "type": "boolean"
+          },
+          "hasInternalTestProvider": {
+            "default": false,
+            "title": "Hasinternaltestprovider",
+            "type": "boolean"
+          },
+          "hasRepository": {
+            "default": false,
+            "title": "Hasrepository",
+            "type": "boolean"
+          }
+        },
+        "title": "TestStrategyDraftRequest",
+        "type": "object"
+      },
+      "TestStrategyPublic": {
+        "properties": {
+          "agent_session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Session Id"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "document": {
+            "$ref": "#/components/schemas/TestStrategyDocument"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TestStrategyStatus"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workspace_id",
+          "project_id",
+          "version",
+          "status",
+          "document",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "TestStrategyPublic",
+        "type": "object"
+      },
+      "TestStrategyStatus": {
+        "enum": [
+          "DRAFT",
+          "APPROVED",
+          "SUPERSEDED"
+        ],
+        "title": "TestStrategyStatus",
+        "type": "string"
+      },
+      "TestStrategyUpdateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/TestStrategyDocument"
+          }
+        },
+        "required": [
+          "document"
+        ],
+        "title": "TestStrategyUpdateRequest",
+        "type": "object"
+      },
+      "TestingApproach": {
+        "enum": [
+          "BLACK_BOX",
+          "GRAY_BOX",
+          "WHITE_BOX"
+        ],
+        "title": "TestingApproach",
+        "type": "string"
       },
       "Tier": {
         "description": "Capability tier. The env base is always ZERO; LOCAL/CLOUD come from the\nper-workspace LLM config (web UI).",
@@ -15411,6 +16150,152 @@
         ]
       }
     },
+    "/api/v1/projects/{project_id}/test-strategies": {
+      "get": {
+        "operationId": "list_test_strategies_api_v1_projects__project_id__test_strategies_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Workspace-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TestStrategyPublic"
+                  },
+                  "title": "Response List Test Strategies Api V1 Projects  Project Id  Test Strategies Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Test Strategies",
+        "tags": [
+          "test-strategies"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/test-strategies/draft": {
+      "post": {
+        "operationId": "create_test_strategy_draft_api_v1_projects__project_id__test_strategies_draft_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Workspace-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestStrategyDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestStrategyPublic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Test Strategy Draft",
+        "tags": [
+          "test-strategies"
+        ]
+      }
+    },
     "/api/v1/prompt-experiments": {
       "get": {
         "description": "List the workspace's prompt A/B experiments with live stats.",
@@ -18278,6 +19163,22 @@
           },
           {
             "in": "query",
+            "name": "testingApproach",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TestingApproach"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Testingapproach"
+            }
+          },
+          {
+            "in": "query",
             "name": "tag",
             "required": false,
             "schema": {
@@ -19210,6 +20111,160 @@
         ]
       }
     },
+    "/api/v1/test-cases/{case_id}/self-heal/apply": {
+      "post": {
+        "description": "Apply a human-approved proposal after autonomy + stale-code checks.",
+        "operationId": "apply_selector_repair_api_v1_test_cases__case_id__self_heal_apply_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Workspace-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelectorRepairApplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectorRepairApplied"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Apply Selector Repair",
+        "tags": [
+          "test-cases"
+        ]
+      }
+    },
+    "/api/v1/test-cases/{case_id}/self-heal/propose": {
+      "post": {
+        "description": "Propose a validated selector-only patch; never mutates the test step.",
+        "operationId": "propose_selector_repair_api_v1_test_cases__case_id__self_heal_propose_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Workspace-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelectorRepairRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectorRepairPublic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Propose Selector Repair",
+        "tags": [
+          "test-cases"
+        ]
+      }
+    },
     "/api/v1/test-cases/{case_id}/steps": {
       "get": {
         "description": "Return a case's steps only (step editor pre-load); 404 when cross-workspace.",
@@ -19537,6 +20592,214 @@
         "summary": "Reorder Test Case Steps",
         "tags": [
           "test-cases"
+        ]
+      }
+    },
+    "/api/v1/test-strategies/{strategy_id}": {
+      "put": {
+        "operationId": "update_test_strategy_api_v1_test_strategies__strategy_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "strategy_id",
+            "required": true,
+            "schema": {
+              "title": "Strategy Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Workspace-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestStrategyUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestStrategyPublic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Update Test Strategy",
+        "tags": [
+          "test-strategies"
+        ]
+      }
+    },
+    "/api/v1/test-strategies/{strategy_id}/approve": {
+      "post": {
+        "operationId": "approve_test_strategy_api_v1_test_strategies__strategy_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "strategy_id",
+            "required": true,
+            "schema": {
+              "title": "Strategy Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Workspace-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestStrategyPublic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Approve Test Strategy",
+        "tags": [
+          "test-strategies"
+        ]
+      }
+    },
+    "/api/v1/test-strategies/{strategy_id}/enrich": {
+      "post": {
+        "operationId": "enrich_test_strategy_api_v1_test_strategies__strategy_id__enrich_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "strategy_id",
+            "required": true,
+            "schema": {
+              "title": "Strategy Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Workspace-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Workspace-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestStrategyPublic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Enrich Test Strategy",
+        "tags": [
+          "test-strategies"
         ]
       }
     },

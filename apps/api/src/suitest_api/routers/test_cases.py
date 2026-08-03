@@ -27,20 +27,36 @@ from typing import Annotated, Any
 from arq.connections import ArqRedis
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from suitest_core.capabilities import TierFlag
 from suitest_db.models.case import TestStep
 from suitest_db.repositories.projects import ProjectRepo
 from suitest_db.repositories.runs import RunRepo
 from suitest_db.repositories.suites import SuiteRepo
 from suitest_db.repositories.test_cases import TestCaseRepo
-from suitest_shared.domain.enums import CaseSource, CaseStatus, Priority, Role, Tier
+from suitest_shared.domain.enums import (
+    AutonomyLevel,
+    CaseSource,
+    CaseStatus,
+    Priority,
+    Role,
+    TestingApproach,
+    Tier,
+)
 from suitest_shared.schemas.pagination import Page, PageMeta
 
 from suitest_api.auth.db import get_async_session
 from suitest_api.deps.arq import get_arq
 from suitest_api.deps.role import require_role
 from suitest_api.deps.scope import TenantContext, require_workspace_membership
+from suitest_api.deps.tier import require_autonomy, require_tier
 from suitest_api.routers._pagination import decode_cursor_or_400, encode_next
 from suitest_api.routers._tier import resolve_workspace_tier
+from suitest_api.schemas.self_heal import (
+    SelectorRepairApplied,
+    SelectorRepairApplyRequest,
+    SelectorRepairPublic,
+    SelectorRepairRequest,
+)
 from suitest_api.schemas.test_case import (
     AdHocRunResponse,
     BulkUpdateRequest,
@@ -56,6 +72,7 @@ from suitest_api.schemas.test_case import (
     TestStepPublic,
 )
 from suitest_api.services.run_service import RunService
+from suitest_api.services.self_heal_service import SelfHealError, SelfHealService
 from suitest_api.services.test_case_service import (
     BulkLimitExceededError,
     ConcurrentModificationError,
@@ -82,6 +99,14 @@ _writer_dep = require_role(_WRITER_ROLES)
 # Surfacing tombstoned rows via ``?includeDeleted=true`` is an admin operation
 # per ``docs/API.md §3.3`` — QA cannot enumerate soft-deleted cases.
 _ADMIN_ROLES: set[Role] = {Role.ADMIN, Role.OWNER}
+
+
+def _raise_self_heal(exc: SelfHealError) -> None:
+    if exc.code == "STEP_NOT_FOUND":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
+    if exc.code in {"SELF_HEAL_REQUIRES_ASSIST", "LLM_REQUIRED"}:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail=exc.message) from exc
+    raise HTTPException(status.HTTP_409_CONFLICT, detail=exc.message) from exc
 
 
 def _require_admin_for_include_deleted(ctx: TenantContext, include_deleted: bool) -> None:
@@ -216,6 +241,12 @@ async def _detail_with_steps(
         )
     steps = await _refresh_steps_public(request, session, workspace_id, case.id)
     tags = await repo.get_tags(case.id)
+    suite = await SuiteRepo(session).get_by_id(case.suite_id)
+    effective_approach = (
+        case.testing_approach
+        or (suite.default_testing_approach if suite is not None else None)
+        or TestingApproach.BLACK_BOX
+    )
     return TestCaseDetail(
         id=case.id,
         suite_id=case.suite_id,
@@ -229,6 +260,11 @@ async def _detail_with_steps(
         status=case.status,
         priority=case.priority,
         owner_id=case.owner_id,
+        testing_approach=case.testing_approach,
+        effective_testing_approach=effective_approach,
+        test_level=case.test_level,
+        framework=case.framework,
+        strategy_id=case.strategy_id,
         created_at=case.created_at,
         updated_at=case.updated_at,
         steps=steps,
@@ -254,6 +290,7 @@ async def list_test_cases(
     status_: CaseStatus | None = Query(default=None, alias="status"),
     source: CaseSource | None = Query(default=None),
     priority: Priority | None = Query(default=None),
+    testing_approach: TestingApproach | None = Query(default=None, alias="testingApproach"),
     tag: str | None = Query(default=None),
     q: str | None = Query(default=None),
     cursor: str | None = Query(default=None),
@@ -288,9 +325,23 @@ async def list_test_cases(
         if project is None or project.workspace_id != ctx.workspace_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="project not found")
         rows = await TestCaseRepo(session).list_by_project(project_id)
+        suite_defaults = {
+            suite.id: suite.default_testing_approach
+            for suite in await SuiteRepo(session).list_by_project(project_id)
+        }
+        items = []
+        for row in rows:
+            item = TestCaseListItem.model_validate(row)
+            item.effective_testing_approach = (
+                row.testing_approach
+                or suite_defaults.get(row.suite_id)
+                or TestingApproach.BLACK_BOX
+            )
+            if testing_approach is None or item.effective_testing_approach == testing_approach:
+                items.append(item)
         return Page[TestCaseListItem](
-            items=[TestCaseListItem.model_validate(r) for r in rows],
-            meta=PageMeta(next_cursor=None, limit=len(rows)),
+            items=items,
+            meta=PageMeta(next_cursor=None, limit=len(items)),
         )
 
     # Per-suite path — filtered + keyset-paginated.
@@ -303,14 +354,25 @@ async def list_test_cases(
         status=status_,
         source=source,
         priority=priority,
+        testing_approach=testing_approach,
         tag=tag,
         q=q,
         cursor=decoded,
         limit=limit,
         include_deleted=include_deleted,
     )
+    suite = await SuiteRepo(session).get_by_id(suite_id)
+    items = []
+    for row in rows_page:
+        item = TestCaseListItem.model_validate(row)
+        item.effective_testing_approach = (
+            row.testing_approach
+            or (suite.default_testing_approach if suite is not None else None)
+            or TestingApproach.BLACK_BOX
+        )
+        items.append(item)
     return Page[TestCaseListItem](
-        items=[TestCaseListItem.model_validate(r) for r in rows_page],
+        items=items,
         meta=PageMeta(next_cursor=encode_next(next_keyset), limit=limit),
     )
 
@@ -401,6 +463,12 @@ async def get_test_case(
     tier = await resolve_workspace_tier(request, session, ctx.workspace_id)
     steps = await repo.get_steps(case_id)
     tags = await repo.get_tags(case_id)
+    suite = await SuiteRepo(session).get_by_id(case.suite_id)
+    effective_approach = (
+        case.testing_approach
+        or (suite.default_testing_approach if suite is not None else None)
+        or TestingApproach.BLACK_BOX
+    )
     return TestCaseDetail(
         id=case.id,
         suite_id=case.suite_id,
@@ -414,6 +482,11 @@ async def get_test_case(
         status=case.status,
         priority=case.priority,
         owner_id=case.owner_id,
+        testing_approach=case.testing_approach,
+        effective_testing_approach=effective_approach,
+        test_level=case.test_level,
+        framework=case.framework,
+        strategy_id=case.strategy_id,
         created_at=case.created_at,
         updated_at=case.updated_at,
         steps=[_step_public(s, tier) for s in steps],
@@ -689,6 +762,72 @@ async def reorder_test_case_steps(
         data=outcome.ws_payload,
     )
     return detail
+
+
+@router.post(
+    "/test-cases/{case_id}/self-heal/propose",
+    response_model=SelectorRepairPublic,
+)
+@require_tier(TierFlag.CLOUD | TierFlag.LOCAL)
+@require_autonomy(AutonomyLevel.ASSIST)
+async def propose_selector_repair(
+    case_id: str,
+    body: SelectorRepairRequest,
+    ctx: TenantContext = Depends(_writer_dep),
+    session: AsyncSession = Depends(get_async_session),
+) -> SelectorRepairPublic:
+    """Propose a validated selector-only patch; never mutates the test step."""
+    service = SelfHealService(
+        session,
+        workspace_id=ctx.workspace_id,
+        user_id=ctx.user_id,
+    )
+    try:
+        proposal = await service.propose(
+            case_id,
+            step_id=body.step_id,
+            error=body.error,
+            dom_snapshot=body.dom_snapshot,
+        )
+    except SelfHealError as exc:
+        await session.rollback()
+        _raise_self_heal(exc)
+    await session.commit()
+    return proposal
+
+
+@router.post(
+    "/test-cases/{case_id}/self-heal/apply",
+    response_model=SelectorRepairApplied,
+)
+@require_tier(TierFlag.CLOUD | TierFlag.LOCAL)
+@require_autonomy(AutonomyLevel.ASSIST)
+async def apply_selector_repair(
+    case_id: str,
+    body: SelectorRepairApplyRequest,
+    request: Request,
+    ctx: TenantContext = Depends(_writer_dep),
+    session: AsyncSession = Depends(get_async_session),
+) -> SelectorRepairApplied:
+    """Apply a human-approved proposal after autonomy + stale-code checks."""
+    service = SelfHealService(
+        session,
+        workspace_id=ctx.workspace_id,
+        user_id=ctx.user_id,
+    )
+    try:
+        applied = await service.apply(case_id, body)
+    except SelfHealError as exc:
+        await session.rollback()
+        _raise_self_heal(exc)
+    await session.commit()
+    await publish_event(
+        request,
+        topic=f"workspace:{ctx.workspace_id}",
+        event="case.steps.replaced",
+        data={"caseId": case_id, "stepId": applied.step_id, "selfHealed": True},
+    )
+    return applied
 
 
 @router.post(

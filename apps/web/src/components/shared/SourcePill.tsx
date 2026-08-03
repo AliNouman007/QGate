@@ -1,6 +1,5 @@
 import { cn } from "@/lib/utils";
-
-export type SourceKind = "MANUAL" | "AI" | "MCP" | "IMPORT";
+import type { SourceKind } from "@/lib/test-case-format";
 
 export interface SourcePillProps {
   source: SourceKind;
@@ -18,10 +17,7 @@ const SOURCE_CLASSES: Record<SourceKind, string> = {
  * Source label pill (UI_SPEC § 4.4). Used in case tree rows + run detail to
  * indicate the origin of a test case or step.
  */
-export function SourcePill({
-  source,
-  className,
-}: SourcePillProps): React.ReactElement {
+export function SourcePill({ source, className }: SourcePillProps): React.ReactElement {
   return (
     <span
       data-testid="source-pill"

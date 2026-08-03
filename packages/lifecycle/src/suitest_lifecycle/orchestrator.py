@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime
 import json
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -30,9 +31,9 @@ from suitest_lifecycle.paths import Paths, build_paths
 from suitest_lifecycle.plan import generate_backend_plan
 from suitest_lifecycle.plan_frontend import generate_frontend_plan
 from suitest_lifecycle.prd import build_prd
-from suitest_lifecycle.process import ProcessManager
+from suitest_lifecycle.process import ManagedProcess, ProcessManager
 from suitest_lifecycle.publish import PublishSession, publish_results
-from suitest_lifecycle.readiness import wait_until_ready
+from suitest_lifecycle.readiness import Readiness, wait_until_ready
 from suitest_lifecycle.report import write_all_reports
 from suitest_lifecycle.retest import (
     BindingResult,
@@ -40,6 +41,7 @@ from suitest_lifecycle.retest import (
     can_reuse_generated,
     classify_results,
     diff_fingerprint,
+    load_change_report,
     load_codegen_meta,
     load_snapshot,
     reconcile_codegen,
@@ -53,10 +55,16 @@ from suitest_lifecycle.serialize import (
     prd_to_json,
     results_to_json,
 )
+from suitest_lifecycle.strategy import apply_strategy
 from suitest_lifecycle.tcm import sync_tcm
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from suitest_lifecycle.config import Config, DependencyConfig
+
+
+_MAX_DEPENDENCY_WORKERS = 4
 
 
 @dataclass
@@ -175,36 +183,80 @@ def _crawl_elements(crawl: object | None) -> dict[str, object] | None:
     pt = page_testids if isinstance(page_testids, dict) else {}
     if not pe and not pt:
         return None
-    return {
-        str(route): {"elements": pe.get(route), "testids": pt.get(route)}
-        for route in sorted({*pe, *pt})
+    routes = list(set(pe) | set(pt))
+    routes.sort()
+    return {str(route): {"elements": pe.get(route), "testids": pt.get(route)} for route in routes}
+
+
+def _element_identity(element: object, *, with_text: bool = False) -> dict[str, object]:
+    identity: dict[str, object] = {
+        field: getattr(element, field, "") for field in _ELEMENT_ID_FIELDS
     }
+    if with_text:
+        identity["text"] = getattr(element, "text", "")
+    return identity
+
+
+def _element_identities(
+    elements: Iterable[object], *, with_text: bool = False
+) -> list[dict[str, object]]:
+    return [_element_identity(element, with_text=with_text) for element in elements]
 
 
 def _discovery_elements(pages: list[object]) -> dict[str, object]:
     """Per-route element identity from a blackbox discovery (same purpose as
     :func:`_crawl_elements`, different source shape)."""
 
-    def _ident(e: object, *, with_text: bool = False) -> dict[str, object]:
-        d: dict[str, object] = {f: getattr(e, f, "") for f in _ELEMENT_ID_FIELDS}
-        if with_text:
-            # Button labels are part of the UI contract (button_label_changed);
-            # link/input text is too dynamic to fingerprint.
-            d["text"] = getattr(e, "text", "")
-        return d
-
     out: dict[str, object] = {}
     for p in pages:
         out[str(getattr(p, "route", ""))] = {
-            "inputs": [_ident(e) for e in getattr(p, "inputs", [])],
-            "buttons": [_ident(e, with_text=True) for e in getattr(p, "buttons", [])],
-            "links": [_ident(e) for e in getattr(p, "links", [])],
+            "inputs": _element_identities(getattr(p, "inputs", [])),
+            "buttons": _element_identities(getattr(p, "buttons", []), with_text=True),
+            "links": _element_identities(getattr(p, "links", [])),
             "hasTable": getattr(p, "has_table", False),
             "hasForm": getattr(p, "has_form", False),
             "hasModal": getattr(p, "has_modal", False),
             "rowLocator": getattr(p, "row_locator", ""),
         }
     return out
+
+
+def _start_dependency(
+    dep: DependencyConfig,
+) -> tuple[DependencyConfig, ProcessManager, ManagedProcess, Readiness]:
+    manager = ProcessManager()
+    managed = manager.start(dep.start_command, dep.cwd, dep.env)
+    verdict = wait_until_ready(
+        dep.ready_url,
+        "localhost",
+        dep.port,
+        dep.ready_timeout_sec,
+        log_reader=managed.log_text,
+        ready_log_pattern=dep.ready_log_pattern,
+    )
+    return dep, manager, managed, verdict
+
+
+def _start_dependencies(
+    dependencies: list[DependencyConfig],
+) -> list[tuple[DependencyConfig, ProcessManager, ManagedProcess, Readiness]]:
+    if not dependencies:
+        return []
+    workers = min(len(dependencies), _MAX_DEPENDENCY_WORKERS)
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        return list(executor.map(_start_dependency, dependencies))
+
+
+def _dependency_managers(
+    started: list[tuple[DependencyConfig, ProcessManager, ManagedProcess, Readiness]],
+) -> list[tuple[DependencyConfig, ProcessManager]]:
+    return [(dep, manager) for dep, manager, _managed, _verdict in started]
+
+
+def _classification_summary(classifications: dict[str, str]) -> str:
+    ordered = list(classifications.items())
+    ordered.sort()
+    return ", ".join(f"{test_id}={kind}" for test_id, kind in ordered)
 
 
 def generate_only(
@@ -228,6 +280,7 @@ def generate_only(
     cases = _plan(config, summary)
     client = resolve_client(config)
     cases = enrich_plan(summary, cases, config, client)
+    strategy = apply_strategy(config, summary, cases)
     # LLM codegen wants a client even when enrichment is off — resolve the
     # remote bridge directly unless codegen is pinned deterministic.
     codegen_llm = client
@@ -299,6 +352,7 @@ def generate_only(
     paths.code_summary_json.write_text(json.dumps(code_summary_to_json(summary), indent=2), "utf-8")
     paths.prd_json.write_text(json.dumps(prd_to_json(prd), indent=2), encoding="utf-8")
     paths.test_plan_json.write_text(json.dumps(plan_to_json(cases), indent=2), encoding="utf-8")
+    paths.test_strategy_json.write_text(json.dumps(strategy, indent=2), encoding="utf-8")
     paths.config_snapshot_json.write_text(_config_snapshot(config), encoding="utf-8")
     return summary, cases, paths
 
@@ -317,6 +371,13 @@ def _config_snapshot(config: Config) -> str:
             "autostart": config.server.autostart,
             "startCommand": config.server.start_command,
             "testIds": config.test_ids,
+            "testing": {
+                "approach": config.testing.approach,
+                "level": config.testing.level.value,
+                "framework": config.testing.framework,
+                "command": config.testing.command,
+                "coverageFile": config.testing.coverage_file,
+            },
         },
         indent=2,
     )
@@ -398,6 +459,7 @@ def _blackbox_generate(config: Config) -> tuple[CodeSummary, list[PlanCase], Pat
             else "No login form found."
         ),
     )
+    strategy = apply_strategy(config, summary, cases)
     # Retest change detection for the blackbox path (deterministic codegen, so
     # code reuse is just hash bookkeeping — no LLM cost to skip).
     fingerprint = build_fingerprint(summary, cases, _discovery_elements(list(discovery.pages)))
@@ -415,19 +477,9 @@ def _blackbox_generate(config: Config) -> tuple[CodeSummary, list[PlanCase], Pat
         _json.dumps(code_summary_to_json(summary), indent=2), encoding="utf-8"
     )
     paths.test_plan_json.write_text(_json.dumps(plan_to_json(cases), indent=2), encoding="utf-8")
+    paths.test_strategy_json.write_text(_json.dumps(strategy, indent=2), encoding="utf-8")
     paths.config_snapshot_json.write_text(_config_snapshot(config), encoding="utf-8")
     return summary, cases, paths, steps
-
-
-def _load_change_report(paths: Paths) -> dict[str, object]:
-    p = paths.tmp_dir / "change_report.json"
-    if not p.is_file():
-        return {}
-    try:
-        raw = json.loads(p.read_text(encoding="utf-8"))
-        return raw if isinstance(raw, dict) else {}
-    except ValueError:
-        return {}
 
 
 _RUN_MODE = {
@@ -498,6 +550,12 @@ def _build_retest(
 
 
 def run_lifecycle(config: Config) -> LifecycleResult:
+    from suitest_lifecycle.models import TestingApproach
+    from suitest_lifecycle.strategy import resolve_approach
+
+    if resolve_approach(config) is TestingApproach.WHITE_BOX:
+        return _run_whitebox_lifecycle(config)
+
     steps: list[str] = []
     errors: list[str] = []
 
@@ -562,27 +620,16 @@ def run_lifecycle(config: Config) -> LifecycleResult:
             artifacts=_artifact_list(paths),
             errors=errors,
             steps=steps,
-            retest=_build_retest(
-                binding, _load_change_report(paths), {"readiness": kind}, fail_pub
-            ),
+            retest=_build_retest(binding, load_change_report(paths), {"readiness": kind}, fail_pub),
         )
 
     try:
         # 1) start dependency services (e.g. the backend a frontend run needs)
-        for dep in config.dependencies:
-            dpm = ProcessManager()
-            dmanaged = dpm.start(dep.start_command, dep.cwd, dep.env)
-            dep_managers.append((dep, dpm))
+        started_dependencies = _start_dependencies(config.dependencies)
+        dep_managers.extend(_dependency_managers(started_dependencies))
+        for dep, _dpm, dmanaged, dverdict in started_dependencies:
             steps.append(
                 f"started dependency '{dep.name}': {dep.start_command} (pid {dmanaged.popen.pid})"
-            )
-            dverdict = wait_until_ready(
-                dep.ready_url,
-                "localhost",
-                dep.port,
-                dep.ready_timeout_sec,
-                log_reader=dmanaged.log_text,
-                ready_log_pattern=dep.ready_log_pattern,
             )
             if not dverdict.ready:
                 return _finish_fail(f"dependency '{dep.name}' not ready: {dverdict.detail}")
@@ -654,7 +701,7 @@ def run_lifecycle(config: Config) -> LifecycleResult:
                     f"publish started: {started.get('imported')} case(s), "
                     f"run {started.get('runId')}"
                 )
-                early_report = _load_change_report(paths)
+                early_report = load_change_report(paths)
                 early_change = early_report.get("changeDetection")
                 stream_api_changed = (
                     bool(early_change.get("apiChanged"))
@@ -700,20 +747,17 @@ def run_lifecycle(config: Config) -> LifecycleResult:
     run = _build_run(config, summary_code, results, server_started, ready_detail, startup_tail)
     _finalize(config, cases, run, paths)
 
-    report = _load_change_report(paths)
+    report = load_change_report(paths)
     cd = report.get("changeDetection")
     api_changed = bool(cd.get("apiChanged")) if isinstance(cd, dict) else False
     classifications = classify_results(run.results, config.mode, api_changed=api_changed)
     if classifications:
-        steps.append(
-            "failure classification: "
-            + ", ".join(f"{tid}={kind}" for tid, kind in sorted(classifications.items()))
-        )
+        steps.append("failure classification: " + _classification_summary(classifications))
 
     pub2: dict[str, object] = {"published": False, "reason": "publish disabled"}
     if config.publish.enabled:
         if stream_session is not None and stream_started:
-            pub2 = stream_session.finish()
+            pub2 = stream_session.finish(coverage=run.coverage)
         else:
             # Startup can fail before any result exists (older server, brief
             # outage). One compatibility retry preserves the pre-incremental
@@ -736,6 +780,52 @@ def run_lifecycle(config: Config) -> LifecycleResult:
         errors=errors,
         steps=steps,
         retest=_build_retest(binding, report, classifications, pub2),
+    )
+
+
+def _run_whitebox_lifecycle(config: Config) -> LifecycleResult:
+    from suitest_lifecycle.whitebox import execute
+
+    binding = resolve_binding(config, recreate=config.publish.recreate)
+    if binding.blocks_publish:
+        return LifecycleResult(
+            success=False,
+            summary="FAILED — project binding is stale; white-box run was not started.",
+            run=None,
+            errors=[binding.detail],
+            steps=[f"project binding: {binding.status} ({binding.action})"],
+        )
+    try:
+        _summary, cases, run, paths = execute(config)
+    except (OSError, RuntimeError, ValueError) as exc:
+        return LifecycleResult(
+            success=False,
+            summary=f"FAILED — white-box provider error: {exc}",
+            run=None,
+            errors=[str(exc)],
+            steps=["white-box discovery failed"],
+        )
+    errors: list[str] = []
+    steps = [
+        f"white-box: generated {len(cases)} case(s)",
+        f"white-box: executed {run.total} case(s)",
+    ]
+    pub: dict[str, object] = {"published": False, "reason": "publish disabled"}
+    if config.publish.enabled:
+        pub = publish_results(config, run, cases, paths, binding=binding)
+        _record_publish(pub, steps, errors)
+    ok = run.failed == 0 and run.errored == 0 and run.total > 0
+    return LifecycleResult(
+        success=ok,
+        summary=(
+            f"{'PASSED' if ok else 'FAILED'} — {run.passed}/{run.total} white-box "
+            f"case(s) passed in {run.duration_ms} ms"
+        ),
+        run=run,
+        artifacts=_artifact_list(paths),
+        errors=errors,
+        steps=steps,
+        retest={"publish": pub, "testingApproach": "WHITE_BOX"},
     )
 
 
@@ -815,6 +905,8 @@ def _artifact_list(paths: Paths) -> list[str]:
         paths.code_summary_json,
         paths.prd_json,
         paths.test_plan_json,
+        paths.test_strategy_json,
+        paths.coverage_json,
         paths.test_results_json,
         paths.raw_report_md,
         paths.reports_dir / "summary.json",

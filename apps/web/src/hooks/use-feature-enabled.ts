@@ -49,13 +49,13 @@ export function useFeatureEnabled(feature: FeatureKey): boolean {
       return Boolean(caps.features?.ai_conversation || caps.features?.ai_generation);
     }
     if (feature === "autonomy_assist") {
-      return caps.autonomy?.available?.includes("assist") ?? false;
+      return ["assist", "semi_auto", "auto"].includes(caps.autonomy?.default ?? "manual");
     }
     if (feature === "autonomy_semi_auto") {
-      return caps.autonomy?.available?.includes("semi_auto") ?? false;
+      return ["semi_auto", "auto"].includes(caps.autonomy?.default ?? "manual");
     }
     if (feature === "autonomy_auto") {
-      return caps.autonomy?.available?.includes("auto") ?? false;
+      return caps.autonomy?.default === "auto";
     }
     return false;
   });

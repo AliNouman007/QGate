@@ -30,6 +30,7 @@ class RunCreate(BaseModel):
     commit_sha: str | None = None
     env: str = "staging"
     status: RunStatus = RunStatus.QUEUED
+    metadata_json: dict[str, object] | None = None
 
 
 class RunUpdate(BaseModel):
@@ -40,6 +41,7 @@ class RunUpdate(BaseModel):
     total_steps: int | None = None
     passed_steps: int | None = None
     failed_steps: int | None = None
+    metadata_json: dict[str, object] | None = None
 
 
 class RunSummary(BaseModel):
@@ -98,14 +100,7 @@ class RunRepo(AsyncRepository[Run, RunCreate, RunUpdate]):
         stmt = stmt.order_by(Run.created_at.desc(), Run.id.desc()).limit(limit + 1)
 
         rows = list((await self.session.scalars(stmt)).all())
-        if len(rows) > limit:
-            page = rows[:limit]
-            last = page[-1]
-            next_cursor: tuple[datetime, str] | None = (last.created_at, last.id)
-        else:
-            page = rows
-            next_cursor = None
-        return page, next_cursor
+        return self._paginate(rows, limit)
 
     async def get_with_summary(self, run_id: str) -> tuple[Run, RunSummary] | None:
         """Return ``(run, summary)`` with counters derived from live RunSteps.

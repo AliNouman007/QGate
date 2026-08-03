@@ -65,3 +65,45 @@ async def test_missing_run_returns_error(stub_ctx_empty: dict[str, object]) -> N
     """Unknown run → structured ``RUN_NOT_FOUND`` error, no events published."""
     out = await run_test_case(stub_ctx_empty, "missing")
     assert out.get("error") == "RUN_NOT_FOUND"
+
+
+async def test_auto_self_heal_retries_once_and_counts_final_pass(
+    stub_ctx_auto_self_heal: tuple[dict[str, object], object],
+) -> None:
+    ctx, redis_stub = stub_ctx_auto_self_heal
+    out = await run_test_case(ctx, "run-1")
+    assert out["status"] == "PASS"
+    assert out["passed"] == 1
+    inserted = ctx["_inserted_steps"]
+    assert isinstance(inserted, list)
+    assert len(inserted) == 1
+    assert inserted[0]["state_snapshot"] == {
+        "failureKind": "selector_changed",
+        "selfHeal": {
+            "failureKind": "selector_changed",
+            "oldSelector": "#old",
+            "newSelector": "#new",
+            "retryCount": 1,
+            "originalError": "MCP_TOOL_FAILED: Timeout waiting for locator('#submit')",
+            "retryOutcome": "PASS",
+            "persisted": True,
+        },
+    }
+    published = redis_stub.published["run:run-1"]  # type: ignore[attr-defined]
+    completed = next(
+        json.loads(message)["data"]
+        for message in published
+        if json.loads(message)["event"] == "run.step.completed"
+    )
+    assert completed["selfHeal"]["retryOutcome"] == "PASS"
+
+
+async def test_selector_failure_is_classified_without_auto_repair(
+    stub_ctx_selector_fail: tuple[dict[str, object], object],
+) -> None:
+    ctx, _ = stub_ctx_selector_fail
+    out = await run_test_case(ctx, "run-1")
+    assert out["status"] == "FAIL"
+    inserted = ctx["_inserted_steps"]
+    assert isinstance(inserted, list)
+    assert inserted[0]["state_snapshot"] == {"failureKind": "selector_changed"}

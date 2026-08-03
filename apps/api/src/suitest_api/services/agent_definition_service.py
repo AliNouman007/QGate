@@ -25,8 +25,6 @@ from suitest_db.repositories.agent_definitions import (
 from suitest_api.deps.tier import require_tier
 
 if TYPE_CHECKING:
-    import uuid
-
     from sqlalchemy.ext.asyncio import AsyncSession
     from suitest_db.models.agent_definition import AgentDefinition
 
@@ -71,7 +69,7 @@ class AgentDefinitionService:
         *,
         workspace_id: str,
         spec_yaml: str,
-        user_id: uuid.UUID | None,
+        user_id: str | None,
     ) -> AgentDefinition:
         """Validate the YAML spec and insert a new agent definition row.
 
@@ -110,7 +108,7 @@ class AgentDefinitionService:
         workspace_id: str,
         name: str,
         spec_yaml: str,
-        user_id: uuid.UUID | None,
+        user_id: str | None,
     ) -> AgentDefinition:
         """Replace the YAML spec of an existing active definition.
 
@@ -139,7 +137,7 @@ class AgentDefinitionService:
         *,
         workspace_id: str,
         name: str,
-        user_id: uuid.UUID | None,
+        user_id: str | None,
     ) -> bool:
         """Soft-delete an active definition.
 

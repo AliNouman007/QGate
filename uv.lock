@@ -2859,6 +2859,7 @@ dev = [
     { name = "pytest-cov" },
     { name = "respx" },
     { name = "ruff" },
+    { name = "suiflex-suitest-lifecycle", extra = ["frontend"] },
     { name = "suitest-agent", extra = ["cloud"] },
     { name = "types-pyyaml" },
 ]
@@ -2879,6 +2880,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=5.0.0" },
     { name = "respx", specifier = ">=0.21.0" },
     { name = "ruff", specifier = ">=0.7.0" },
+    { name = "suiflex-suitest-lifecycle", extras = ["frontend"], editable = "packages/lifecycle" },
     { name = "suitest-agent", extras = ["cloud"], editable = "packages/agent" },
     { name = "types-pyyaml", specifier = ">=6.0" },
 ]

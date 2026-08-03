@@ -19,6 +19,18 @@ function formatTimestamp(iso: string | null | undefined): string {
   }
 }
 
+function coveragePercent(value: unknown): string {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "percent" in value &&
+    typeof value.percent === "number"
+  ) {
+    return `${value.percent.toFixed(1)}%`;
+  }
+  return "—";
+}
+
 export function RunSummaryCard({ run }: RunSummaryCardProps): React.ReactElement {
   if (!run) {
     return (
@@ -58,6 +70,15 @@ export function RunSummaryCard({ run }: RunSummaryCardProps): React.ReactElement
         />
         <Stat label="Failed" value={run.summary.failed_steps.toString()} />
       </dl>
+      {run.coverage_summary ? (
+        <dl
+          className="grid grid-cols-2 gap-3 border-t border-border pt-3 font-mono text-[11px]"
+          data-testid="run-coverage-summary"
+        >
+          <Stat label="Line coverage" value={coveragePercent(run.coverage_summary.lines)} />
+          <Stat label="Branch coverage" value={coveragePercent(run.coverage_summary.branches)} />
+        </dl>
+      ) : null}
     </section>
   );
 }

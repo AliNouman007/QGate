@@ -12,7 +12,7 @@ Cross-reference: [PRODUCT.md](./PRODUCT.md), [ARCHITECTURE.md](./ARCHITECTURE.md
 
 - **v1.0** = M0 → M4. Public OSS launch readiness. ZERO tier complete, CLOUD + LOCAL tier online, SDK/CLI shipped.
 - **v1.x** = M5 → M9. Tier B polish features post-launch.
-- **v2.x** = M10 → M15. Tier C agentic + advanced features.
+- **v2.x** = M10 → M16. Testing intelligence + Tier C agentic features.
 
 ---
 
@@ -307,41 +307,50 @@ Tag `v1.0.0`. Announce on HN / Reddit / dev.to. Discord + community forum set up
 
 # v2.x — Tier C
 
-## M10 — Self-healing tests (5 weeks)
+## M10 — Testing intelligence (black/gray/white + QA mindset)
 
-- [ ] **M10-1** Selector changed detection
-- [ ] **M10-2** AI repair → propose updated step
-- [ ] **M10-3** Save updated step (gated by autonomy)
-- [ ] **M10-4** Requires the `auto` autonomy level for full self-heal
+- [x] **M10-1** First-class `BLACK_BOX`, `GRAY_BOX`, and `WHITE_BOX` metadata, independent from test level; suite default + case override + effective fallback.
+- [x] **M10-2** Deterministic risk-based strategy in ZERO with versioned draft/edit/approve; optional LOCAL/CLOUD enrichment through `packages/agent`.
+- [x] **M10-3** QA-mindset checks cover assumptions, failure modes, risk priority, observable oracles, negative/boundary/permission/state/concurrency/recovery/accessibility dimensions, exclusions, and remaining risk.
+- [x] **M10-4** `suitest.whitebox.v1` local provider contract with pytest and Vitest/Jest adapters, native test source, repository-owned coverage gates, and normalized coverage.
+- [x] **M10-5** Existing `suitest-output` and `PublishSession` flows carry approach, level, framework, strategy, native source, results, and coverage without parallel folder or publish paths.
+- [x] **M10-6** Web Cases supports approach badges/filter/override and strategy review/edit/approval; Run detail displays white-box coverage.
 
-## M11 — Visual regression with AI explanation (4 weeks)
+## M11 — Self-healing tests (5 weeks)
 
-- [ ] **M11-1** Screenshot diff (pixel + perceptual)
-- [ ] **M11-2** Semantic reason via vision LLM ("Button color changed from green to blue")
-- [ ] **M11-3** Threshold tuning per case
+- [x] **M11-1** Selector changed detection
+- [x] **M11-2** AI repair → propose updated step
+- [x] **M11-3** Save updated step (gated by autonomy)
+- [x] **M11-4** Requires the `auto` autonomy level for full self-heal
 
-## M12 — Mobile testing (5 weeks)
+## M12 — Visual regression with AI explanation (4 weeks)
 
-- [ ] **M12-1** `appium-mcp` full bundle
-- [ ] **M12-2** Mobile generator strategies (iOS/Android)
-- [ ] **M12-3** Device farm integration (BrowserStack adapter)
+- [ ] **M12-1** Screenshot diff (pixel + perceptual)
+- [ ] **M12-2** Semantic reason via vision LLM ("Button color changed from green to blue")
+- [ ] **M12-3** Threshold tuning per case
 
-## M13 — Desktop testing (5 weeks)
+## M13 — Mobile testing (5 weeks)
 
-- [ ] **M13-1** `computer-use-mcp` integration
-- [ ] **M13-2** Generic desktop UI testing (Electron, Win32, macOS)
+- [ ] **M13-1** `appium-mcp` full bundle
+- [ ] **M13-2** Mobile generator strategies (iOS/Android)
+- [ ] **M13-3** Device farm integration (BrowserStack adapter)
 
-## M14 — Multi-agent swarm (6 weeks)
+## M14 — Desktop testing (5 weeks)
 
-- [ ] **M14-1** LangGraph orchestration: Planner + Executor + Critic
-- [ ] **M14-2** Higher quality complex test orchestration (multi-step E2E)
-- [ ] **M14-3** Inter-agent message bus
+- [ ] **M14-1** `computer-use-mcp` integration
+- [ ] **M14-2** Generic desktop UI testing (Electron, Win32, macOS)
 
-## M15 — PR codegen patches (5 weeks)
+## M15 — Multi-agent swarm (6 weeks)
 
-- [ ] **M15-1** Diagnose `REGRESSION` → AI writes fix → opens PR
-- [ ] **M15-2** Requires `auto` autonomy + GitHub integration write scopes
-- [ ] **M15-3** Strong audit + review gates (no auto-merge default)
+- [ ] **M15-1** LangGraph orchestration: Planner + Executor + Critic
+- [ ] **M15-2** Higher quality complex test orchestration (multi-step E2E)
+- [ ] **M15-3** Inter-agent message bus
+
+## M16 — PR codegen patches (5 weeks)
+
+- [ ] **M16-1** Diagnose `REGRESSION` → AI writes fix → opens PR
+- [ ] **M16-2** Requires `auto` autonomy + GitHub integration write scopes
+- [ ] **M16-3** Strong audit + review gates (no auto-merge default)
 
 ---
 

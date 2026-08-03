@@ -13,9 +13,10 @@ from typing import TYPE_CHECKING
 import pytest
 from suitest_api.services.prompt_experiment_service import choose_variant
 from suitest_api.services.prompt_resolver import resolve_and_pin
+from suitest_db.models.workspace_capability import WorkspaceCapability
 from suitest_db.repositories.prompt_experiments import PromptExperimentRepo
 from suitest_db.repositories.workspace_prompt_overrides import WorkspacePromptOverrideRepo
-from suitest_shared.domain.enums import Role
+from suitest_shared.domain.enums import AutonomyLevel, Role, Tier
 
 if TYPE_CHECKING:
     from api_harness import ApiDb
@@ -45,6 +46,16 @@ async def test_experiment_routes_and_picks_winner(api_db: ApiDb) -> None:
     user = await api_db.seed_user(email="ab-admin@example.com")
     ws = await api_db.seed_workspace(slug="ab-ws", name="AB WS")
     await api_db.seed_membership(workspace_id=ws.id, user_id=user.id, role=Role.ADMIN)
+    await api_db.add_all(
+        [
+            WorkspaceCapability(
+                workspace_id=ws.id,
+                tier=Tier.CLOUD,
+                autonomy_level=AutonomyLevel.MANUAL,
+                features_json={},
+            )
+        ]
+    )
     headers = {"X-Workspace-Id": ws.id}
     forked = "FORKED variant B content\n"
 
