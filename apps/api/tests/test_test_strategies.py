@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 from suitest_api.schemas.test_strategy import TestStrategyDraftRequest as StrategyDraftRequest
 from suitest_api.services.test_strategy_service import TestStrategyService as StrategyService
@@ -23,8 +22,8 @@ if TYPE_CHECKING:
 
 def test_strategy_approach_selection_without_database() -> None:
     black, _ = StrategyService._approach(StrategyDraftRequest())
-    gray, _ = StrategyService._approach(StrategyDraftRequest(hasRepository=True))
-    white, _ = StrategyService._approach(StrategyDraftRequest(hasInternalTestProvider=True))
+    gray, _ = StrategyService._approach(StrategyDraftRequest(has_repository=True))
+    white, _ = StrategyService._approach(StrategyDraftRequest(has_internal_test_provider=True))
     assert (black, gray, white) == (
         Approach.BLACK_BOX,
         Approach.GRAY_BOX,
@@ -40,7 +39,7 @@ async def test_next_strategy_version_locks_project_first() -> None:
 
     assert await repo.next_version("project-1") == 3
     statement = session.execute.await_args.args[0]
-    sql = str(statement.compile(dialect=postgresql.dialect()))
+    sql = str(statement)
     assert "FOR UPDATE" in sql
 
 
