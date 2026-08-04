@@ -1,8 +1,12 @@
 {
   "name": "@suiflex/suitest",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Suitest local bundle — one command runs the full local stack (dashboard + SQLite + MCP).",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/suiflex/suitest"
+  },
   "bin": {
     "suitest": "bin/suitest.js"
   },
@@ -16,7 +20,7 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@suiflex/suitest-mcp": "^0.1.4"
+    "@suiflex/suitest-mcp": "^0.5.0"
   },
   "scripts": {
     "sync-assets": "node scripts/sync-assets.js",

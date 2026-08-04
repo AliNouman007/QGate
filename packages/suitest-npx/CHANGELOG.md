@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.0] (unreleased)
+
+Includes the post-0.4.0 launcher updates currently on `main`.
+
 ## [0.4.0](https://github.com/suiflex/suitest/compare/launcher-v0.3.0...launcher-v0.4.0) (2026-07-25)
 
 
