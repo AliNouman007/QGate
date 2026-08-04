@@ -152,7 +152,7 @@ def _tool_catalog() -> list[Tool]:
         Tool(
             name="http.request",
             description="Execute an HTTP request via httpx.AsyncClient.",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "required": ["method", "url"],
                 "properties": {
@@ -169,7 +169,7 @@ def _tool_catalog() -> list[Tool]:
         Tool(
             name="http.assert_status",
             description="Assert a response status code equals an expected integer.",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "required": ["result", "equals"],
                 "properties": {
@@ -184,7 +184,7 @@ def _tool_catalog() -> list[Tool]:
                 "Assert a JSONPath expression resolves on the response body and "
                 "optionally equals / matches an expected value."
             ),
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "required": ["result", "path"],
                 "properties": {
@@ -201,7 +201,7 @@ def _tool_catalog() -> list[Tool]:
                 "Assert a response header equals an expected value "
                 "(header name match is case-insensitive)."
             ),
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "required": ["result", "name", "equals"],
                 "properties": {

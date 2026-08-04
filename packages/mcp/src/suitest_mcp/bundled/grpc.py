@@ -42,12 +42,12 @@ def _tool_catalog() -> list[Tool]:
         Tool(
             name="grpc.call",
             description="Invoke a unary gRPC method via server reflection.",
-            inputSchema={"type": "object", "required": ["method"], "properties": call_props},
+            input_schema={"type": "object", "required": ["method"], "properties": call_props},
         ),
         Tool(
             name="grpc.assert_response",
             description="Invoke a unary method and assert a JSONPath on the response.",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "required": ["method", "jsonpath", "equals"],
                 "properties": {**call_props, "jsonpath": string, "equals": {}},

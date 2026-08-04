@@ -237,7 +237,7 @@ app = Server("probe-mock")
 
 @app.list_tools()
 async def list_tools():
-    return [Tool(name="echo", description="echo back", inputSchema={"type": "object"})]
+    return [Tool(name="echo", description="echo back", input_schema={"type": "object"})]
 
 @app.call_tool()
 async def call_tool(name, arguments):

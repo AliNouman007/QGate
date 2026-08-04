@@ -32,11 +32,13 @@ from typing import TYPE_CHECKING, Any, Protocol
 import anyio
 from mcp.server import Server
 from mcp.shared.memory import create_client_server_memory_streams
+from mcp.types import CallToolResult, ListToolsResult, TextContent
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
 
-    from mcp.types import TextContent, Tool
+    from mcp.server.context import ServerRequestContext
+    from mcp.types import CallToolRequestParams, PaginatedRequestParams, Tool
 
     from suitest_mcp.models import McpProviderConfig
 
@@ -121,22 +123,35 @@ def get_bundled_builder(name: str) -> Callable[[McpProviderConfig], BundledServe
     return _BUILDERS[name]
 
 
-def _adapt_server(server: BundledServer, label: str) -> Server[object, object]:
+def _adapt_server(server: BundledServer, label: str) -> Server[object]:
     """Wrap a :class:`BundledServer` in an :class:`mcp.server.Server`.
 
-    The SDK requires its decorator-based handler registration, so we mount the
-    bundled provider's coroutines onto a fresh ``Server`` instance per session.
+    The SDK registers lowlevel handlers via constructor ``on_*`` callables, so
+    we mount the bundled provider's coroutines onto a fresh ``Server`` instance
+    per session.
     """
-    app: Server[object, object] = Server(label)
 
-    @app.list_tools()  # type: ignore[no-untyped-call,misc,untyped-decorator,unused-ignore]
-    async def _list_tools() -> list[Tool]:
-        return await server.list_tools()
+    async def _list_tools(
+        ctx: ServerRequestContext[object, Any], params: PaginatedRequestParams | None
+    ) -> ListToolsResult:
+        return ListToolsResult(tools=await server.list_tools())
 
-    @app.call_tool()  # type: ignore[no-untyped-call,misc,untyped-decorator,unused-ignore]
-    async def _call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
-        return await server.call_tool(name, arguments)
+    async def _call_tool(
+        ctx: ServerRequestContext[object, Any], params: CallToolRequestParams
+    ) -> CallToolResult:
+        # v2 no longer auto-wraps a raised exception into
+        # ``CallToolResult(is_error=True)`` (it becomes a top-level JSON-RPC
+        # error instead) — restore v1's behavior ourselves so
+        # ``BundledServer.call_tool`` implementations can keep raising
+        # ``AssertionError``/``ValueError`` for tool-execution failures and
+        # have the generic client surface them as ``McpToolFailed``.
+        try:
+            content = await server.call_tool(params.name, params.arguments or {})
+        except Exception as exc:
+            return CallToolResult(content=[TextContent(type="text", text=str(exc))], is_error=True)
+        return CallToolResult(content=content, is_error=False)
 
+    app: Server[object] = Server(label, on_list_tools=_list_tools, on_call_tool=_call_tool)
     return app
 
 

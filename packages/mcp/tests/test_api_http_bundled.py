@@ -83,8 +83,8 @@ async def test_list_tools_advertises_four_http_tools(server: ApiHttpServer) -> N
     }
     for t in tools:
         assert t.description, f"{t.name} must have a description"
-        assert isinstance(t.inputSchema, dict)
-        assert t.inputSchema["type"] == "object"
+        assert isinstance(t.input_schema, dict)
+        assert t.input_schema["type"] == "object"
 
 
 async def test_call_tool_unknown_raises(server: ApiHttpServer) -> None:
