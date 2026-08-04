@@ -57,7 +57,7 @@ repos:
           - opentelemetry-instrumentation-asyncpg>=0.50b0
           - prometheus-fastapi-instrumentator>=7.0.0
           - slowapi>=0.1.9
-          - mcp>=1.0.0
+          - mcp>=2.0.0
           - websockets>=12
           - redis[hiredis]>=5.0
           - anyio>=4.3
@@ -78,6 +78,11 @@ repos:
           - openapi-pydantic>=0.4.0
           - faker>=25.0
           - types-PyYAML>=6.0
+          # apps/api/src/suitest_api/services/uat_renderer.py subclasses
+          # fpdf2's FPDF; without the stub package mypy resolves the base
+          # class to Any and trips ``disallow_any_unimported``.
+          - fpdf2>=2.8.5
+          - types-fpdf2>=2.8.4
           # M3-1/M3-4: the agent package (providers/litellm_router, graphs/*)
           # imports litellm + langgraph. Both ship py.typed; without them the
           # isolated pre-commit mypy env resolves the imports to Any and trips
