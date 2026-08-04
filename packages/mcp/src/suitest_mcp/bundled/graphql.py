@@ -53,16 +53,16 @@ def _tool_catalog() -> list[Tool]:
         },
     }
     return [
-        Tool(name="graphql.query", description="Execute a GraphQL query.", inputSchema=doc_schema),
+        Tool(name="graphql.query", description="Execute a GraphQL query.", input_schema=doc_schema),
         Tool(
             name="graphql.mutate",
             description="Execute a GraphQL mutation.",
-            inputSchema=doc_schema,
+            input_schema=doc_schema,
         ),
         Tool(
             name="graphql.assert_data",
             description="Run a query and assert a JSONPath over the data payload.",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "required": ["query", "jsonpath"],
                 "properties": {

@@ -21,25 +21,26 @@ import asyncio, json, sys
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
+from mcp.types import CallToolResult, ListToolsResult, TextContent, Tool
 
 
-app: Server = Server("mock-mcp")
+async def list_tools(ctx, params):
+    return ListToolsResult(
+        tools=[
+            Tool(name="echo", description="echo", input_schema={"type": "object"}),
+            Tool(name="boom", description="raises", input_schema={"type": "object"}),
+        ]
+    )
 
 
-@app.list_tools()
-async def list_tools() -> list[Tool]:
-    return [
-        Tool(name="echo", description="echo", inputSchema={"type": "object"}),
-        Tool(name="boom", description="raises", inputSchema={"type": "object"}),
-    ]
+async def call_tool(ctx, params):
+    if params.name == "boom":
+        return CallToolResult(content=[TextContent(type="text", text="boom")], is_error=True)
+    text = "ECHO:" + json.dumps(params.arguments or {}, sort_keys=True)
+    return CallToolResult(content=[TextContent(type="text", text=text)], is_error=False)
 
 
-@app.call_tool()
-async def call_tool(name, arguments):
-    if name == "boom":
-        raise RuntimeError("boom")
-    return [TextContent(type="text", text="ECHO:" + json.dumps(arguments, sort_keys=True))]
+app: Server = Server("mock-mcp", on_list_tools=list_tools, on_call_tool=call_tool)
 
 
 async def main() -> None:

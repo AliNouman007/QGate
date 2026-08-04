@@ -38,12 +38,12 @@ def _tool_catalog() -> list[Tool]:
         Tool(
             name="k8s.get",
             description="Get one resource by kind/namespace/name.",
-            inputSchema={"type": "object", "required": ["kind", "name"], "properties": base_props},
+            input_schema={"type": "object", "required": ["kind", "name"], "properties": base_props},
         ),
         Tool(
             name="k8s.list",
             description="List resources of a kind in a namespace.",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "required": ["kind"],
                 "properties": {**base_props, "labelSelector": string},
@@ -52,7 +52,7 @@ def _tool_catalog() -> list[Tool]:
         Tool(
             name="k8s.assert_condition",
             description="Assert a JSONPath on a resource equals an expected value.",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "required": ["kind", "name", "jsonpath", "equals"],
                 "properties": {**base_props, "jsonpath": string, "equals": {}},

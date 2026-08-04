@@ -214,7 +214,7 @@ def _tool_schemas() -> list[Tool]:
         Tool(
             name="db.query",
             description="Execute a parameterized SELECT; returns rows as list[dict].",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "required": ["sql"],
                 "properties": {
@@ -227,7 +227,7 @@ def _tool_schemas() -> list[Tool]:
         Tool(
             name="db.exec",
             description="Execute a DML / DDL statement; returns affected rowcount.",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "required": ["sql"],
                 "properties": {"sql": string_schema, "params": array_schema},
@@ -236,7 +236,7 @@ def _tool_schemas() -> list[Tool]:
         Tool(
             name="db.insert",
             description="Parameterized INSERT keyed by column->value.",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "required": ["table", "row"],
                 "properties": {"table": string_schema, "row": object_schema},
@@ -245,7 +245,7 @@ def _tool_schemas() -> list[Tool]:
         Tool(
             name="db.delete",
             description="Parameterized DELETE keyed by column->value WHERE.",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "required": ["table", "where"],
                 "properties": {"table": string_schema, "where": object_schema},
@@ -254,7 +254,7 @@ def _tool_schemas() -> list[Tool]:
         Tool(
             name="db.assert_row_exists",
             description="Assert >=1 row matches the WHERE filter.",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "required": ["table", "where"],
                 "properties": {"table": string_schema, "where": object_schema},
@@ -263,7 +263,7 @@ def _tool_schemas() -> list[Tool]:
         Tool(
             name="db.assert_row_count",
             description="Assert an exact row count matches the WHERE filter.",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "required": ["table", "where", "count"],
                 "properties": {

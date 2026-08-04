@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client
-from mcp.client.websocket import websocket_client
+from mcp.client.streamable_http import streamable_http_client
 from opentelemetry import trace
 
 from mcp import ClientSession, StdioServerParameters
@@ -74,7 +74,7 @@ class McpSession:
             {
                 "name": t.name,
                 "description": t.description or "",
-                "input_schema": t.inputSchema or {},
+                "input_schema": t.input_schema or {},
             }
             for t in result.tools
         ]
@@ -148,7 +148,7 @@ class McpSession:
                     output.setdefault("blocks", []).append(
                         {"type": ctype, "data": getattr(content, "data", None)}
                     )
-            if result.isError:
+            if result.is_error:
                 raise McpToolFailed(stdout.strip() or "isError=true")
             return McpToolResult(
                 ok=True,
@@ -178,7 +178,7 @@ def _transport_context(provider: McpProviderConfig) -> Any:
         headers = provider.config_json.get("headers", {})
         return sse_client(provider.endpoint, headers=headers)
     if provider.transport == McpTransport.WS:
-        return websocket_client(provider.endpoint)
+        return streamable_http_client(provider.endpoint)
     if provider.transport == McpTransport.IN_PROCESS:
         # Late import: the bundled runtime depends on mcp.server which we do
         # not want to load for stdio/SSE/WS code paths.

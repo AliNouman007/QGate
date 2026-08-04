@@ -231,17 +231,18 @@ _MOCK_MCP_SCRIPT = """
 import asyncio, json
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
+from mcp.types import CallToolResult, ListToolsResult, TextContent, Tool
 
-app = Server("probe-mock")
+async def list_tools(ctx, params):
+    return ListToolsResult(
+        tools=[Tool(name="echo", description="echo back", input_schema={"type": "object"})]
+    )
 
-@app.list_tools()
-async def list_tools():
-    return [Tool(name="echo", description="echo back", inputSchema={"type": "object"})]
+async def call_tool(ctx, params):
+    text = json.dumps(params.arguments or {})
+    return CallToolResult(content=[TextContent(type="text", text=text)], is_error=False)
 
-@app.call_tool()
-async def call_tool(name, arguments):
-    return [TextContent(type="text", text=json.dumps(arguments))]
+app = Server("probe-mock", on_list_tools=list_tools, on_call_tool=call_tool)
 
 async def main():
     async with stdio_server() as (r, w):

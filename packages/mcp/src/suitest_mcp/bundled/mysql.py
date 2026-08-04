@@ -35,7 +35,7 @@ def _tool_catalog() -> list[Tool]:
         Tool(
             name="db.query",
             description="Execute a SELECT; returns rows as list[dict].",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "required": ["sql"],
                 "properties": {"sql": string, "params": array},
@@ -44,7 +44,7 @@ def _tool_catalog() -> list[Tool]:
         Tool(
             name="db.exec",
             description="Execute DML/DDL; returns affected rowcount.",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "required": ["sql"],
                 "properties": {"sql": string, "params": array},
@@ -53,7 +53,7 @@ def _tool_catalog() -> list[Tool]:
         Tool(
             name="db.assert_row_count",
             description="Assert COUNT(*) over a table matches an exact value.",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "required": ["table", "count"],
                 "properties": {"table": string, "where_sql": string, "count": {"type": "integer"}},

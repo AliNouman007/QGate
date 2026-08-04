@@ -32,7 +32,7 @@ def _tool_catalog() -> list[Tool]:
         Tool(
             name="mongo.find",
             description="Find documents in a collection by filter.",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "required": ["collection"],
                 "properties": {"collection": string, "filter": obj, "limit": {"type": "integer"}},
@@ -41,7 +41,7 @@ def _tool_catalog() -> list[Tool]:
         Tool(
             name="mongo.insert_one",
             description="Insert a single document.",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "required": ["collection", "document"],
                 "properties": {"collection": string, "document": obj},
@@ -50,7 +50,7 @@ def _tool_catalog() -> list[Tool]:
         Tool(
             name="mongo.delete",
             description="Delete documents matching a filter.",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "required": ["collection", "filter"],
                 "properties": {"collection": string, "filter": obj},
@@ -59,7 +59,7 @@ def _tool_catalog() -> list[Tool]:
         Tool(
             name="mongo.assert_count",
             description="Assert the document count matching a filter.",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "required": ["collection", "count"],
                 "properties": {"collection": string, "filter": obj, "count": {"type": "integer"}},
