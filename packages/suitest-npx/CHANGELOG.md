@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.1](https://github.com/suiflex/suitest/compare/launcher-v0.5.0...launcher-v0.5.1) (2026-08-04)
+
+
+### Bug Fixes
+
+* **release:** add launcher provenance metadata ([e8369d3](https://github.com/suiflex/suitest/commit/e8369d3aa59c5d16b2e73d7d382ecb516df441b7))
+* **release:** declare launcher repository metadata ([b44cf86](https://github.com/suiflex/suitest/commit/b44cf86a221f31e093654fd1b4ecd374fbfa52a7))
+
 ## [0.5.0] (unreleased)
 
 Includes the post-0.4.0 launcher updates currently on `main`.
