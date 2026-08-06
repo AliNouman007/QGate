@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.0](https://github.com/suiflex/suitest/compare/launcher-v0.5.1...launcher-v0.6.0) (2026-08-06)
+
+
+### Features
+
+* **cli:** brand suitest/suitest-mcp with a connected onboarding wizard ([1f90b29](https://github.com/suiflex/suitest/commit/1f90b299dee5a0baa094381ac8ed9765b4aee4fa))
+* **cli:** brand suitest/suitest-mcp with a connected onboarding wizard ([0e67907](https://github.com/suiflex/suitest/commit/0e67907ca62e0dfaaf8acfb1f06e71e6fe415b56))
+
 ## [0.5.1](https://github.com/suiflex/suitest/compare/launcher-v0.5.0...launcher-v0.5.1) (2026-08-04)
 
 
