@@ -16,6 +16,7 @@ const { spawnSync } = require("node:child_process");
 
 const creds = require("./creds.js");
 const picker = require("./picker.js");
+const theme = require("./theme.js");
 const { findPython } = require("./python.js");
 
 const PKG = "@suiflex/suitest-mcp";
@@ -418,22 +419,24 @@ function doctor(only) {
 // --- interactive orchestration -------------------------------------------
 
 async function runInteractive(opts) {
-  process.stdout.write("suitest-mcp install — interactive setup\n");
-  process.stdout.write("─".repeat(38) + "\n\n");
+  process.stdout.write(theme.banner() + "\n\n");
 
   const py = findPython();
-  process.stdout.write(
-    py
-      ? `[ok]   Python interpreter: ${py.cmd} (${py.version})\n`
-      : "[fail] Python >= 3.11 not found on PATH\n",
-  );
   const saved = creds.loadCreds();
   process.stdout.write(
-    saved
-      ? "[ok]   Credentials saved (reused automatically)\n"
-      : "[info] No saved credentials — you'll be asked once\n",
+    theme.step(
+      "install — preflight",
+      [
+        py
+          ? `[ok]   Python interpreter: ${py.cmd} (${py.version})`
+          : "[fail] Python >= 3.11 not found on PATH",
+        saved
+          ? "[ok]   Credentials saved (reused automatically)"
+          : "[info] No saved credentials — you'll be asked once",
+      ],
+      { color: py ? theme.accent : theme.amber },
+    ) + "\n",
   );
-  process.stdout.write("\n");
 
   if (!py) {
     throw new Error(
@@ -458,15 +461,17 @@ async function runInteractive(opts) {
     label: CLIENTS[id].label,
     hint: CLIENTS[id].hint,
   }));
-  const clientId = await picker.select("Pick the MCP client to install into:", items);
+  const clientIds = await picker.multiselect("Pick the MCP client(s) to install into:", items);
 
-  installClient(clientId, { ...opts, env });
+  for (const clientId of clientIds) {
+    installClient(clientId, { ...opts, env });
+  }
 }
 
 // Interactive credential step for `install`. Order: honor flags/env first (no
 // prompt), else ask "log in now?"; on yes, offer saved-vs-new; on skip, placeholder.
 // Returns the same shape as creds.resolveCreds ({apiUrl, apiKey, warn}).
-async function interactiveLogin(opts) {
+async function interactiveLogin(opts, streams = {}) {
   // Non-interactive override: explicit flags or env win, no questions asked.
   if (opts.apiUrl && opts.apiKey) {
     return { apiUrl: opts.apiUrl, apiKey: opts.apiKey, warn: false };
@@ -479,25 +484,35 @@ async function interactiveLogin(opts) {
     };
   }
 
-  const want = await picker.select("Set up Suitest login now?", [
-    { value: "yes", label: "Yes, log in", hint: "enter or reuse API URL + key" },
-    { value: "skip", label: "Skip", hint: "write placeholder, edit later" },
-  ]);
-  if (want === "skip") {
-    return { ...creds.PLACEHOLDER, warn: true };
-  }
-
   const saved = creds.loadCreds();
-  let useExisting = false;
-  if (saved) {
-    const pick = await picker.select("Saved credentials found — use them?", [
-      { value: "existing", label: "Use existing", hint: saved.apiUrl },
-      { value: "new", label: "Enter new credentials" },
-    ]);
-    useExisting = pick === "existing";
-  }
-  if (useExisting) {
-    return { ...saved, warn: false };
+
+  // Esc on the second question ("use saved creds?") re-asks the first
+  // ("log in now?") instead of aborting — Ctrl-C still aborts the whole flow.
+  let wantLogin;
+  for (;;) {
+    try {
+      wantLogin = await picker.confirm("Set up Suitest login now?", { default: "yes" }, streams);
+    } catch (err) {
+      if (err.code !== "BACK") throw err; // nowhere earlier to go back to
+      continue;
+    }
+    if (!wantLogin) return { ...creds.PLACEHOLDER, warn: true };
+
+    if (!saved) break; // nothing to choose between — fall through to entering creds
+
+    let useExisting;
+    try {
+      useExisting = await picker.confirm(
+        `Saved credentials found (${saved.apiUrl}) — use them?`,
+        { default: "yes" },
+        streams,
+      );
+    } catch (err) {
+      if (err.code === "BACK") continue; // -> back to "log in now?"
+      throw err;
+    }
+    if (useExisting) return { ...saved, warn: false };
+    break;
   }
 
   const entered = await creds.promptCreds(saved || {});
@@ -607,6 +622,7 @@ module.exports = {
   loadJsonObject,
   ensureObjectPath,
   installClient,
+  interactiveLogin,
   parseArgs,
   handleInstall,
   handleLogin,
