@@ -37,16 +37,20 @@ const fg1 = paint(CODES.bold + CODES.fg1);
 const fg3 = paint(CODES.fg3);
 const border = paint(CODES.border);
 
-// Small boxed wordmark, accent green like the real logomark (apps/web/public/logo.svg).
-// Deliberately plain block letters, not figlet — no dependency, and it collapses
-// to three lines of plain text when colorEnabled() is false.
+// Small boxed wordmark, accent green like the real logomark (apps/web/public/logo.svg:
+// a rounded square with a checkmark stroke). The icon is a crisp outlined mini-box
+// (box-drawing chars, not filled quadrant blocks — those render as a solid blob
+// that crushes the checkmark) — a 3-row badge next to the wordmark, not one small
+// glyph. No figlet, no image; collapses to plain text when colorEnabled() is false.
 function banner(stream = process.stdout) {
+  const icon = ["┌───┐", "│ ✓ │", "└───┘"];
   const word = "S U I T E S T";
-  const width = word.length + 4;
+  const rows = [icon[0], `${icon[1]}  ${word}`, icon[2]];
+  const width = Math.max(...rows.map((r) => r.length)) + 4;
   const top = `┌${"─".repeat(width)}┐`;
-  const mid = `│  ${word}  │`;
+  const mid = rows.map((r) => `│  ${r.padEnd(width - 4)}  │`);
   const bot = `└${"─".repeat(width)}┘`;
-  return [accent(top, stream), accent(mid, stream), accent(bot, stream)].join("\n");
+  return [accent(top, stream), ...mid.map((r) => accent(r, stream)), accent(bot, stream)].join("\n");
 }
 
 // Prefix a line with the wizard-step connector column. Defaults to accent —
