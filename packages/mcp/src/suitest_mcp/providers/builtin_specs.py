@@ -129,4 +129,89 @@ BUILTIN_SPECS: list[McpProviderConfig] = [
         is_default_for_target={"BE_GRPC": True},
         max_sessions=4,
     ),
+    # M14 — desktop (FE_DESKTOP). All three are external stdio binaries that are
+    # NOT distributed in the runner image: each resolves its real path via
+    # registration / ``command_pin`` (e.g. ``command_pin = /opt/suitest/slint-mcp``).
+    # The ``command`` below is only a discoverability hint (a binary that must
+    # exist on PATH once installed).
+    #
+    # ``computer-use-mcp`` is the generic catch-all: OS-level screenshot+click
+    # control, so it routes as the FE_DESKTOP default. ``slint-mcp`` and
+    # ``electron-mcp`` drive apps through their own accessible-tree / DOM seams
+    # and are pinned explicitly per step (or via a workspace routing override)
+    # — far more deterministic than screen control, so preferred when the app is
+    # Slint or Electron. See docs/DESKTOP_TESTING.md.
+    McpProviderConfig(
+        id="builtin:computer-use-mcp",
+        workspace_id="_builtin_",
+        name="computer-use-mcp",
+        kind="desktop",
+        transport=McpTransport.STDIO,
+        command=["computer-use-mcp"],
+        config_json={
+            "tools": [
+                "desktop.screenshot",
+                "desktop.click",
+                "desktop.type_text",
+                "desktop.scroll",
+                "desktop.move",
+                "desktop.assert_visible",
+            ]
+        },
+        is_default_for_target={"FE_DESKTOP": True},
+        max_sessions=2,
+        # OS control can be slow on first connect (screen capture server).
+        spawn_timeout_seconds=60.0,
+        call_timeout_seconds=45.0,
+    ),
+    McpProviderConfig(
+        id="builtin:electron-mcp",
+        workspace_id="_builtin_",
+        name="electron-mcp",
+        kind="desktop",
+        transport=McpTransport.STDIO,
+        command=["electron-mcp"],
+        config_json={
+            "tools": [
+                "electron.launch",
+                "electron.click",
+                "electron.type_text",
+                "electron.get_property",
+                "electron.assert_text",
+                "electron.assert_visible",
+                "electron.screenshot",
+                "electron.close",
+            ]
+        },
+        max_sessions=2,
+        spawn_timeout_seconds=120.0,
+        call_timeout_seconds=60.0,
+    ),
+    McpProviderConfig(
+        id="builtin:slint-mcp",
+        workspace_id="_builtin_",
+        name="slint-mcp",
+        kind="desktop",
+        transport=McpTransport.STDIO,
+        command=["slint-mcp"],
+        config_json={
+            "tools": [
+                "slint.launch",
+                "slint.click",
+                "slint.set_property",
+                "slint.get_property",
+                "slint.assert_visible",
+                "slint.assert_text",
+                "slint.assert_checked",
+                "slint.assert_value",
+                "slint.screenshot",
+                "slint.close",
+            ]
+        },
+        max_sessions=2,
+        # A Rust Slint harness compiles/link-checks at spawn and file loads can
+        # be slow on a cold run; give it room like playwright.
+        spawn_timeout_seconds=120.0,
+        call_timeout_seconds=60.0,
+    ),
 ]
