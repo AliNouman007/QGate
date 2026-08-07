@@ -32,6 +32,11 @@ repos:
     rev: v2.1.0
     hooks:
       - id: mypy
+        # Tests are enforced at runtime (pytest) + lint (ruff). Their
+        # per-package conftest.py files collide as duplicate mypy modules, so
+        # never hand them to the mypy hook (mirrors the ``exclude`` in
+        # [tool.mypy]).
+        exclude: "(^|/)(tests)/"
         additional_dependencies:
           - pydantic>=2.9.0
           - pydantic-settings>=2.6.0
