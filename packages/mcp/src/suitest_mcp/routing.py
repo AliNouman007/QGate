@@ -46,6 +46,10 @@ DEFAULT_ROUTING: dict[TargetKind, tuple[str, str | None]] = {
     TargetKind.FE_WEB: ("playwright-mcp", None),
     # appium-mcp ships later (M12) — until then, FE_MOBILE falls back to playwright.
     TargetKind.FE_MOBILE: ("playwright-mcp", None),
+    # M14: desktop default is the generic computer-use-mcp (screen control).
+    # slint-mcp / electron-mcp are pinned explicitly per step (or via a
+    # workspace override) because they target a specific app runtime.
+    TargetKind.FE_DESKTOP: ("computer-use-mcp", None),
     TargetKind.DATA: ("postgres-mcp", None),
     # M2-10: kubernetes-mcp bundled for INFRA assertions.
     TargetKind.INFRA: ("kubernetes-mcp", None),

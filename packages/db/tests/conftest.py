@@ -15,6 +15,8 @@ from __future__ import annotations
 import asyncio
 import base64
 import os
+import shutil
+import subprocess
 import sys
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
@@ -30,6 +32,30 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+
+
+def _require_docker() -> None:
+    """Skip the testcontainers Postgres path when no Docker daemon is usable.
+
+    These integration tests need a real Postgres. ``SUITEST_DATABASE_URL``
+    (documented Docker-less local runs) skips Docker entirely; otherwise a
+    testcontainer is booted. If neither is possible, skip clearly rather than
+    fail the local ForgeGuard gate — CI runs the same tests with Docker
+    services (see .github/workflows/ci.yml).
+    """
+    if os.environ.get("SUITEST_DATABASE_URL"):
+        return
+    if not shutil.which("docker"):
+        pytest.skip(
+            "docker unavailable; set SUITEST_DATABASE_URL to run against an external Postgres"
+        )
+    try:
+        subprocess.run(["docker", "info"], check=True, capture_output=True, timeout=15)
+    except Exception:
+        pytest.skip(
+            "docker daemon not reachable; set SUITEST_DATABASE_URL to run against an external Postgres"
+        )
+
 
 _DB_PKG_ROOT = Path(__file__).resolve().parent.parent  # packages/db
 
@@ -72,6 +98,8 @@ def database_url() -> Iterator[str]:
         return
     # Lazy import: ``testcontainers`` is only needed for the Docker path, which
     # is skipped entirely when ``SUITEST_DATABASE_URL`` is supplied.
+    _require_docker()
+
     from testcontainers.postgres import PostgresContainer
 
     with PostgresContainer("pgvector/pgvector:pg16", driver="asyncpg") as container:

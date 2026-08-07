@@ -1,0 +1,132 @@
+{
+  "suite": "SlintDemo — login smoke suite (M14 desktop testing)",
+  "description": "Deterministic slint-mcp smoke suite. Replays against ui/login-screen.slint via the accessible tree (accessible-id selectors).",
+  "cases": [
+    {
+      "name": "Login screen starts in idle state (S1)",
+      "source": "AI",
+      "priority": "P1",
+      "status": "ACTIVE",
+      "target_kind": "FE_DESKTOP",
+      "mcp_provider": "slint-mcp",
+      "description": "Launches the Slint screen and asserts the status label reads 'idle' before any interaction.",
+      "steps": [
+        {
+          "order": 0,
+          "action": "Launch the Slint screen",
+          "expected": "Window mounted root accessible element",
+          "code": {
+            "tool": "slint.launch",
+            "arguments": {"path": "${SLINT_DEMO_UI}/login-screen.slint"},
+            "assertions": [
+              {"tool": "slint.assert_visible", "arguments": {"selector": "[id=\"label-status\"]", "equals": true}}
+            ]
+          }
+        },
+        {
+          "order": 1,
+          "action": "Assert the idle status text",
+          "expected": "status shows 'idle'",
+          "code": {
+            "tool": "slint.assert_text",
+            "arguments": {"selector": "[id=\"label-status\"]", "equals": "idle"}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Submit sets status to submitted (S2)",
+      "source": "AI",
+      "priority": "P1",
+      "status": "ACTIVE",
+      "target_kind": "FE_DESKTOP",
+      "mcp_provider": "slint-mcp",
+      "description": "Submitting the form sets the status text to 'submitted'.",
+      "steps": [
+        {
+          "order": 0,
+          "action": "Launch the Slint screen",
+          "expected": "root ready",
+          "code": {
+            "tool": "slint.launch",
+            "arguments": {"path": "${SLINT_DEMO_UI}/login-screen.slint"}
+          }
+        },
+        {
+          "order": 1,
+          "action": "Set the email field",
+          "expected": "email updated",
+          "code": {
+            "tool": "slint.set_property",
+            "arguments": {"selector": "[id=\"input-email\"]", "value": "qa@example.com"}
+          }
+        },
+        {
+          "order": 2,
+          "action": "Click submit",
+          "expected": "status flips to submitted",
+          "code": {
+            "tool": "slint.click",
+            "arguments": {"selector": "[id=\"btn-submit\"]"}
+          }
+        },
+        {
+          "order": 3,
+          "action": "Assert status text",
+          "expected": "status shows 'submitted'",
+          "code": {
+            "tool": "slint.assert_text",
+            "arguments": {"selector": "[id=\"label-status\"]", "equals": "submitted"}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reset returns status to idle (S3)",
+      "source": "AI",
+      "priority": "P2",
+      "status": "ACTIVE",
+      "target_kind": "FE_DESKTOP",
+      "mcp_provider": "slint-mcp",
+      "description": "After submitting, clicking reset returns the status text to 'idle'.",
+      "steps": [
+        {
+          "order": 0,
+          "action": "Launch the Slint screen",
+          "expected": "root ready",
+          "code": {
+            "tool": "slint.launch",
+            "arguments": {"path": "${SLINT_DEMO_UI}/login-screen.slint"}
+          }
+        },
+        {
+          "order": 1,
+          "action": "Submit",
+          "expected": "status submitted",
+          "code": {
+            "tool": "slint.click",
+            "arguments": {"selector": "[id=\"btn-submit\"]"}
+          }
+        },
+        {
+          "order": 2,
+          "action": "Reset",
+          "expected": "status idle",
+          "code": {
+            "tool": "slint.click",
+            "arguments": {"selector": "[id=\"btn-reset\"]"}
+          }
+        },
+        {
+          "order": 3,
+          "action": "Assert status text",
+          "expected": "status shows 'idle'",
+          "code": {
+            "tool": "slint.assert_text",
+            "arguments": {"selector": "[id=\"label-status\"]", "equals": "idle"}
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+// Minimal Slint screen used as the deterministic target for the bundled
+// slint-mcp smoke suite. Every interactive element carries an `accessible-id`
+// and `accessible-label` so the accessible-tree driver can find it without
+// requiring a browser DOM (selector priority: accessible-id -> label+role).
+import { Button, LineEdit, CheckBox, VerticalBox, HorizontalBox } from "std-widgets.slint";
+
+export component LoginScreen inherits Window {
+    out property <string> status-text: "idle";
+
+    in property <string> known-user: "qa@example.com";
+
+    title: "Slint MCP demo";
+
+    VerticalBox {
+        padding: 16px;
+        alignment: start;
+
+        Text {
+            text: "Sign in";
+            font-size: 24px;
+            accessible-role: heading;
+            accessible-label: "Sign in";
+        }
+
+        LineEdit {
+            accessible-id: "input-email";
+            accessible-label: "Email";
+            placeholder-text: "you@example.com";
+            text: known-user;
+        }
+
+        LineEdit {
+            accessible-id: "input-password";
+            accessible-label: "Password";
+            placeholder-text: "••••••";
+            password: true;
+        }
+
+        CheckBox {
+            accessible-id: "checkbox-remember";
+            accessible-label: "Remember me";
+            text: "Remember me";
+        }
+
+        HorizontalBox {
+            spacing: 8px;
+            Button {
+                accessible-id: "btn-submit";
+                accessible-label: "Submit";
+                text: "Submit";
+                clicked => {
+                    status-text = "submitted";
+                }
+            }
+            Button {
+                accessible-id: "btn-reset";
+                accessible-label: "Reset";
+                text: "Reset";
+                clicked => {
+                    status-text = "idle";
+                }
+            }
+        }
+
+        Text {
+            accessible-id: "label-status";
+            accessible-label: "Status";
+            text: status-text;
+        }
+    }
+}

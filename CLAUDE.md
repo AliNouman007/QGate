@@ -308,7 +308,7 @@ If you are unsure about something not covered in the docs:
 | **Artifact** | Output of a run (screenshot, HAR, log, video) |
 | **Tier** | Capability level: `ZERO` / `LOCAL` / `CLOUD` — base is always ZERO, raised per-workspace by the LLM configuration in the web UI |
 | **Autonomy** | Per-workspace dial: `manual` / `assist` / `semi_auto` / `auto` |
-| **target_kind** | Enum: `BE_REST` / `BE_GRAPHQL` / `BE_GRPC` / `FE_WEB` / `FE_MOBILE` / `DATA` / `INFRA` / `CUSTOM` |
+| **target_kind** | Enum: `BE_REST` / `BE_GRAPHQL` / `BE_GRPC` / `FE_WEB` / `FE_MOBILE` / `FE_DESKTOP` / `DATA` / `INFRA` / `CUSTOM` |
 | **mcp_provider** | Foreign key into the MCP server registry (e.g. `playwright-mcp`, `api-http-mcp`) |
 | **Generator** | Mechanism for creating test cases. Deterministic (OpenAPI, Recorder, Crawler) or LLM-driven (PRD, semantic URL, MCP discovery) |
 | **Capability resolver** | `packages/core/capabilities.py` — supplies the ZERO base + primitives (tier → features/autonomy); the effective tier is raised by the service layer from the workspace LLMConfig |

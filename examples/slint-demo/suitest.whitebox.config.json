@@ -1,0 +1,14 @@
+{
+  "mode": "desktop",
+  "projectName": "SlintDemo",
+  "projectPath": ".",
+  "testing": {
+    "approach": "white-box",
+    "level": "UI",
+    "target_kind": "FE_DESKTOP"
+  },
+  "server": {
+    "autostart": false
+  },
+  "output": "suitest-output"
+}

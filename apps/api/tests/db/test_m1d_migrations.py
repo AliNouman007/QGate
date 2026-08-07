@@ -27,6 +27,8 @@ from __future__ import annotations
 import asyncio
 import base64
 import os
+import shutil
+import subprocess
 import uuid
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
@@ -43,6 +45,28 @@ _DB_PKG_ROOT = _REPO_ROOT / "packages" / "db"
 
 # Last revision *before* the M1d chain — round-trip downgrade target.
 _PRE_M1D_REV = "0015_run_step_logs"
+
+
+def _require_docker() -> None:
+    """Skip the testcontainers Postgres path when no Docker daemon is usable.
+
+    ``SUITEST_DATABASE_URL`` (documented Docker-less local runs) skips Docker
+    entirely; otherwise these M1d migration round-trip tests boot a pgvector
+    testcontainer. If neither is possible, skip clearly rather than fail the
+    local ForgeGuard gate — CI runs the same tests with Docker services.
+    """
+    if os.environ.get("SUITEST_DATABASE_URL"):
+        return
+    if not shutil.which("docker"):
+        pytest.skip(
+            "docker unavailable; set SUITEST_DATABASE_URL to run against an external Postgres"
+        )
+    try:
+        subprocess.run(["docker", "info"], check=True, capture_output=True, timeout=15)
+    except Exception:
+        pytest.skip(
+            "docker daemon not reachable; set SUITEST_DATABASE_URL to run against an external Postgres"
+        )
 
 
 def _script_head(cfg: Config) -> str:
@@ -103,6 +127,8 @@ def _m1d_database_url() -> Iterator[str]:
                 conn.execute(text(f'DROP DATABASE IF EXISTS "{db_name}"'))
             admin_engine.dispose()
         return
+
+    _require_docker()
 
     from testcontainers.postgres import PostgresContainer
 
