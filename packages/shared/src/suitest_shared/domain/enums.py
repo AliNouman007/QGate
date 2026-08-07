@@ -197,6 +197,7 @@ class TargetKind(StrEnum):
     BE_GRPC = "BE_GRPC"
     FE_WEB = "FE_WEB"
     FE_MOBILE = "FE_MOBILE"
+    FE_DESKTOP = "FE_DESKTOP"
     DATA = "DATA"
     INFRA = "INFRA"
     CUSTOM = "CUSTOM"
