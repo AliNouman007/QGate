@@ -133,7 +133,7 @@ namespace_packages = true
 # named "conftest"). Tests stay enforced at runtime by pytest and at lint time
 # by ruff; only mypy defers to the application source trees (see the
 # ``mypy_path`` bases above).
-exclude = "(^|/)(\\.venv|alembic/versions|node_modules|dist|build|tests)/"
+exclude = "(^|/)(\\.venv|alembic/versions|node_modules|dist|build|tests|mcp-npx/python)/"
 
 [[tool.mypy.overrides]]
 module = ["alembic.*", "fastembed.*", "cuid2.*", "pgvector.*", "testcontainers.*", "jsonpath_ng.*", "respx.*", "fakeredis.*", "aioboto3.*", "botocore.*", "moto.*", "boto3.*"]
