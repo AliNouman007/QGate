@@ -337,8 +337,9 @@ Tag `v1.0.0`. Announce on HN / Reddit / dev.to. Discord + community forum set up
 
 ## M14 — Desktop testing (5 weeks)
 
-- [ ] **M14-1** `computer-use-mcp` integration
-- [ ] **M14-2** Generic desktop UI testing (Electron, Win32, macOS)
+- [x] **M14-1** `computer-use-mcp` integration (screen-level default for `FE_DESKTOP`)
+- [x] **M14-2** Generic desktop UI testing (Electron, Win32, macOS) — `electron-mcp` (CDP/DOM) + `computer-use-mcp` fallback
+- [x] **M14-3** Slint desktop testing via accessible tree — `slint-mcp` (headless software renderer); see [DESKTOP_TESTING.md](./DESKTOP_TESTING.md) and `examples/slint-demo/`
 
 ## M15 — Multi-agent swarm (6 weeks)
 

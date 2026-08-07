@@ -24,7 +24,7 @@ def _registry_with_builtins(workspace_id: str = "ws-1") -> McpRegistry:
 def test_registry_register_builtin_seeds_bundled_providers() -> None:
     reg = _registry_with_builtins()
     providers = {p.name for p in reg.list_for_workspace("ws-1")}
-    # 3 original (M1c) + 5 added in M2-10.
+    # 3 original (M1c) + 5 added in M2-10 + 3 desktop (M14) = 11.
     assert providers == {
         "api-http-mcp",
         "playwright-mcp",
@@ -34,6 +34,9 @@ def test_registry_register_builtin_seeds_bundled_providers() -> None:
         "mongo-mcp",
         "kubernetes-mcp",
         "grpc-mcp",
+        "computer-use-mcp",
+        "electron-mcp",
+        "slint-mcp",
     }
 
 
@@ -72,6 +75,61 @@ def test_routing_data_default_to_postgres() -> None:
     reg = _registry_with_builtins()
     cfg = resolve_provider(reg, workspace_id="ws-1", target_kind=TargetKind.DATA, explicit=None)
     assert cfg.name == "postgres-mcp"
+
+
+def test_routing_fe_desktop_default_to_computer_use() -> None:
+    """M14: FE_DESKTOP routes to the screen-level default by default."""
+    reg = _registry_with_builtins()
+    cfg = resolve_provider(
+        reg, workspace_id="ws-1", target_kind=TargetKind.FE_DESKTOP, explicit=None
+    )
+    assert cfg.name == "computer-use-mcp"
+
+
+def test_routing_fe_desktop_explicit_slint_wins() -> None:
+    """An explicit structural provider (slint) beats the screen-level default."""
+    reg = _registry_with_builtins()
+    cfg = resolve_provider(
+        reg, workspace_id="ws-1", target_kind=TargetKind.FE_DESKTOP, explicit="slint-mcp"
+    )
+    assert cfg.name == "slint-mcp"
+
+
+def _desktop_config(name: str) -> McpProviderConfig:
+    reg = _registry_with_builtins()
+    providers = {p.name: p for p in reg.list_for_workspace("ws-1")}
+    cfg = providers[name]
+    assert cfg.kind == "desktop"
+    assert cfg.transport is McpTransport.STDIO
+    return cfg
+
+
+def test_desktop_provider_configs_are_desktop_stdio_residency() -> None:
+    """All three M14 providers are desktop-kind, stdio, and NOT shipped in the
+    image (they resolve via command_pin at runtime)."""
+    assert _desktop_config("computer-use-mcp").command == ["computer-use-mcp"]
+    assert _desktop_config("electron-mcp").command == ["electron-mcp"]
+    assert _desktop_config("slint-mcp").command == ["slint-mcp"]
+
+
+def test_desktop_provider_configs_expose_core_tools() -> None:
+    """Each provider's config_json advertises its namespaced tool catalog."""
+    prefixes = {"computer-use-mcp": "desktop.", "electron-mcp": "electron.", "slint-mcp": "slint."}
+    for name, prefix in prefixes.items():
+        cfg = _desktop_config(name)
+        tools = cfg.config_json.get("tools", [])
+        assert tools, f"{name} should advertise a tool catalog"
+        assert any(t.startswith(prefix) for t in tools)
+        # structural drivers (electron/slint) launch an app; computer-use is a
+        # screen-level catch-all so it has no launch step.
+        if name != "computer-use-mcp":
+            assert any(t.endswith(".launch") for t in tools)
+
+
+def test_computer_use_is_default_for_desktop_target() -> None:
+    reg = _registry_with_builtins()
+    providers = {p.name: p for p in reg.list_for_workspace("ws-1")}
+    assert providers["computer-use-mcp"].is_default_for_target.get("FE_DESKTOP") is True
 
 
 def test_routing_explicit_provider_wins() -> None:
