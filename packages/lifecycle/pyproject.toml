@@ -12,7 +12,7 @@ dependencies = []
 # never installs playwright themselves (it provisions Chromium on first run).
 # Install with: pip install "suiflex-suitest-lifecycle[frontend]"
 [project.optional-dependencies]
-frontend = ["playwright>=1.40"]
+frontend = ["playwright>=1.62.0"]
 # NOTE: publishing run results back to a Suitest instance needs `suiflex-suitest-sdk`.
 # It is a LOCAL path package (not on PyPI), so it is NOT listed here as a version
 # dep — that would break `uv` workspace resolution. Install it into the same env

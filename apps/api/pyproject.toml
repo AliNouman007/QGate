@@ -18,7 +18,7 @@ dependencies = [
   "opentelemetry-instrumentation-sqlalchemy>=0.50b0",
   "opentelemetry-instrumentation-httpx>=0.50b0",
   "opentelemetry-instrumentation-asyncpg>=0.50b0",
-  "prometheus-fastapi-instrumentator>=7.0.0",
+  "prometheus-fastapi-instrumentator>=8.1.0",
   "suitest-agent",
   "suitest-core",
   "suitest-db",
