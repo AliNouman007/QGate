@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.1](https://github.com/suiflex/suitest/compare/launcher-v0.6.0...launcher-v0.6.1) (2026-08-11)
+
+
+### Bug Fixes
+
+* **suitest-npx:** correct license field to Apache-2.0 ([59fb3e2](https://github.com/suiflex/suitest/commit/59fb3e273cf0dc186482ffcb14dcddbc76acf011))
+* **suitest-npx:** correct license field to Apache-2.0 ([6cb0624](https://github.com/suiflex/suitest/commit/6cb062478617503b492d14c622775b21446ba179))
+
 ## [0.6.0](https://github.com/suiflex/suitest/compare/launcher-v0.5.1...launcher-v0.6.0) (2026-08-06)
 
 
