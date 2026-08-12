@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.2](https://github.com/suiflex/suitest/compare/launcher-v0.6.1...launcher-v0.6.2) (2026-08-12)
+
+### Bug Fixes
+
+* use the released MCP package containing the onboarding theme module
+
 ## [0.6.1](https://github.com/suiflex/suitest/compare/launcher-v0.6.0...launcher-v0.6.1) (2026-08-11)
 
 
