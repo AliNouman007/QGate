@@ -19,6 +19,7 @@ const path = require("node:path");
 const readline = require("node:readline");
 
 const { askSecret } = require("./prompt.js");
+const theme = require("./theme.js");
 
 const PLACEHOLDER = {
   apiUrl: "http://localhost:4000",
@@ -95,11 +96,13 @@ function ask(question) {
 async function promptCreds(defaults = {}) {
   const urlHint = defaults.apiUrl ? ` [${defaults.apiUrl}]` : "";
   const keyHint = defaults.apiKey ? " [keep existing]" : "";
+  // point() (not gutter()) so the marker sits on the connector column, same
+  // as the collapsed confirm()/select() lines just above it (install.js).
   const apiUrl =
-    (await ask(`SUITEST_API_URL${urlHint}: `)) || defaults.apiUrl || "";
+    (await ask(theme.point(`SUITEST_API_URL${urlHint}: `))) || defaults.apiUrl || "";
   // Secret: mask so the key never echoes to the terminal / screen-share.
   const apiKey =
-    (await askSecret(`SUITEST_API_KEY${keyHint}: `)) || defaults.apiKey || "";
+    (await askSecret(theme.point(`SUITEST_API_KEY${keyHint}: `))) || defaults.apiKey || "";
   if (!apiUrl || !apiKey) return null;
   return { apiUrl, apiKey };
 }

@@ -1268,6 +1268,7 @@ class CodeExport(Base):
 |-------|--------|-------|
 | `test_steps` | + `mcp_provider TEXT NOT NULL DEFAULT 'playwright-mcp'` | per-step MCP routing |
 | `test_steps` | + `target_kind ENUM target_kind NOT NULL DEFAULT 'FE_WEB'` | classification used by router |
+| `target_kind` enum | + `FE_DESKTOP` (migration 0048; Postgres `ALTER TYPE ... ADD VALUE`, SQLite n/a) | desktop testing (M14) → routable to `computer-use-mcp`/`electron-mcp`/`slint-mcp` |
 | `test_steps` | `executable` **NOT a column** — computed in domain `TestStep.executable(tier)` |
 | `agent_sessions` | + `prompt_version_id FK prompt_versions(id) NULL` | reproducibility |
 | `agent_sessions` | + `seed INT NULL` | LLM determinism |
@@ -1437,6 +1438,7 @@ class TargetKind(StrEnum):
     BE_GRPC = "BE_GRPC"
     FE_WEB = "FE_WEB"
     FE_MOBILE = "FE_MOBILE"
+    FE_DESKTOP = "FE_DESKTOP"  # M14: desktop apps — see DESKTOP_TESTING.md
     DATA = "DATA"
     INFRA = "INFRA"
     CUSTOM = "CUSTOM"

@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shutil
+import subprocess
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 
@@ -29,6 +31,28 @@ from suitest_shared.domain.enums import AutonomyLevel, Tier
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DB_PKG_ROOT = _REPO_ROOT / "packages" / "db"
+
+
+def _require_docker() -> None:
+    """Skip the testcontainers Postgres path when no Docker daemon is usable.
+
+    ``SUITEST_DATABASE_URL`` (documented Docker-less local runs) skips Docker
+    entirely; otherwise the overlay tests boot a pgvector testcontainer. If
+    neither is possible, skip clearly rather than fail the local ForgeGuard
+    gate — CI runs the same tests with Docker services.
+    """
+    if os.environ.get("SUITEST_DATABASE_URL"):
+        return
+    if not shutil.which("docker"):
+        pytest.skip(
+            "docker unavailable; set SUITEST_DATABASE_URL to run against an external Postgres"
+        )
+    try:
+        subprocess.run(["docker", "info"], check=True, capture_output=True, timeout=15)
+    except Exception:
+        pytest.skip(
+            "docker daemon not reachable; set SUITEST_DATABASE_URL to run against an external Postgres"
+        )
 
 
 async def _capabilities_via_fresh_app(headers: dict[str, str] | None = None) -> dict[str, object]:
@@ -218,6 +242,8 @@ def _overlay_database_url() -> Iterator[str]:
                 conn.execute(text(f'DROP DATABASE IF EXISTS "{db_name}"'))
             admin_engine.dispose()
         return
+
+    _require_docker()
 
     from testcontainers.postgres import PostgresContainer
 

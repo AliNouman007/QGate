@@ -11,9 +11,16 @@ const assert = require("node:assert");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { PassThrough } = require("node:stream");
 
 const install = require("../lib/install.js");
 const creds = require("../lib/creds.js");
+const { multiselect } = require("../lib/picker.js");
+
+const KEY_ESC = "\x1b";
+const KEY_ENTER = "\r";
+const KEY_DOWN = "\x1b[B";
+const KEY_SPACE = " ";
 
 const ENV = { SUITEST_API_URL: "http://localhost:4000", SUITEST_API_KEY: "sk_test" };
 
@@ -158,4 +165,98 @@ function silence(fn) {
   if (prevDir !== undefined) process.env.SUITEST_CONFIG_DIR = prevDir;
 }
 
-process.stdout.write("install.test.js OK\n");
+// 8. interactiveLogin: Esc on "use saved creds?" goes back to "log in now?"
+// instead of aborting — feed Esc then re-answer Yes/Yes to land on the saved creds.
+(async () => {
+  const prevDir = process.env.SUITEST_CONFIG_DIR;
+  const dir = tmp("interactive-login-back");
+  process.env.SUITEST_CONFIG_DIR = dir;
+  creds.saveCreds({ apiUrl: "http://127.0.0.1:4000", apiKey: "sk_saved" });
+
+  const input = new PassThrough();
+  const output = new PassThrough();
+  output.on("data", () => {});
+
+  const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  const p = install.interactiveLogin({}, { input, output });
+  await delay(20);
+  input.write(KEY_ENTER); // "log in now?" -> Yes (default)
+  await delay(20);
+  input.write(KEY_ESC); // "use saved creds?" -> back
+  // readline debounces a lone ESC to distinguish it from the start of an
+  // escape sequence (e.g. arrow keys) — give its internal timeout room to
+  // fire before sending the next key, or they get parsed as one sequence.
+  await delay(600);
+  input.write(KEY_ENTER); // "log in now?" again -> Yes
+  await delay(20);
+  input.write(KEY_ENTER); // "use saved creds?" -> Yes (default)
+
+  const resolved = await p;
+  assert.strictEqual(resolved.apiUrl, "http://127.0.0.1:4000");
+  assert.strictEqual(resolved.apiKey, "sk_saved");
+  assert.strictEqual(resolved.warn, false);
+
+  fs.rmSync(dir, { recursive: true, force: true });
+  if (prevDir === undefined) delete process.env.SUITEST_CONFIG_DIR;
+  else process.env.SUITEST_CONFIG_DIR = prevDir;
+
+  // 9. multiselect() -> install into every picked client (this is the exact
+  // pattern install.js's runInteractive() follows: multiselect then loop).
+  {
+    const claudeTarget = tmp("multi-client-claude.json");
+    const cursorTarget = tmp("multi-client-cursor.json");
+    const prevClaude = process.env.CLAUDE_CODE_CONFIG;
+    const prevCursor = process.env.CURSOR_CONFIG;
+    process.env.CLAUDE_CODE_CONFIG = claudeTarget;
+    process.env.CURSOR_CONFIG = cursorTarget;
+
+    const items = install.CLIENT_ORDER.map((id) => ({
+      value: id,
+      label: install.CLIENTS[id].label,
+      hint: install.CLIENTS[id].hint,
+    }));
+
+    const mInput = new PassThrough();
+    const mOutput = new PassThrough();
+    mOutput.on("data", () => {});
+    const picked = multiselect("Pick the MCP client(s) to install into:", items, {
+      input: mInput,
+      output: mOutput,
+    });
+    // CLIENT_ORDER is [claude-code, claude-desktop, cursor, ...] — check
+    // claude-code, skip claude-desktop (no safe env-redirected target, would
+    // touch the real Claude Desktop config dir), land on cursor and check it.
+    await delay(20);
+    mInput.write(KEY_SPACE); // check claude-code
+    await delay(20);
+    mInput.write(KEY_DOWN);
+    await delay(20);
+    mInput.write(KEY_DOWN); // now on cursor
+    await delay(20);
+    mInput.write(KEY_SPACE); // check cursor
+    await delay(20);
+    mInput.write(KEY_ENTER);
+
+    const clientIds = await picked;
+    assert.deepStrictEqual(clientIds.sort(), ["claude-code", "cursor"]);
+
+    for (const clientId of clientIds) {
+      silence(() => install.installClient(clientId, { name: "suitest", scope: "global", env: ENV }));
+    }
+    assert.ok(fs.existsSync(claudeTarget), "expected claude-code config to be written");
+    assert.ok(fs.existsSync(cursorTarget), "expected cursor config to be written");
+
+    fs.rmSync(claudeTarget, { force: true });
+    fs.rmSync(cursorTarget, { force: true });
+    if (prevClaude === undefined) delete process.env.CLAUDE_CODE_CONFIG;
+    else process.env.CLAUDE_CODE_CONFIG = prevClaude;
+    if (prevCursor === undefined) delete process.env.CURSOR_CONFIG;
+    else process.env.CURSOR_CONFIG = prevCursor;
+  }
+
+  process.stdout.write("install.test.js OK\n");
+})().catch((err) => {
+  console.error(err);
+  process.exitCode = 1;
+});

@@ -2,7 +2,7 @@
 
 > Cross-links: [API.md](./API.md), [DATA_MODEL.md](./DATA_MODEL.md), [GENERATORS.md](./GENERATORS.md), [AI_AGENT.md](./AI_AGENT.md), [ARCHITECTURE.md](./ARCHITECTURE.md), [DEPLOYMENT.md](./DEPLOYMENT.md).
 
-> ⚠️ **PARTIAL.** Bundled providers built: `playwright`, `api-http`, `postgres`, `graphql`, `mysql`, `mongo`, `kubernetes`, and `grpc`, plus lifecycle-local `suitest.whitebox.v1` adapters for pytest and Vitest/Jest. Documented-but-unbuilt: `browser-use`/`appium`/`computer-use`/`jira`/`github` (later milestones). See [ROADMAP.md](./ROADMAP.md).
+> ⚠️ **PARTIAL.** Bundled providers built: `playwright`, `api-http`, `postgres`, `graphql`, `mysql`, `mongo`, `kubernetes`, and `grpc`, plus lifecycle-local `suitest.whitebox.v1` adapters for pytest and Vitest/Jest. M14 adds the desktop set: `computer-use-mcp`, `electron-mcp`, `slint-mcp` (configs registered; binaries resolve via `command_pin` — see [DESKTOP_TESTING.md](./DESKTOP_TESTING.md)). Documented-but-unbuilt: `browser-use`/`appium`/`jira`/`github` (later milestones). See [ROADMAP.md](./ROADMAP.md).
 
 ---
 
@@ -135,7 +135,9 @@ These providers ship inside the main Suitest image (see [DEPLOYMENT.md](./DEPLOY
 | `grpc-mcp` | api | stdio | BE_GRPC | gRPC unary + streaming tests | per-test (mTLS / metadata) |
 | `kubernetes-mcp` | infra | stdio | INFRA | K8s resource assertions, port-forward, log tail | kubeconfig (mounted) |
 | `appium-mcp` | mobile | stdio | FE_MOBILE | iOS / Android UI tests | appium server URL |
-| `computer-use-mcp` | desktop | stdio (Anthropic computer-use) | FE_DESKTOP (v1.x preview, v2 stable) | Desktop app tests | OS-level (VNC / X11 / Wayland) |
+| `computer-use-mcp` | desktop | stdio (Anthropic computer-use) | FE_DESKTOP (v1.x preview, v2 stable) | Desktop app tests — screen-level default | OS-level (VNC / X11 / Wayland) |
+| `electron-mcp` | desktop | stdio | FE_DESKTOP | Electron app tests via CDP DOM (Playwright `_electron`) | none |
+| `slint-mcp` | desktop | stdio | FE_DESKTOP | Slint app tests via accessible tree (headless-capable) | none |
 | `jirac-mcp` | issue-tracker | stdio | EXTERNAL_TOOL | Jira issue tracker (file defect, transition, comment, JQL search) | cloud-token / DC PAT |
 | `github-mcp` | issue-tracker | stdio | EXTERNAL_TOOL | GitHub Issues + labels + comments | github-app-installation-token / PAT |
 
@@ -156,6 +158,7 @@ Each `target_kind` resolves to a primary MCP plus an optional fallback. The runn
 | `BE_GRPC` | `grpc-mcp` | _none_ |
 | `FE_WEB` | `playwright-mcp` | `browser-use-mcp` |
 | `FE_MOBILE` | `appium-mcp` | _none_ |
+| `FE_DESKTOP` | `computer-use-mcp` | `electron-mcp` / `slint-mcp` (per step) |
 | `DATA` | `postgres-mcp` | _user must override per workspace_ |
 | `INFRA` | `kubernetes-mcp` | _none_ |
 | `CUSTOM` | _user must set per step or workspace_ | _none_ |
@@ -676,6 +679,13 @@ providers:
     network_policy:
       egress_allow: ["api.stripe.com:443"]
 ```
+
+### v1.x (M14 shipped)
+
+- **Desktop testing bundle** — `computer-use-mcp` (screen default), `electron-mcp`
+  (CDP DOM), `slint-mcp` (accessible tree, headless). Selector-driven steps;
+  binaries resolved via `command_pin`, not shipped in the image. See
+  [DESKTOP_TESTING.md](./DESKTOP_TESTING.md).
 
 ### v2.x
 

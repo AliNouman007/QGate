@@ -39,6 +39,31 @@ pytestmark = pytest.mark.asyncio
 # ---------------------------------------------------------------------------
 
 
+def _require_docker() -> None:
+    """Skip the testcontainers path when a Docker daemon is unavailable.
+
+    These integration tests need a real Postgres. With ``SUITEST_DATABASE_URL``
+    set they run against an external DB (no Docker); otherwise they boot a
+    testcontainer. If neither is possible, skip clearly instead of failing the
+    local ForgeGuard test gate — CI runs the same tests with Docker services.
+    """
+    import shutil
+    import subprocess
+
+    if os.environ.get("SUITEST_DATABASE_URL"):
+        return
+    if not shutil.which("docker"):
+        pytest.skip(
+            "docker unavailable; set SUITEST_DATABASE_URL to run against an external Postgres"
+        )
+    try:
+        subprocess.run(["docker", "info"], check=True, capture_output=True, timeout=15)
+    except Exception:
+        pytest.skip(
+            "docker daemon not reachable; set SUITEST_DATABASE_URL to run against an external Postgres"
+        )
+
+
 @pytest.fixture(scope="session")
 def postgres_dsn() -> Iterator[str]:
     """Yield an isolated libpq DSN for psycopg.
@@ -73,6 +98,8 @@ def postgres_dsn() -> Iterator[str]:
                 conn.execute(text(f'DROP DATABASE IF EXISTS "{db_name}"'))
             admin_engine.dispose()
         return
+
+    _require_docker()
 
     from testcontainers.postgres import PostgresContainer
 

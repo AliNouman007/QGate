@@ -27,7 +27,14 @@ async function promptAccount(credPath, opts = {}) {
   }
   const readline = require("node:readline/promises");
   const { askSecret } = loadMcpLib("prompt.js");
-  console.log("Create the admin account for your local Suitest (you'll log in with this):");
+  const theme = loadMcpLib("theme.js");
+  console.log(
+    theme.step(
+      "create admin account",
+      ["Create the admin account for your local Suitest.", "You'll log in with this."],
+      { color: theme.violet },
+    ),
+  );
 
   // Email over a plain interface, closed before we prompt for secrets so the
   // masked-secret interface owns stdin without two readers competing.
@@ -35,7 +42,7 @@ async function promptAccount(credPath, opts = {}) {
   let email = "";
   try {
     while (!email.includes("@")) {
-      email = (await rl.question("  email: ")).trim();
+      email = (await rl.question(theme.point("email: ", { color: theme.violet }))).trim();
     }
   } finally {
     rl.close();
@@ -44,11 +51,11 @@ async function promptAccount(credPath, opts = {}) {
   // Password typed twice, masked (`askSecret` echoes `*`, never the chars).
   let password = "";
   for (;;) {
-    password = await askSecret("  password (min 8 chars): ");
+    password = await askSecret(theme.point("password (min 8 chars): ", { color: theme.violet }));
     if (password.length < 8) continue;
-    const confirm = await askSecret("  confirm password: ");
+    const confirm = await askSecret(theme.point("confirm password: ", { color: theme.violet }));
     if (confirm === password) break;
-    console.log("  Passwords don't match, try again.");
+    console.log(theme.point("Passwords don't match, try again.", { color: theme.violet }));
   }
   return loadOrCreateCredentials(credPath, { email, password });
 }
@@ -97,6 +104,8 @@ async function resolvePort(dirs, opts) {
 }
 
 async function onboard(cwd, opts = {}) {
+  console.log(loadMcpLib("theme.js").banner());
+  console.log("");
   const { dirs, webDist, python } = await prepare(cwd);
   await promptAccount(dirs.credentials, opts);
   const port = await resolvePort(dirs, opts);
@@ -123,14 +132,21 @@ async function onboard(cwd, opts = {}) {
     console.error("Re-run later: suitest init --ide <claude-code|cursor|windsurf>");
   }
 
-  console.log(`
-Suitest local ready:
-  dashboard : ${apiUrl}
-  login     : ${creds.email} (password you set; stored in ${dirs.credentials})
-  MCP config: ${mcpConfigPath || "(not wired)"}
-  data      : ${dirs.root}
-  stop      : suitest down
-  start again (after reboot): suitest up`);
+  const theme = loadMcpLib("theme.js");
+  console.log("");
+  console.log(
+    theme.panel(
+      [
+        `dashboard : ${apiUrl}`,
+        `login     : ${creds.email} (password you set; stored in ${dirs.credentials})`,
+        `MCP config: ${mcpConfigPath || "(not wired)"}`,
+        `data      : ${dirs.root}`,
+        `stop      : suitest down`,
+        `start again (after reboot): suitest up`,
+      ],
+      { title: "Suitest local ready", color: theme.accent },
+    ),
+  );
   return { ...running, apiUrl, mcpConfigPath };
 }
 

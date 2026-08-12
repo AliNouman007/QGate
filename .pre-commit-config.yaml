@@ -32,6 +32,8 @@ repos:
     rev: v2.1.0
     hooks:
       - id: mypy
+        # Tests are enforced at runtime (pytest) + lint (ruff); the hook-level
+        # ``exclude`` below skips them (mirrors ``tools.mypy.exclude``).
         additional_dependencies:
           - pydantic>=2.9.0
           - pydantic-settings>=2.6.0
@@ -92,26 +94,22 @@ repos:
           - langgraph>=0.2.40
         args: ["--config-file=pyproject.toml"]
         files: ^(apps|packages)/.*\.py$
-        # mirrors-mypy passes the staged files in a single invocation. With
-        # pytest's importlib import mode there is no `tests/__init__.py`, so
-        # same-named test/conftest modules across packages all resolve to the
-        # same top-level module name. If a commit stages more than one at
-        # once, mypy aborts with "Duplicate module named …". Exclude the
-        # `packages/<pkg>/tests/` siblings here so the canonical
-        # `apps/<app>/tests/` copy stays type-checked at the per-file hook;
-        # every excluded file is still fully type-checked by the authoritative
-        # `mypy apps`/`mypy packages` split in CI (.github/workflows/ci.yml).
-        # Known duplicate-named files (M1c → M1d):
-        #   - conftest.py            (db, mcp)
-        #   - test_health.py         (mcp)
-        #   - test_capabilities.py   (core)
+        # Tests are enforced at runtime (pytest) + lint (ruff). Their
+        # per-package conftest.py files collide as duplicate mypy modules
+        # (e.g. packages/agent/tests/conftest.py vs apps/api/tests/conftest.py),
+        # so never hand them to the mypy hook. Every excluded file is still
+        # fully type-checked by the authoritative per-package `mypy apps/*` /
+        # `mypy packages/*` split in CI (.github/workflows/ci.yml), which runs
+        # `mypy .` with `tools.mypy.exclude` covering the same test paths.
+        # `packages/lifecycle` matches `files` but is deliberately NOT in the
+        # CI mypy matrix (it pulls in untyped playwright async+sync APIs), so it
+        # is excluded here too to keep the local hook aligned with the
+        # authoritative gate.
         exclude: |
           (?x)^(
             .*/alembic/versions/.*
-            | packages/db/tests/conftest\.py
-            | packages/mcp/tests/conftest\.py
-            | packages/mcp/tests/test_health\.py
-            | packages/core/tests/test_capabilities\.py
+            | .*/tests/.*
+            | packages/lifecycle/.*
           )$
 
   - repo: https://github.com/gitleaks/gitleaks

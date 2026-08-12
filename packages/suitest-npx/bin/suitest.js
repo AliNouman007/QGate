@@ -38,6 +38,8 @@ async function main() {
   // Pre-parse: strict parseArgs would throw on unknown --help/--version (mcp-npx convention).
   const rawArgs = process.argv.slice(2);
   if (rawArgs.includes("--help")) {
+    const { loadMcpLib } = require("../lib/onboard.js");
+    process.stdout.write(loadMcpLib("theme.js").banner() + "\n\n");
     process.stdout.write(USAGE);
     process.exit(0);
   }
