@@ -144,9 +144,62 @@ jobs:
             | uvx --from "$(ls dist/*.whl)" suitest-mcp \
             | python3 -c 'import sys, json; m = json.loads(sys.stdin.readline()); assert "suitest" in m["result"]["serverInfo"]["name"]; print("boot OK")'
 
-      - name: Publish
+      - name: Publish lifecycle package
         if: startsWith(github.ref, 'refs/tags/mcp-v')
-        # --check-url skips files already on PyPI (lifecycle version may lag the mcp tag)
-        run: uv publish --check-url https://pypi.org/simple/ dist/*
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import sys
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          metadata = Path("packages/lifecycle/pyproject.toml").read_text()
+          version = next(
+              line.split("=", 1)[1].strip().strip('"')
+              for line in metadata.splitlines()
+              if line.startswith("version =")
+          )
+          url = f"https://pypi.org/pypi/suiflex-suitest-lifecycle/{version}/json"
+
+          try:
+              with urllib.request.urlopen(url) as response:
+                  release = json.load(response)["urls"]
+          except urllib.error.HTTPError as error:
+              if error.code == 404:
+                  release = []
+              else:
+                  raise
+
+          remote = {item["filename"]: item["digests"]["sha256"] for item in release}
+          local = {
+              path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in Path("dist").iterdir()
+              if path.is_file()
+          }
+          mismatched = {
+              name: (digest, remote.get(name))
+              for name, digest in local.items()
+              if name in remote and remote[name] != digest
+          }
+
+          if mismatched:
+              print(
+                  f"PyPI version {version} already contains different artifacts: "
+                  f"{sorted(mismatched)}. Bump the lifecycle version.",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
+          missing = sorted(set(local) - set(remote))
+          if not missing and local:
+              print(f"PyPI version {version} already matches dist; skipping publish")
+              sys.exit(0)
+
+          print(f"Publishing lifecycle version {version}; missing artifacts: {missing}")
+          PY
+          uv publish --check-url https://pypi.org/simple/ dist/*
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}

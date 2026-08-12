@@ -818,7 +818,7 @@ class OpenApiGenerator:
         expected_status: int | tuple[int, ...] | None,
         secured: bool,
         response_schema: JsonObj | None = None,
-        auth_token_override: str | None | object = _UUID,
+        auth_token_override: str | object | None = _UUID,
     ) -> str:
         """Emit runner-executable Python for one ``mcp.api.request(...)`` call.
 

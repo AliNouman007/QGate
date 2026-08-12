@@ -1,20 +1,10 @@
 # Changelog
 
-## [0.6.0](https://github.com/suiflex/suitest/compare/mcp-v0.5.1...mcp-v0.6.0) (2026-08-06)
-
-
-### Features
-
-* **cli:** add a boxed checkmark icon to the banner ([a819000](https://github.com/suiflex/suitest/commit/a819000d15507f07a2113b81c0e8289563e7a2a1))
-* **cli:** brand suitest/suitest-mcp with a connected onboarding wizard ([1f90b29](https://github.com/suiflex/suitest/commit/1f90b299dee5a0baa094381ac8ed9765b4aee4fa))
-* **cli:** brand suitest/suitest-mcp with a connected onboarding wizard ([0e67907](https://github.com/suiflex/suitest/commit/0e67907ca62e0dfaaf8acfb1f06e71e6fe415b56))
-
-## [0.5.1](https://github.com/suiflex/suitest/compare/mcp-v0.5.0...mcp-v0.5.1) (2026-08-04)
-
+## Unreleased
 
 ### Bug Fixes
 
-* **release:** add launcher provenance metadata ([e8369d3](https://github.com/suiflex/suitest/commit/e8369d3aa59c5d16b2e73d7d382ecb516df441b7))
+* ship the terminal theme module required by `@suiflex/suitest` onboarding
 
 ## [0.4.0](https://github.com/suiflex/suitest/compare/mcp-v0.3.2...mcp-v0.4.0) (2026-07-19)
 

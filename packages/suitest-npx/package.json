@@ -20,7 +20,7 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@suiflex/suitest-mcp": "^0.5.0"
+    "@suiflex/suitest-mcp": "^0.5.2"
   },
   "scripts": {
     "sync-assets": "node scripts/sync-assets.js",
