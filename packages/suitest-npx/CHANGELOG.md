@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.3](https://github.com/suiflex/suitest/compare/launcher-v0.6.2...launcher-v0.6.3) (2026-08-12)
+
+### Bug Fixes
+
+* publish the launcher with the released `@suiflex/suitest-mcp@0.6.1` dependency
+
 ## [0.6.2](https://github.com/suiflex/suitest/compare/launcher-v0.6.1...launcher-v0.6.2) (2026-08-12)
 
 ### Bug Fixes
