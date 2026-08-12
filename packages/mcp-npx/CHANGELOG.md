@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+* ship the terminal theme module required by `@suiflex/suitest` onboarding
+
 ## [0.4.0](https://github.com/suiflex/suitest/compare/mcp-v0.3.2...mcp-v0.4.0) (2026-07-19)
 
 
