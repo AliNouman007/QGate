@@ -4,12 +4,16 @@ name: release-please
 #   - packages/mcp-npx     → @suiflex/suitest-mcp  → tag mcp-v*      → release-mcp.yml
 #   - sdk/typescript       → @suiflex/suitest-sdk  → tag tssdk-v*    → release-ts-sdk.yml
 #   - packages/suitest-npx → @suiflex/suitest      → tag launcher-v* → release-launcher.yml
-# Run this workflow manually to prepare release PRs. Merging to main does not
-# create release tags or publish packages automatically. Publishing is performed
-# by manually dispatching the package workflow against an existing tag after the
-# release commit is on main.
+# A maintainer starts release preparation explicitly (workflow_dispatch) to
+# open/update a release PR. Merging that PR finalizes it automatically into a
+# tag + GitHub Release, which then triggers the matching publish workflow
+# above via its `push: tags` trigger. Every other PR merge is ignored by the
+# job-level `if`, so this stays quiet on ordinary application PRs.
 on:
   workflow_dispatch:
+  pull_request:
+    types: [closed]
+    branches: [main]
 
 permissions:
   contents: write
@@ -17,6 +21,12 @@ permissions:
 
 jobs:
   release-please:
+    # Manual runs prepare/update the release PR. Pull request runs only
+    # finalize a merged Release Please PR, never an application PR.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'release-please--'))
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v5
