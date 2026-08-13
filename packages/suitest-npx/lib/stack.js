@@ -220,4 +220,4 @@ function down(cwd) {
   return true;
 }
 
-module.exports = { pickPort, buildEnv, up, down, status, isAlive, isHealthy, waitHealthy };
+module.exports = { pickPort, isFree, buildEnv, up, down, status, isAlive, isHealthy, waitHealthy };
