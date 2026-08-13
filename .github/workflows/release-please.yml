@@ -4,13 +4,12 @@ name: release-please
 #   - packages/mcp-npx     → @suiflex/suitest-mcp  → tag mcp-v*      → release-mcp.yml
 #   - sdk/typescript       → @suiflex/suitest-sdk  → tag tssdk-v*    → release-ts-sdk.yml
 #   - packages/suitest-npx → @suiflex/suitest      → tag launcher-v* → release-launcher.yml
-# On every push to main, release-please opens/updates a separate release PR per
-# package (separate-pull-requests) that bumps its package.json (+ VERSION for mcp)
-# from the conventional commits since that package's last release. Merging a PR
-# tags `<component>-v<version>`, which triggers the matching publish workflow.
+# Run this workflow manually to prepare release PRs. Merging to main does not
+# create release tags or publish packages automatically. Publishing is performed
+# by manually dispatching the package workflow against an existing tag after the
+# release commit is on main.
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
