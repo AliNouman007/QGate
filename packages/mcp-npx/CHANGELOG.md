@@ -6,6 +6,13 @@
 
 * ship the terminal theme module required by `@suiflex/suitest` onboarding
 
+## [0.6.2](https://github.com/suiflex/suitest/compare/mcp-v0.6.1...mcp-v0.6.2) (2026-08-12)
+
+
+### Bug Fixes
+
+* ship MCP onboarding and release safeguards ([32751de](https://github.com/suiflex/suitest/commit/32751deec12ae7765703ceea830f4fbb86b37ed1))
+
 ## [0.6.1](https://github.com/suiflex/suitest/compare/mcp-v0.6.0...mcp-v0.6.1) (2026-08-12)
 
 
