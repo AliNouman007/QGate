@@ -75,7 +75,7 @@ jobs:
         run: npm install -g npm@11.5.2
       - name: Tag matches package version
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#mcp-v}"
+          TAG_VERSION="${RELEASE_TAG:-${GITHUB_REF_NAME#mcp-v}}"
           PKG_VERSION="$(node -p "require('./package.json').version")"
           [ "$TAG_VERSION" = "$PKG_VERSION" ] || {
             echo "tag $GITHUB_REF_NAME != package.json $PKG_VERSION" >&2; exit 1; }
@@ -116,10 +116,12 @@ jobs:
 
   pypi:
     name: "suiflex-suitest-lifecycle → PyPI"
-    if: github.event_name != 'workflow_dispatch'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
       - uses: astral-sh/setup-uv@v7
       - uses: actions/setup-python@v7
         with:
@@ -145,7 +147,7 @@ jobs:
             | python3 -c 'import sys, json; m = json.loads(sys.stdin.readline()); assert "suitest" in m["result"]["serverInfo"]["name"]; print("boot OK")'
 
       - name: Publish lifecycle package
-        if: startsWith(github.ref, 'refs/tags/mcp-v')
+        if: startsWith(github.ref, 'refs/tags/mcp-v') || github.event_name == 'workflow_dispatch'
         run: |
           python3 - <<'PY'
           import hashlib
