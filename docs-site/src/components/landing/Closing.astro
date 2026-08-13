@@ -81,6 +81,10 @@ const footCols = [
           deterministic runs, optional AI.
         </p>
         <div class="ph-badge" set:html={productHuntBadge} />
+        <a class="suiflex-badge" href="https://suiflex.dev" target="_blank" rel="noopener noreferrer">
+          <img src="/assets/brand/suiflex-logo-mark.png" alt="" aria-hidden="true" />
+          <span>Suiflex</span>
+        </a>
       </div>
 
       {
@@ -161,6 +165,31 @@ const footCols = [
     line-height: 1.65;
     color: var(--text-3);
     max-width: 34ch;
+  }
+  .suiflex-badge {
+    display: inline-flex;
+    align-items: center;
+    box-sizing: border-box;
+    width: 250px;
+    height: 54px;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-2);
+    font-size: 18px;
+    font-weight: 600;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .suiflex-badge:hover {
+    color: var(--text);
+    border-color: var(--text-3);
+  }
+  .suiflex-badge img {
+    width: 34px;
+    height: 34px;
+    object-fit: contain;
   }
   .ph-badge {
     margin-top: 20px;
