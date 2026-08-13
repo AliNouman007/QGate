@@ -30,9 +30,12 @@ npx -y @suiflex/suitest-mcp init
 ```
 
 `init` detects your IDE (Claude Code or Cursor from project markers; pass
-`--ide windsurf` for Windsurf) and your framework (Next.js, Nuxt, SvelteKit,
-Vite, Vue, Express, Django), then asks one question: local or server. Pick **local** for now; it
-needs no API key.
+`--ide windsurf` for Windsurf) and your framework — frontend (Next.js, Nuxt,
+SvelteKit, Astro, Remix, Qwik, Gatsby, CRA, Vite, Vue, Angular) and backend
+across Node (Express, NestJS, Fastify, Koa, Hapi, AdonisJS), Python (Django,
+FastAPI, Flask), Ruby (Rails), PHP (Laravel), Go (Gin, Echo, Fiber), and Rust
+(Actix Web, Axum, Rocket) — then asks one question: local or server. Pick
+**local** for now; it needs no API key.
 
 It writes two files:
 

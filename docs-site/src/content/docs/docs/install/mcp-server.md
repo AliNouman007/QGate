@@ -47,12 +47,17 @@ npx -y @suiflex/suitest-mcp init
    `.claude/` directory means Claude Code, a `.cursor/` directory means Cursor.
    Windsurf keeps its MCP config in your home directory, so it has no project
    marker: select it explicitly with `--ide windsurf`.
-2. **Detects your app framework.** Next.js, Nuxt, SvelteKit, Vite, Vue (CLI),
-   and Express are read from `package.json` dependencies; a `manage.py` file
-   means Django. Detection
-   seeds the test mode (`frontend` or `backend`) and the app `baseUrl`. If
-   nothing is detected, `init` asks for a base URL (default
-   `http://localhost:3000`).
+2. **Detects your app framework.** Node-based frameworks (Next.js, Nuxt,
+   SvelteKit, Astro, Remix, Qwik, Gatsby, CRA, Vite, Vue, Angular, Express,
+   NestJS, Fastify, Koa, Hapi, AdonisJS) are read from `package.json`
+   dependencies. Beyond Node: a `manage.py` file means Django; `fastapi` or
+   `flask` in `requirements.txt`/`pyproject.toml` means FastAPI/Flask; a
+   `rails` gem in `Gemfile` means Rails; `laravel/framework` in
+   `composer.json` means Laravel; `gin`/`echo`/`fiber` in `go.mod` means the
+   matching Go framework; `actix-web`/`axum`/`rocket` in `Cargo.toml` means
+   the matching Rust framework. Detection seeds the test mode (`frontend` or
+   `backend`) and the app `baseUrl`. If nothing is detected, `init` asks for
+   a base URL (default `http://localhost:3000`).
 3. **Writes `suitest.config.json`** in the project root, unless one already
    exists. An existing config is never overwritten.
 4. **Merges the `suitest` entry into your IDE's MCP config.** The write is
