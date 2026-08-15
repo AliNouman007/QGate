@@ -30,14 +30,14 @@ from suitest_shared.schemas.responses import ArtifactOut, RunOut, SignedUrlOut
 from suitest_api.deps.scope import TenantContext
 from suitest_api.deps.tier import require_tier
 from suitest_api.services.project_scope import project_belongs_to_workspace
+from suitest_api.services.test_case_validator import BUNDLED_MCP_PROVIDERS
 
 # Bundled MCP provider names always accepted by ``create_run`` even when the
 # workspace has not registered them in ``mcp_providers``. Kept here (vs.
 # importing from suitest_mcp) so the api service doesn't pull the runner-only
 # MCP package onto its import graph.
-_BUNDLED_MCP_PROVIDERS: frozenset[str] = frozenset(
-    {"api-http-mcp", "playwright-mcp", "postgres-mcp"}
-)
+# Single source of truth — see the note on ``BUNDLED_MCP_PROVIDERS``.
+_BUNDLED_MCP_PROVIDERS = BUNDLED_MCP_PROVIDERS
 
 # Default presigned-URL lifetime in seconds.
 DEFAULT_SIGNED_URL_TTL = 900

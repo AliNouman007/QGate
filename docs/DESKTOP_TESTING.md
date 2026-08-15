@@ -31,15 +31,30 @@ assert text/visibility/value — exactly as browser steps drive the DOM.
 ## 2. Three backends (M14-1 .. M14-3)
 
 Desktop automation is not one problem; it is three. Suitest ships **three
-provider configs** in `builtin_specs.py`, all resolved at runtime via
-`command_pin` (binaries stay **outside the image** — see
-[DEPLOYMENT.md](./DEPLOYMENT.md)).
+provider configs** in `builtin_specs.py`. Two are external binaries resolved at
+runtime via `command_pin` (they stay **outside the image** — see
+[DEPLOYMENT.md](./DEPLOYMENT.md)); `slint-mcp` needs no binary at all.
 
 | ID | M14 item | Driver | Transport | Best for |
 |----|----------|--------|-----------|----------|
-| `computer-use-mcp` | **M14-1** | Screen pixels + OS input | stdio | Any legacy/native app; last-resort fallback |
-| `electron-mcp` | **M14-2** | Chrome DevTools Protocol inside Electron (Playwright `_electron`) | stdio | Electron apps with real DOM |
-| `slint-mcp` | **M14-3** | Slint **accessible tree** | stdio | Slint apps (Rust, cross-platform, optionally headless) |
+| `computer-use-mcp` | **M14-1** | Screen pixels + OS input | stdio, `command_pin` | Any legacy/native app; last-resort fallback |
+| `electron-mcp` | **M14-2** | Chrome DevTools Protocol inside Electron (Playwright `_electron`) | stdio, `command_pin` | Electron apps with real DOM |
+| `slint-mcp` | **M14-3** | Slint's own embedded MCP server | **bundled, in-process** | Slint apps (Rust, cross-platform, optionally headless) |
+
+> **`slint-mcp` changed shape after this document was first written.** It was
+> specified as an external `slint-mcp` binary, and no such binary was ever
+> built. Slint 1.17 made one unnecessary: the framework embeds an MCP server
+> *inside the application under test*, reachable over HTTP when the app runs
+> with `SLINT_MCP_PORT` and is built with `--features slint/mcp`. The provider
+> is therefore a **bridge** — `suitest_mcp.bundled.slint` — that owns the app
+> process and maps the `slint.*` contract below onto the app's own tools
+> (`find_elements_by_id`, `click_element`, `set_element_value`,
+> `dispatch_key_event`, `take_screenshot`, …). The contract is what keeps test
+> steps stable when Slint renames its surface.
+>
+> `SLINT_EMIT_DEBUG_INFO=1` is required: it is what keeps element ids in the
+> compiled UI. `slint.screenshot` returns an MCP image block, which the runner
+> stores as a `SCREENSHOT` artifact.
 
 ### 2.1 Routing & default
 
@@ -59,9 +74,10 @@ DEFAULT_ROUTING = {
 
 ### 2.2 Residency rule (command_pin)
 
-None of the three desktop binaries are shipped in the image. `command_pin`
-maps the logical command name (`computer-use-mcp`, `electron-mcp`,
-`slint-mcp`) to an absolute host binary supplied by the operator/CI runner, so:
+`computer-use-mcp` and `electron-mcp` are not shipped in the image (`slint-mcp`
+is bundled and needs nothing — see the note above). `command_pin` maps the
+logical command name to an absolute host binary supplied by the operator/CI
+runner, so:
 - the image stays thin and the executor host owns its binaries/versions;
 - no native GUI/Chrome/OS-API deps leak into the Suitest image;
 - `examples/slint-demo` and tests never reach into the `rdb` repo (that repo is
@@ -77,20 +93,34 @@ renderer) no display server are required.
 
 Selectors are JSON objects. Priority when resolving:
 
-1. `accessible-id` (most explicit; the Slint equivalent of `data-testid`)
-2. `accessible-label` + `accessible-role` (stable, human-friendly)
+1. `id` — the **Slint element id**, written `Component::element-id`. The
+   compiler keeps these when the app is built with `SLINT_EMIT_DEBUG_INFO=1`,
+   so an app needs no accessibility annotations to be drivable at all.
+2. `label` — the accessible label, i.e. what the user reads. Needed more often
+   than it looks: ids are *component-scoped*, so `PrimaryButton::ta` matches
+   every instance of that component on screen.
+3. `index` — last resort when neither is unique.
 
 ```jsonc
-// by accessible-id
-{ "id": "btn-submit" }
-// CSS-ish shorthand accepted by the runner for convenience
-"[id=\"btn-submit\"]"
+// by element id
+{ "id": "ConnPicker::add-ta" }
 
-// by label + role pair
-{ "label": "Submit", "role": "button" }
-// role-only for uniqueness within a container
-{ "role": "button", "container": "login-form" }
+// by what the user sees — the only way to tell two PrimaryButtons apart
+{ "label": "New Query" }
+
+// narrow an id down by label, or failing that by position
+{ "id": "PrimaryButton::ta", "label": "Connect" }
+{ "id": "CodeEditor::focus-scope", "index": 1 }
 ```
+
+Resolution **polls** until the element appears — `timeout_s`, default 15s, `0`
+to fail immediately. A UI settles after the call that changed it (a click that
+opens a pane returns before the pane has rendered), so a single look makes every
+test a race. A malformed selector still fails immediately: naming no element at
+all is an authoring mistake, not a timing one.
+
+`find_elements_by_id` searches *descendants*, so a window's own root id never
+matches; reach the root through `get_window_properties` instead.
 
 ### 3.1 Tagging in the `.slint` source
 

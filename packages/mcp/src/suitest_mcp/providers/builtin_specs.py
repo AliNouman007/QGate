@@ -129,11 +129,12 @@ BUILTIN_SPECS: list[McpProviderConfig] = [
         is_default_for_target={"BE_GRPC": True},
         max_sessions=4,
     ),
-    # M14 — desktop (FE_DESKTOP). All three are external stdio binaries that are
-    # NOT distributed in the runner image: each resolves its real path via
-    # registration / ``command_pin`` (e.g. ``command_pin = /opt/suitest/slint-mcp``).
-    # The ``command`` below is only a discoverability hint (a binary that must
-    # exist on PATH once installed).
+    # M14 — desktop (FE_DESKTOP). ``computer-use-mcp`` and ``electron-mcp`` are
+    # external stdio binaries that are NOT distributed in the runner image: each
+    # resolves its real path via registration / ``command_pin`` (e.g.
+    # ``command_pin = /opt/suitest/computer-use-mcp``). The ``command`` below is
+    # only a discoverability hint (a binary that must exist on PATH once
+    # installed). ``slint-mcp`` needs none of that — see its own note below.
     #
     # ``computer-use-mcp`` is the generic catch-all: OS-level screenshot+click
     # control, so it routes as the FE_DESKTOP default. ``slint-mcp`` and
@@ -187,19 +188,24 @@ BUILTIN_SPECS: list[McpProviderConfig] = [
         spawn_timeout_seconds=120.0,
         call_timeout_seconds=60.0,
     ),
+    # Bundled in-process, unlike its two neighbours: Slint 1.17 puts an MCP
+    # server *inside* the application under test, so there is no separate binary
+    # to install or pin. The provider is a bridge that owns the app process and
+    # maps these tools onto the app's own — see suitest_mcp.bundled.slint.
     McpProviderConfig(
         id="builtin:slint-mcp",
         workspace_id="_builtin_",
         name="slint-mcp",
         kind="desktop",
-        transport=McpTransport.STDIO,
-        command=["slint-mcp"],
+        transport=McpTransport.IN_PROCESS,
+        endpoint="in-process://slint",
         config_json={
             "tools": [
                 "slint.launch",
                 "slint.click",
                 "slint.set_property",
                 "slint.get_property",
+                "slint.press_key",
                 "slint.assert_visible",
                 "slint.assert_text",
                 "slint.assert_checked",
