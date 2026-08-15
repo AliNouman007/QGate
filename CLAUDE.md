@@ -246,10 +246,55 @@ MCP is the primary plugin layer. See [MCP_PLUGINS.md](./docs/MCP_PLUGINS.md).
 - Never invoke an MCP server directly from an API route — always go through `packages/mcp/client`
 - Every `Step` declares `mcp_provider` (TEXT) + `target_kind` (ENUM); if empty, default routing comes from the `target_kind` mapping
 - When adding a bundled MCP, update:
-  1. `packages/mcp/suitest_mcp/bundled/` config
-  2. `packages/mcp/suitest_mcp/registry.py` default routing
-  3. `docs/MCP_PLUGINS.md` (list + caveats)
-  4. `docs/DEPLOYMENT.md` (Docker image bundling)
+  1. `packages/mcp/src/suitest_mcp/bundled/<name>.py` — implement the
+     `BundledServer` protocol and call `register_bundled_builder` at module level
+  2. `bundled/in_process_runtime.py` — add the name to `_LAZY_MODULES`, or the
+     runtime cannot find it
+  3. `packages/mcp/src/suitest_mcp/providers/builtin_specs.py` — the spec
+     (`transport=IN_PROCESS`, tool catalog). The catalog here is the contract;
+     a provider test asserts the advertised tools match it
+  4. `packages/mcp/src/suitest_mcp/routing.py` — default routing, if it should be
+     the default for a `target_kind`
+  5. `docs/MCP_PLUGINS.md` (list + caveats) and `docs/DEPLOYMENT.md` (bundling)
+
+  Nothing else. A step may name any builtin because
+  `BUNDLED_MCP_PROVIDERS` derives from `BUILTIN_SPECS` — it used to be a literal
+  list duplicated in `run_service`, the two drifted, and a real provider was
+  rejected as unregistered. Do not reintroduce a hand-maintained copy.
+
+### Desktop targets
+
+`slint-mcp` is bundled and **in-process**, unlike `computer-use-mcp` and
+`electron-mcp` which stay external stdio binaries resolved by `command_pin`.
+Slint 1.17 embeds an MCP server inside the application under test, so there is
+no binary to install: the provider owns the app process and bridges Suitest's
+`slint.*` contract onto the app's own tools. The app must be built with
+`--features slint/mcp` and run with `SLINT_EMIT_DEBUG_INFO=1`.
+
+Selector grammar is id, then accessible label, then `index` — Slint ids are
+component-scoped, so one id matches every instance of that component. Element
+resolution polls until the target appears (`timeout_s`, default 15s): a UI
+settles after the call that changed it, so a single look is a race.
+
+### Running the platform locally
+
+`make dev` assumes the docker-compose stack. Without it, two settings in `.env`
+point at hostnames that do not resolve and the failure looks unrelated:
+
+- `SUITEST_REDIS_URL=redis://redis:6379` — the runner exits on startup. Override
+  with `redis://127.0.0.1:6379/0`.
+- artifacts default to S3/MinIO — step uploads fail *after* the step passed, so
+  the run hangs in RUNNING. Set `SUITEST_ARTIFACTS_BACKEND=local` and
+  `SUITEST_ARTIFACTS_DIR=<abs path>`.
+
+Two things that will waste an afternoon otherwise:
+
+- **The runner does not hot-reload.** Restart it after touching a bundled
+  provider. A stale runner reports the *previous* error text, which reads like a
+  genuine test failure rather than a stale process.
+- **An ad-hoc run of one test case executes the whole suite** in one MCP session.
+  Cases that share external state (a working directory, a database) leak into
+  each other in suite order. Give every case its own.
 - User-provided MCP commands are **untrusted** — sandbox per [MCP_PLUGINS.md § security](./docs/MCP_PLUGINS.md):
   - Run in a container with restricted capabilities
   - No host filesystem access unless explicitly mounted
