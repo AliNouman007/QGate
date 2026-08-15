@@ -60,6 +60,10 @@ PROVIDER_NAME = "slint-mcp"
 
 _DEFAULT_READY_TIMEOUT = 60.0
 _RPC_TIMEOUT = 30.0
+# How long a step waits for its target to appear. A UI settles asynchronously —
+# a click that opens a pane returns before the pane has rendered — so resolving
+# an element has to be a poll, not a single look, or every test is a race.
+_DEFAULT_WAIT_SECONDS = 15.0
 # Slint's HTTP transport only accepts localhost origins, and binding the probe
 # socket to the same interface is what makes "is it up yet" meaningful.
 _HOST = "127.0.0.1"
@@ -221,6 +225,28 @@ class SlintServer:
         ]
 
     async def _element(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        """Resolve the addressed element, waiting for it to appear.
+
+        ``timeout_s: 0`` opts out, for a step that means to assert absence.
+        """
+        # Validate the selector once, up front: a step that names no element at
+        # all is an authoring mistake, and waiting 15s to say so helps nobody.
+        _selector(arguments)
+        raw_timeout = arguments.get("timeout_s", _DEFAULT_WAIT_SECONDS)
+        timeout = (
+            float(raw_timeout) if isinstance(raw_timeout, (int, float)) else _DEFAULT_WAIT_SECONDS
+        )
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        while True:
+            try:
+                return await self._resolve(arguments)
+            except AssertionError:
+                if loop.time() >= deadline:
+                    raise
+                await asyncio.sleep(0.25)
+
+    async def _resolve(self, arguments: dict[str, Any]) -> dict[str, Any]:
         element_id, label, index = _selector(arguments)
 
         if label is None:
@@ -379,6 +405,12 @@ class SlintServer:
             "index": {
                 "type": "integer",
                 "description": "Which match to use when several remain. Default 0.",
+            },
+            "timeout_s": {
+                "type": "number",
+                "description": (
+                    "Seconds to wait for the element to appear. Default 15; 0 fails immediately."
+                ),
             },
         }
 
