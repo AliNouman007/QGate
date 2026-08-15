@@ -100,21 +100,34 @@ def _desktop_config(name: str) -> McpProviderConfig:
     providers = {p.name: p for p in reg.list_for_workspace("ws-1")}
     cfg = providers[name]
     assert cfg.kind == "desktop"
-    assert cfg.transport is McpTransport.STDIO
     return cfg
 
 
-def test_desktop_provider_configs_are_desktop_stdio_residency() -> None:
-    """All three M14 providers are desktop-kind, stdio, and NOT shipped in the
-    image (they resolve via command_pin at runtime)."""
-    assert _desktop_config("computer-use-mcp").command == ["computer-use-mcp"]
-    assert _desktop_config("electron-mcp").command == ["electron-mcp"]
-    assert _desktop_config("slint-mcp").command == ["slint-mcp"]
+def test_external_desktop_providers_resolve_their_binary_at_runtime() -> None:
+    """computer-use and electron are stdio binaries NOT shipped in the image —
+    they resolve via command_pin at runtime, and `command` is only the hint."""
+    for name in ("computer-use-mcp", "electron-mcp"):
+        cfg = _desktop_config(name)
+        assert cfg.transport is McpTransport.STDIO
+        assert cfg.command == [name]
+
+
+def test_slint_provider_is_bundled_in_process() -> None:
+    """slint-mcp is the exception: Slint puts the MCP server inside the app
+    under test, so there is no external binary to install or pin."""
+    cfg = _desktop_config("slint-mcp")
+    assert cfg.transport is McpTransport.IN_PROCESS
+    assert cfg.command == []
+    assert cfg.endpoint == "in-process://slint"
 
 
 def test_desktop_provider_configs_expose_core_tools() -> None:
     """Each provider's config_json advertises its namespaced tool catalog."""
-    prefixes = {"computer-use-mcp": "desktop.", "electron-mcp": "electron.", "slint-mcp": "slint."}
+    prefixes = {
+        "computer-use-mcp": "desktop.",
+        "electron-mcp": "electron.",
+        "slint-mcp": "slint.",
+    }
     for name, prefix in prefixes.items():
         cfg = _desktop_config(name)
         tools = cfg.config_json.get("tools", [])

@@ -32,10 +32,10 @@ from typing import TYPE_CHECKING, Any, Protocol
 import anyio
 from mcp.server import Server
 from mcp.shared.memory import create_client_server_memory_streams
-from mcp.types import CallToolResult, ListToolsResult, TextContent
+from mcp.types import CallToolResult, ImageContent, ListToolsResult, TextContent
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable
+    from collections.abc import AsyncIterator, Callable, Sequence
 
     from mcp.server.context import ServerRequestContext
     from mcp.types import CallToolRequestParams, PaginatedRequestParams, Tool
@@ -55,8 +55,15 @@ class BundledServer(Protocol):
         """Return the tool catalog advertised over ``tools/list``."""
         ...
 
-    async def call_tool(self, name: str, arguments: dict[str, Any]) -> list[TextContent]:
-        """Dispatch a tool invocation and return MCP content blocks."""
+    async def call_tool(
+        self, name: str, arguments: dict[str, Any]
+    ) -> Sequence[TextContent | ImageContent]:
+        """Dispatch a tool invocation and return MCP content blocks.
+
+        Image blocks are carried through to ``CallToolResult`` unchanged, which
+        is how a provider produces a run artifact (the client decodes them in
+        ``suitest_mcp.client``).
+        """
         ...
 
     async def aclose(self) -> None:
@@ -84,6 +91,8 @@ _LAZY_MODULES: dict[str, str] = {
     "mongo-mcp": "suitest_mcp.bundled.mongo",
     "kubernetes-mcp": "suitest_mcp.bundled.kubernetes",
     "grpc-mcp": "suitest_mcp.bundled.grpc",
+    # M14 desktop.
+    "slint-mcp": "suitest_mcp.bundled.slint",
 }
 
 
@@ -149,7 +158,7 @@ def _adapt_server(server: BundledServer, label: str) -> Server[object]:
             content = await server.call_tool(params.name, params.arguments or {})
         except Exception as exc:
             return CallToolResult(content=[TextContent(type="text", text=str(exc))], is_error=True)
-        return CallToolResult(content=content, is_error=False)
+        return CallToolResult(content=list(content), is_error=False)
 
     app: Server[object] = Server(label, on_list_tools=_list_tools, on_call_tool=_call_tool)
     return app
