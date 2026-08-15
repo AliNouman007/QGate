@@ -13,9 +13,15 @@
 
 <p align="center">
   <a href="https://github.com/suiflex/suitest/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/suiflex/suitest/ci.yml?branch=main&style=for-the-badge" alt="CI status"></a>
-  <a href="https://github.com/suiflex/suitest/releases"><img src="https://img.shields.io/github/v/tag/suiflex/suitest?include_prereleases&style=for-the-badge&label=release" alt="Release"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-4ade80.svg?style=for-the-badge" alt="Apache-2.0 License"></a>
   <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-native-4ade80?style=for-the-badge" alt="MCP native"></a>
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@suiflex/suitest"><img src="https://img.shields.io/npm/v/%40suiflex%2Fsuitest?style=for-the-badge&label=launcher&color=4ade80" alt="@suiflex/suitest on npm"></a>
+  <a href="https://www.npmjs.com/package/@suiflex/suitest-mcp"><img src="https://img.shields.io/npm/v/%40suiflex%2Fsuitest-mcp?style=for-the-badge&label=mcp&color=4ade80" alt="@suiflex/suitest-mcp on npm"></a>
+  <a href="https://www.npmjs.com/package/@suiflex/suitest-sdk"><img src="https://img.shields.io/npm/v/%40suiflex%2Fsuitest-sdk?style=for-the-badge&label=sdk%20(ts)&color=4ade80" alt="@suiflex/suitest-sdk on npm"></a>
+  <a href="https://pypi.org/project/suiflex-suitest-sdk/"><img src="https://img.shields.io/pypi/v/suiflex-suitest-sdk?style=for-the-badge&label=sdk%20(py)&color=4ade80" alt="suiflex-suitest-sdk on PyPI"></a>
 </p>
 
 <p align="center">
