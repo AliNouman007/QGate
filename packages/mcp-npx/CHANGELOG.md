@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.0](https://github.com/suiflex/suitest/compare/mcp-v0.7.3...mcp-v0.8.0) (2026-08-15)
+
+
+### Features
+
+* implement slint-mcp as a bundled desktop provider ([d5645c9](https://github.com/suiflex/suitest/commit/d5645c9a0e93b289c04fe73169fb568b55e65bd1))
+
+
+### Bug Fixes
+
+* **mcp-npx:** find Python when the launcher gets a short PATH ([b8aff17](https://github.com/suiflex/suitest/commit/b8aff174f00a7905b1f15165b456c29d6373bb75))
+
 ## [0.7.3](https://github.com/suiflex/suitest/compare/mcp-v0.7.2...mcp-v0.7.3) (2026-08-15)
 
 
