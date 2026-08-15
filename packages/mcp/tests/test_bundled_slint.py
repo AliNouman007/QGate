@@ -51,10 +51,21 @@ async def test_tools_before_launch_say_so() -> None:
 
 
 @pytest.mark.asyncio
-async def test_missing_element_id_is_reported_as_such() -> None:
+async def test_missing_selector_is_reported_as_such() -> None:
     server = build_slint_server(_config())
-    with pytest.raises(AssertionError, match="no element id given"):
+    with pytest.raises(AssertionError, match="no element given"):
         await server.call_tool("slint.click", {})
+
+
+@pytest.mark.asyncio
+async def test_selector_accepts_id_label_and_index() -> None:
+    """Ids are component-scoped, so a step must be able to disambiguate by the
+    label the user sees, or failing that by position."""
+    from suitest_mcp.bundled.slint import _selector
+
+    assert _selector({"id": "A::b"}) == ("A::b", None, 0)
+    assert _selector({"label": "New Query"}) == (None, "New Query", 0)
+    assert _selector({"id": "A::b", "label": "Save", "index": 2}) == ("A::b", "Save", 2)
 
 
 @pytest.mark.asyncio

@@ -71,15 +71,38 @@ def _free_port() -> int:
         return cast("int", sock.getsockname()[1])
 
 
-def _selector(arguments: dict[str, Any]) -> str:
-    """The element id a step addressed, under any of the accepted key names."""
-    for key in ("id", "element_id", "elementId", "selector"):
-        value = arguments.get(key)
-        if isinstance(value, str) and value:
-            return value
-    raise AssertionError(
-        "no element id given — pass `id` as `Component::element-id`, e.g. `ConnPicker::add-ta`"
+def _selector(arguments: dict[str, Any]) -> tuple[str | None, str | None, int]:
+    """The element a step addressed: ``(id, label, index)``.
+
+    Follows the selector grammar in ``docs/DESKTOP_TESTING.md`` — id first,
+    then accessible label. Slint ids are component-scoped, so one id like
+    ``PrimaryButton::ta`` matches every instance of that component on screen;
+    ``label`` picks between them by what the user actually sees, and ``index``
+    is the blunt fallback when neither is unique.
+    """
+    element_id = next(
+        (
+            arguments[k]
+            for k in ("id", "element_id", "elementId", "selector")
+            if isinstance(arguments.get(k), str) and arguments[k]
+        ),
+        None,
     )
+    label = next(
+        (
+            arguments[k]
+            for k in ("label", "accessible_label", "accessibleLabel", "text")
+            if isinstance(arguments.get(k), str) and arguments[k]
+        ),
+        None,
+    )
+    if element_id is None and label is None:
+        raise AssertionError(
+            "no element given — pass `id` as `Component::element-id` "
+            "(e.g. `ConnPicker::add-ta`) and/or `label` as its visible text"
+        )
+    raw_index = arguments.get("index", 0)
+    return element_id, label, int(raw_index) if isinstance(raw_index, int) else 0
 
 
 class SlintServer:
@@ -177,22 +200,69 @@ class SlintServer:
             self._window = cast("dict[str, Any]", handles[0])
         return self._window
 
-    async def _element(self, element_id: str) -> dict[str, Any]:
+    async def _tree(self) -> list[dict[str, Any]]:
+        """Flat element list for the whole window, used for label lookups."""
+        window = await self._window_handle()
+        props = await self._call_json("get_window_properties", {"windowHandle": window})
+        root = (props or {}).get("rootElementHandle")
+        if root is None:
+            raise AssertionError("the window reported no root element")
         payload = await self._call_json(
-            "find_elements_by_id",
-            {"windowHandle": await self._window_handle(), "elementsId": element_id},
+            "get_element_tree", {"elementHandle": root, "maxElements": 10000}
         )
-        handles = (payload or {}).get("elementHandles") or []
-        if not handles:
-            raise AssertionError(
-                f"no element with id {element_id!r}. Ids are "
-                "`Component::element-id` and only exist when the app was built "
-                "with SLINT_EMIT_DEBUG_INFO=1"
-            )
-        return cast("dict[str, Any]", handles[0])
+        return cast("list[dict[str, Any]]", (payload or {}).get("elements") or [])
 
-    async def _properties(self, element_id: str) -> dict[str, Any]:
-        handle = await self._element(element_id)
+    @staticmethod
+    def _labels_of(element: dict[str, Any]) -> list[str]:
+        return [
+            v
+            for k in ("accessibleLabel", "accessibleValue", "accessibleDescription")
+            if isinstance(v := element.get(k), str) and v
+        ]
+
+    async def _element(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        element_id, label, index = _selector(arguments)
+
+        if label is None:
+            payload = await self._call_json(
+                "find_elements_by_id",
+                {"windowHandle": await self._window_handle(), "elementsId": element_id},
+            )
+            handles = (payload or {}).get("elementHandles") or []
+            if not handles:
+                raise AssertionError(
+                    f"no element with id {element_id!r}. Ids are "
+                    "`Component::element-id` and only exist when the app was built "
+                    "with SLINT_EMIT_DEBUG_INFO=1"
+                )
+            if index >= len(handles):
+                raise AssertionError(
+                    f"{element_id!r} matched {len(handles)} element(s), asked for #{index}"
+                )
+            return cast("dict[str, Any]", handles[index])
+
+        # Label lookup walks the tree, since Slint only indexes by id.
+        matches = [
+            el
+            for el in await self._tree()
+            if label in self._labels_of(el)
+            and (
+                element_id is None
+                or any(d.get("id") == element_id for d in el.get("typeNamesAndIds") or [])
+            )
+        ]
+        if not matches:
+            where = f" with id {element_id!r}" if element_id else ""
+            raise AssertionError(f"no element labelled {label!r}{where}")
+        if index >= len(matches):
+            raise AssertionError(f"{label!r} matched {len(matches)} element(s), asked for #{index}")
+        handle = matches[index].get("handle")
+        if handle is None:
+            raise AssertionError(f"element labelled {label!r} exposes no handle")
+        return cast("dict[str, Any]", handle)
+
+    async def _properties(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        handle = await self._element(arguments)
         payload = await self._call_json("get_element_properties", {"elementHandle": handle})
         return cast("dict[str, Any]", payload or {})
 
@@ -297,7 +367,19 @@ class SlintServer:
             "id": {
                 "type": "string",
                 "description": "Element id, `Component::element-id`.",
-            }
+            },
+            "label": {
+                "type": "string",
+                "description": (
+                    "Visible/accessible label. Ids are component-scoped, so one "
+                    "id matches every instance of that component — use this to "
+                    "pick between them."
+                ),
+            },
+            "index": {
+                "type": "integer",
+                "description": "Which match to use when several remain. Default 0.",
+            },
         }
 
         def tool(name: str, description: str, props: dict[str, Any], req: list[str]) -> Tool:
@@ -426,11 +508,11 @@ class SlintServer:
             )
             return [TextContent(type="text", text=f"sent {text!r}")]
 
-        element_id = _selector(arguments)
+        target = _selector(arguments)[0] or _selector(arguments)[1] or "element"
 
         if name == "slint.click":
-            await self._call("click_element", {"elementHandle": await self._element(element_id)})
-            return [TextContent(type="text", text=f"clicked {element_id}")]
+            await self._call("click_element", {"elementHandle": await self._element(arguments)})
+            return [TextContent(type="text", text=f"clicked {target}")]
 
         if name == "slint.set_property":
             value = arguments.get("value")
@@ -438,55 +520,51 @@ class SlintServer:
                 raise AssertionError("`value` is required")
             await self._call(
                 "set_element_value",
-                {"elementHandle": await self._element(element_id), "value": value},
+                {"elementHandle": await self._element(arguments), "value": value},
             )
-            return [TextContent(type="text", text=f"set {element_id} to {value!r}")]
+            return [TextContent(type="text", text=f"set {target} to {value!r}")]
 
         if name == "slint.get_property":
-            props = await self._properties(element_id)
+            props = await self._properties(arguments)
             return [TextContent(type="text", text=json.dumps(props, indent=2))]
 
         if name == "slint.assert_visible":
-            props = await self._properties(element_id)
+            props = await self._properties(arguments)
             opacity = props.get("computedOpacity", 1.0)
             if not isinstance(opacity, (int, float)) or opacity <= 0:
-                raise AssertionError(f"{element_id} is not visible (opacity {opacity})")
-            return [TextContent(type="text", text=f"{element_id} is visible")]
+                raise AssertionError(f"{target} is not visible (opacity {opacity})")
+            return [TextContent(type="text", text=f"{target} is visible")]
 
         if name == "slint.assert_text":
-            actual = self._text_of(await self._properties(element_id))
+            actual = self._text_of(await self._properties(arguments))
             if "contains" in arguments:
                 needle = str(arguments["contains"])
                 if needle not in actual:
                     raise AssertionError(
-                        f"{element_id}: expected text containing {needle!r}, got {actual!r}"
+                        f"{target}: expected text containing {needle!r}, got {actual!r}"
                     )
             else:
                 expected = str(arguments.get("equals", ""))
                 if actual != expected:
-                    raise AssertionError(
-                        f"{element_id}: expected text {expected!r}, got {actual!r}"
-                    )
-            return [TextContent(type="text", text=f"{element_id} text matched")]
+                    raise AssertionError(f"{target}: expected text {expected!r}, got {actual!r}")
+            return [TextContent(type="text", text=f"{target} text matched")]
 
         if name == "slint.assert_value":
-            actual = self._text_of(await self._properties(element_id))
+            actual = self._text_of(await self._properties(arguments))
             expected = str(arguments.get("equals", ""))
             if actual != expected:
-                raise AssertionError(f"{element_id}: expected value {expected!r}, got {actual!r}")
-            return [TextContent(type="text", text=f"{element_id} value matched")]
+                raise AssertionError(f"{target}: expected value {expected!r}, got {actual!r}")
+            return [TextContent(type="text", text=f"{target} value matched")]
 
         if name == "slint.assert_checked":
-            props = await self._properties(element_id)
+            props = await self._properties(arguments)
             if "accessibleChecked" not in props:
-                raise AssertionError(f"{element_id} exposes no checked state")
+                raise AssertionError(f"{target} exposes no checked state")
             is_checked = bool(props["accessibleChecked"])
             want_checked = bool(arguments.get("checked"))
             if is_checked != want_checked:
-                raise AssertionError(
-                    f"{element_id}: expected checked={want_checked}, got {is_checked}"
-                )
-            return [TextContent(type="text", text=f"{element_id} checked matched")]
+                raise AssertionError(f"{target}: expected checked={want_checked}, got {is_checked}")
+            return [TextContent(type="text", text=f"{target} checked matched")]
 
         raise AssertionError(f"unknown tool: {name}")
 
