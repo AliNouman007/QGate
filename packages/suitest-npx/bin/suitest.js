@@ -66,6 +66,11 @@ async function main() {
   opts.baseUrl = opts["base-url"];
 
   const cwd = process.cwd();
+  if (cmd === "onboard" || cmd === "up") {
+    const { guardProjectRoot } = require("../lib/project.js");
+    await guardProjectRoot(cwd, opts);
+  }
+
   switch (cmd) {
     case "onboard": {
       const { onboard } = require("../lib/onboard.js");

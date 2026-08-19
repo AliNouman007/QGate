@@ -12,6 +12,8 @@ const {
   saveCredentials,
   dbUrl,
   cacheDir,
+  isProjectRoot,
+  guardProjectRoot,
 } = require("../lib/project.js");
 
 function tmp() {
@@ -102,4 +104,50 @@ test("config persists the chosen port across restarts", () => {
   assert.deepStrictEqual(loadConfig(dirs.config), {}); // missing file = empty
   saveConfig(dirs.config, { port: 4005 });
   assert.strictEqual(loadConfig(dirs.config).port, 4005);
+});
+
+test("isProjectRoot detects package.json, .git, or pyproject.toml", () => {
+  const dir = tmp();
+  assert.strictEqual(isProjectRoot(dir), false);
+
+  fs.writeFileSync(path.join(dir, "package.json"), "{}");
+  assert.strictEqual(isProjectRoot(dir), true);
+  fs.unlinkSync(path.join(dir, "package.json"));
+
+  fs.mkdirSync(path.join(dir, ".git"));
+  assert.strictEqual(isProjectRoot(dir), true);
+  fs.rmdirSync(path.join(dir, ".git"));
+
+  fs.writeFileSync(path.join(dir, "pyproject.toml"), "");
+  assert.strictEqual(isProjectRoot(dir), true);
+});
+
+test("isProjectRoot rejects home directory", () => {
+  assert.strictEqual(isProjectRoot(os.homedir()), false);
+});
+
+test("guardProjectRoot passes in valid project root", async () => {
+  const dir = tmp();
+  fs.writeFileSync(path.join(dir, "package.json"), "{}");
+  await assert.doesNotReject(() => guardProjectRoot(dir));
+});
+
+test("guardProjectRoot allows non-project root when yes option is set", async () => {
+  const dir = tmp();
+  await assert.doesNotReject(() => guardProjectRoot(dir, { yes: true }));
+});
+
+test("guardProjectRoot rejects non-project root in non-TTY without yes", async () => {
+  const dir = tmp();
+  await assert.rejects(
+    () => guardProjectRoot(dir),
+    /Current directory does not look like a project root/,
+  );
+});
+
+test("guardProjectRoot rejects homedir in non-TTY without yes", async () => {
+  await assert.rejects(
+    () => guardProjectRoot(os.homedir()),
+    /Current directory does not look like a project root/,
+  );
 });

@@ -494,14 +494,14 @@ The drill is **mandatory quarterly** for production.
 | 6 | Verify `/capabilities` for a tier mismatch (in case a provider was swapped unintentionally) |
 | 7 | Rollback: `helm rollback suitest <revision>` — downgrade-safe migrations only |
 
-### 4.3b Desktop install channels (Homebrew / Scoop)
+### 4.3b MCP desktop install channels (Homebrew / Scoop)
 
-`brew install suiflex/tap/suitest` and `scoop install suitest` (plus the
-`suitest-mcp` variants) are published automatically from this repo:
+`brew install suiflex/tap/suitest-mcp` and `scoop install suitest-mcp`
+are published automatically from this repo:
 
 | Stage | Where |
 |------|------|
-| 1 | Tag `launcher-v*` / `mcp-v*` → npm publish (OIDC) |
+| 1 | Tag `mcp-v*` → npm publish (OIDC) |
 | 2 | `scripts/build-dist-bundle.sh` builds a self-contained tarball (vendored `node_modules`, `.cmd` shim) and its `.sha256` |
 | 3 | Tarball attached to the GitHub Release for that tag |
 | 4 | `scripts/publish-installers.sh` renders `packaging/*.tmpl` and pushes to `suiflex/homebrew-tap` and `suiflex/scoop-bucket` |
