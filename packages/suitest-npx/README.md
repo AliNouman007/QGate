@@ -6,12 +6,10 @@ MCP — no Docker, no cloud services, no LLM API key (MCP sampling).
 ## Install
 
 ```bash
-# with Node >= 18
-npm i -g @suiflex/suitest && suitest onboard
-
-# or try without installing
-npx @suiflex/suitest onboard
+npx -y @suiflex/suitest onboard
 ```
+
+Suitest reads per-project context from the current working directory (`cwd`), so run this command at the root of the project you want to test.
 
 Requires [`uv`](https://docs.astral.sh/uv/) (provisions Python 3.12 on
 demand); `onboard` prints the install one-liner when it's missing.
@@ -20,12 +18,12 @@ demand); `onboard` prints the install one-liner when it's missing.
 
 | Command | What it does |
 |---------|--------------|
-| `suitest onboard` | provision runtime (per-project uv venv from bundled wheels), boot the stack, mint a local API key, wire your IDE's MCP config |
-| `suitest up` | boot the local stack (idempotent) |
-| `suitest down` | stop it |
-| `suitest status` | is the stack running? (URL, version, health) |
-| `suitest settings` | terminal panel: generate/refresh the API key + show config, no browser |
-| `suitest init` | wire MCP config only |
+| `npx @suiflex/suitest onboard` | provision runtime (per-project uv venv from bundled wheels), boot the stack, mint a local API key, wire your IDE's MCP config |
+| `npx @suiflex/suitest up` | boot the local stack (idempotent) |
+| `npx @suiflex/suitest down` | stop it |
+| `npx @suiflex/suitest status` | is the stack running? (URL, version, health) |
+| `npx @suiflex/suitest settings` | terminal panel: generate/refresh the API key + show config, no browser |
+| `npx @suiflex/suitest init` | wire MCP config only |
 
 Data lives in `./.suitest/` (SQLite DB, artifacts, logs, venv, credentials).
 The API binds to `127.0.0.1` only. The web dashboard and Suitest wheels ship
