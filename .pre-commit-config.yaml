@@ -81,10 +81,13 @@ repos:
           - faker>=25.0
           - types-PyYAML>=6.0
           # apps/api/src/suitest_api/services/uat_renderer.py subclasses
-          # fpdf2's FPDF; without the stub package mypy resolves the base
-          # class to Any and trips ``disallow_any_unimported``.
+          # fpdf2's FPDF; without it mypy resolves the base class to Any and
+          # trips ``disallow_any_unimported``. fpdf2 ships its own py.typed
+          # inline types, so no separate stub package is needed — the
+          # third-party types-fpdf2 stub was stale (typed set_font's size as
+          # int; fpdf2 2.8.x actually accepts float) and produced false
+          # positives here.
           - fpdf2>=2.8.5
-          - types-fpdf2>=2.8.4
           # M3-1/M3-4: the agent package (providers/litellm_router, graphs/*)
           # imports litellm + langgraph. Both ship py.typed; without them the
           # isolated pre-commit mypy env resolves the imports to Any and trips
