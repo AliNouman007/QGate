@@ -93,6 +93,38 @@ function dbUrl(cwd) {
   return "sqlite+aiosqlite:///" + projectDirs(cwd).db;
 }
 
+function isProjectRoot(cwd) {
+  if (!cwd || cwd === os.homedir()) return false;
+  const markers = ["package.json", ".git", "pyproject.toml"];
+  return markers.some((m) => fs.existsSync(path.join(cwd, m)));
+}
+
+async function guardProjectRoot(cwd, opts = {}) {
+  if (isProjectRoot(cwd)) return;
+
+  const reason =
+    cwd === os.homedir()
+      ? "Running in your home directory."
+      : "No package.json, .git, or pyproject.toml found in current directory.";
+
+  console.warn(`Warning: ${reason}`);
+  console.warn("Suitest stores artifacts and config in ./.suitest/ relative to cwd.");
+
+  if (opts.yes) return;
+
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error(
+      "Current directory does not look like a project root. Run in a project root, or pass --yes to continue.",
+    );
+  }
+
+  const { askYesNo } = require("./preflight.js");
+  const proceed = await askYesNo("Continue in current directory anyway? [y/N]", { defaultYes: false });
+  if (!proceed) {
+    throw new Error("Aborted.");
+  }
+}
+
 module.exports = {
   projectDirs,
   ensureProjectDirs,
@@ -102,4 +134,6 @@ module.exports = {
   loadConfig,
   saveConfig,
   dbUrl,
+  isProjectRoot,
+  guardProjectRoot,
 };
