@@ -1,4 +1,6 @@
-# Suitest — MCP-native testing platform
+<p align="right"><a href="./README_ID.md">🇮🇩 Bahasa Indonesia</a></p>
+
+# Suitest — A Testing Platform That Works for Everyone
 
 <p align="center">
   <picture>
@@ -8,7 +10,7 @@
 </p>
 
 <p align="center">
-  <strong>Manual test management. Deterministic runs. Optional autonomous AI.<br>Your stack, your LLM, your data.</strong>
+  <strong>Manage test cases. Run them automatically. Analyze with AI.<br>Your data stays yours — no subscription fees.</strong>
 </p>
 
 <p align="center">
@@ -25,104 +27,135 @@
 </p>
 
 <p align="center">
-  <img src="assets/brand/readme-hero.png" alt="Suitest — AI-native QA platform. Ship with confidence: manage tests, run everywhere, diagnose with AI. A checkout regression passing across browser, API and database steps." width="960">
-</p>
-
-**Suitest** is a self-hostable, open-source QA platform that works fully **without an LLM** (ZERO tier): manual test case management plus a deterministic run engine that drives any target through [MCP](https://modelcontextprotocol.io) (Playwright, HTTP APIs, Postgres, and more). If you want AI on top, plug in your own LLM key (cloud, or local Ollama) to unlock test generation, failure diagnosis, and conversational testing. No vendor lock-in, no forced API keys.
-
-It also ships an **MCP server for IDE agents** (Claude Code, Cursor, Codex): analyze a repo, generate runnable tests, execute them with video and screenshot evidence, and publish results. Its **blackbox DOM engine** can test any web app from just a URL and test credentials, without repo access.
-
-Backend: Python 3.12 + FastAPI · Frontend: Vite + React 19 · DB: Postgres 16 + pgvector · Queue: ARQ/Redis · Plugin layer: MCP.
-
-[Docs](./docs) · [Getting started](#install) · [MCP server](./docs/MCP_PLUGINS.md) · [Blackbox testing](./docs/BLACKBOX_UI_TESTING.md) · [Deployment](./docs/DEPLOYMENT.md) · [Architecture](./docs/ARCHITECTURE.md) · [Troubleshooting](./docs/TROUBLESHOOTING.md) · [Contributing](./CONTRIBUTING.md)
-
-New install? Start at [Install](#install) below. `npx @suiflex/suitest onboard` boots the full platform locally in one command; the MCP server alone runs from a single `npx` command; the team server is one `make docker-up`.
-
-<p align="center">
-  <img src="assets/demo.gif" alt="Suitest 30-second demo: PRD-generated test suite executing green against the bundled Brewly demo app" width="960">
-</p>
-
-<p align="center">
-  <em>AI-generated suite (from <a href="./examples/demo-app/PRD.md">PRD.md</a>) running green against a live app — API + browser steps, screenshots included.<br>
-  Replay it yourself in one command: <code>make demo</code> → <a href="http://localhost:3000">localhost:3000</a> (<code>demo@suitest.dev</code> / <code>demo1234</code>). No LLM key needed.</em>
+  <img src="assets/brand/readme-hero.png" alt="Suitest — QA platform that tests browser, API, and database in one place." width="960">
 </p>
 
 ---
 
-## Project status
+## What is Suitest?
 
-**Pre-v1.0, under active development.** What works **today**:
+**Suitest** is a free, self-hostable software testing platform.
 
-- ✅ Manual TCM — create/edit test cases, steps, suites, projects (read + write)
-- ✅ Deterministic runner via MCP — `playwright`, `api-http`, `postgres` providers
-- ✅ Live run logs (WebSocket), screenshots + per-test video, MinIO artifacts, cancel/rerun
-- ✅ Rule-based defects, traceability matrix, analytics, integrations + CI webhooks (GitHub/GitLab/Jira/Slack)
-- ✅ Deterministic generators — OpenAPI, browser recorder, crawler
-- ✅ **MCP server for IDE agents** (`npx -y @suiflex/suitest-mcp`) — analyze → generate → run → publish from Claude Code / Cursor / Codex, incl. a **blackbox DOM engine** that tests any web app from just a URL + credentials (no repo, no LLM key)
-- ✅ BYO LLM per workspace (Settings → LLM: Anthropic/OpenAI/Gemini/…, local Ollama/vLLM, or any OpenAI-compatible URL) — unlocks agent chat, PRD-driven test generation, LLM codegen
-- ✅ Local auth: super-admin bootstrap + invite-only onboarding (no OAuth required)
-- ✅ Desktop targets (`FE_DESKTOP`) — `slint-mcp` bundled in-process, plus `electron-mcp` and `computer-use-mcp` as pinned binaries ([DESKTOP_TESTING.md](./docs/DESKTOP_TESTING.md))
-- ✅ UAT sign-off export — branded PDF (cover, execution summary, per-case results with screenshot evidence, sign-off sheet) from any selection of cases
+**Here's what that means:** You have a website or app. You want to make sure all its features work correctly — buttons are clickable, forms can be filled, data is saved properly. In the old days, you'd use spreadsheets to track test cases and run each one manually. **Suitest replaces all of that with a single application.**
 
-See [docs/ROADMAP.md](./docs/ROADMAP.md) — the single source of truth for build status.
+### What can Suitest do?
 
----
+| What you need | Suitest solution |
+|---------------|-----------------|
+| 📝 Keep all test cases in one place | ✅ **Test Case Management** — create, edit, organize test cases and suites |
+| 🤖 Run tests automatically | ✅ **Automated Runner** — test browser, API, database automatically |
+| 📸 Get screenshot & video evidence | ✅ **Evidence Capture** — every test produces screenshots and videos |
+| 🐛 Track bugs from failed tests | ✅ **Defect Tracking** — bugs are logged automatically when tests fail |
+| 📊 See testing reports | ✅ **Dashboard & Analytics** — pass rate, coverage, readiness at a glance |
+| 🔗 Link requirements ↔ tests ↔ bugs | ✅ **Traceability** — every test connects to requirements and bugs |
+| 🔌 Integrate with CI/CD | ✅ **Webhooks** — GitHub, GitLab, Jira, Slack |
+| 🤖 Use AI to generate tests | ✅ **AI (optional)** — generate tests from PRDs, auto-diagnosis |
 
-## Releases
+### Who uses Suitest?
 
-Suitest ships as two independently versioned packages. **Bumping one does not bump the other**, so pick the one that carries the change you want:
-
-| Package | Carries | Update with |
-|---------|---------|-------------|
-| [`@suiflex/suitest`](https://www.npmjs.com/package/@suiflex/suitest) (launcher) | The local platform: web dashboard + every Python wheel, so API, UI, and export changes (e.g. the UAT PDF) arrive here | `npx @suiflex/suitest@latest onboard` |
-| [`@suiflex/suitest-mcp`](https://www.npmjs.com/package/@suiflex/suitest-mcp) (MCP server) | The IDE tools and the lifecycle engine that generates and runs tests. Also on PyPI as [`suiflex-suitest-lifecycle`](https://pypi.org/project/suiflex-suitest-lifecycle/) | `npx -y @suiflex/suitest-mcp@latest` |
-
-The launcher rebuilds its Python venv whenever its version changes, so re-running the command above is all an upgrade takes.
-
-**Release notes:** [suitest.suiflex.dev/docs/changelog](https://suitest.suiflex.dev/docs/changelog/) — generated from [`packages/suitest-npx/CHANGELOG.md`](./packages/suitest-npx/CHANGELOG.md) and [`packages/mcp-npx/CHANGELOG.md`](./packages/mcp-npx/CHANGELOG.md), which release-please writes from conventional commits. Publishing a release is a tag (`launcher-v*` / `mcp-v*`); the docs site picks the notes up on its next build, with no page to edit by hand.
+| Profile | Needs | Best tier |
+|---------|-------|-----------|
+| 👩‍💻 **QA Engineer** | Manage test cases, run automatically, track defects | **ZERO** (free) or **CLOUD** (with AI) |
+| 👨‍💻 **Developer** | Ensure PRs are safe to merge, cross-cutting tests | **CLOUD** (for CI pipelines) |
+| 📋 **Product Manager** | See release readiness before deploy | **ZERO** or **CLOUD** (viewer) |
+| 🏦 **IT / Infrastructure** | Self-host for compliance (bank, healthcare, government) | **ZERO** → **LOCAL** (Ollama on-prem) |
+| 🚀 **Startup / Indie Dev** | Free, no subscription, no vendor lock-in | **ZERO** (forever) or **CLOUD** (spot-use) |
 
 ---
 
-## Install
+## Why use Suitest?
 
-Five supported paths.
+### vs TestRail / Zephyr
+TestRail is paid ($30/user/month) and has no automated runner. **Suitest ZERO already has everything TestRail has + automated runner + MCP plugins — for free.**
 
-### 1. Local bundle — one command (recommended quickstart)
+### vs Playwright (standalone)
+Playwright can only test browsers. **Suitest uses Playwright as one of many plugins** + adds TCM layer + traceability + multi-target (not just browsers).
 
-Requirements: **Node ≥ 18** and [uv](https://docs.astral.sh/uv/).
+### vs TestSprite
+TestSprite has vendor lock-in (their LLM, their cloud). **Suitest: BYO LLM, self-host, universal MCP plugin (test API/DB/Infra/Mobile, not just browsers).**
+
+---
+
+## Get Started in 3 Steps
+
+### ⚡ Step 1: Install (1 minute)
+
+**What you need:**
+- [Node.js](https://nodejs.org/) version 18 or higher (download from nodejs.org)
+- [uv](https://docs.astral.sh/uv/) — Python package manager (install with: `pip install uv`)
+
+**Check if you have them installed:**
+
+Open a terminal (Command Prompt / PowerShell / Terminal) and type:
+
+```bash
+node --version    # must be v18 or higher
+uv --version      # must be installed
+```
+
+**Install Suitest:**
 
 ```bash
 npx @suiflex/suitest onboard
 ```
 
-Boots the full platform locally — web dashboard + API on SQLite + run supervisor (port 4000, falls back to 4001–4009, binds `127.0.0.1`) — and wires your IDE's MCP config in the same step. No Docker, no Postgres, no LLM key (generation uses MCP sampling through your IDE agent). Data lives in `./.suitest/`; the dashboard and Suitest wheels ship inside the npm package (~3 MB). `suitest up` / `suitest down` manage the stack; `suitest settings` generates/refreshes the API key from the terminal (no browser); `--port`, `--ide`, `--base-url` override defaults. Details: [packages/suitest-npx](./packages/suitest-npx/README.md).
+> 💡 **What is `npx`?** It's part of Node.js that lets you run programs without manual installation. `npx @suiflex/suitest onboard` downloads and runs Suitest automatically.
 
-### 2. MCP server only (no install required)
+### ⚡ Step 2: Open the Dashboard (30 seconds)
 
-Requirements: **Node ≥ 18** and **Python ≥ 3.11** on PATH.
+After installation, Suitest will give you a web address (usually `http://localhost:4000`). Open it in your browser.
+
+**First-time login:**
+- Email: the one you entered during onboard
+- Password: the one you entered during onboard
+
+> 💡 **Tip:** If you forgot your password, run `suitest settings` in the terminal to regenerate your API key.
+
+### ⚡ Step 3: Create Your First Test Case
+
+1. **Log in** to the dashboard
+2. Click **"+ New Project"** → give it a name
+3. Click **"+ New Suite"** → give it a name (a collection of test cases)
+4. Click **"+ New Case"** → create your first test case
+5. Add **steps** — each step has an action (click a button, fill a form, etc.)
+6. Click **"Run"** → the test will run automatically
+
+> 💡 **First time?** Check out the [interactive demo](http://localhost:3000) after running `make demo` — it comes with pre-built test cases ready to go.
+
+---
+
+## Installation Options (Detailed)
+
+### 1. 🏠 Local Install — One Command (Recommended for Beginners)
+
+```bash
+npx @suiflex/suitest onboard
+```
+
+**What this command does:**
+
+Downloads and installs all required components.
+
+**Managing Suitest after installation:**
+
+| Want to... | Command |
+|------------|---------|
+| Start Suitest | `suitest up` |
+| Stop Suitest | `suitest down` |
+| Generate/refresh API key | `suitest settings` |
+| Change port | `suitest onboard --port 5000` |
+
+### 2. 🌐 MCP Server Only (No Platform Install)
+
+If you only need the MCP server for IDEs (Claude Code, Cursor, Codex):
 
 ```bash
 npx -y @suiflex/suitest-mcp
 ```
 
-Python-native route (same server, via [uv](https://docs.astral.sh/uv/)):
+> 💡 **What is MCP?** MCP (Model Context Protocol) is a standard that lets AI agents (like Claude Code) run tests. With the MCP server, you can generate tests from your code repo.
 
-```bash
-uvx --from suiflex-suitest-lifecycle suitest-mcp
-```
-
-Or on PATH, as `suitest-mcp`:
-
-```bash
-brew install suiflex/tap/suitest-mcp
-```
-
-```powershell
-scoop bucket add suiflex https://github.com/suiflex/scoop-bucket
-scoop install suitest-mcp
-```
-
-Wire it into Claude Code / Cursor (`.mcp.json`):
+**Example configuration for Claude Code / Cursor (`.mcp.json`):**
 
 ```json
 {
@@ -130,198 +163,296 @@ Wire it into Claude Code / Cursor (`.mcp.json`):
     "suitest": {
       "command": "npx",
       "args": ["-y", "@suiflex/suitest-mcp"],
-      "env": { "SUITEST_API_URL": "http://localhost:4000", "SUITEST_API_KEY": "sk_suitest_…" }
+      "env": {
+        "SUITEST_API_URL": "http://localhost:4000",
+        "SUITEST_API_KEY": "sk_suitest_..."
+      }
     }
   }
 }
 ```
 
-The agent gets 22 tools: repo-based lifecycle (analyze → generate → run → report), the **blackbox engine** for apps you have no repo for (browser setup wizard, login detection, safe crawling, deterministic Playwright generation, evidence), and PRD-driven planning. `SUITEST_API_URL`/`KEY` are optional — with them, cases/runs/evidence publish into the web TCM; without them results stay local under `suitest-output/`.
+> 💡 **`SUITEST_API_URL` and `SUITEST_API_KEY` are optional.** Without them, results are saved locally in the `suitest-output/` folder.
 
-### 3. Full platform — Docker Compose
+### 3. 🐳 Full Platform — Docker Compose
 
-Requirements: **Docker + Docker Compose**.
+If you want to run all components (API, web, runner, database, Redis, MinIO):
 
 ```bash
 git clone https://github.com/suiflex/suitest && cd suitest
 cp .env.example .env
 ```
 
-Set a super-admin in `.env` so you can log in (ZERO tier needs no LLM):
+**Edit `.env`** — set a super-admin:
 
 ```bash
-SUITEST_AUTH_SECRET=<32-char-random-hex>     # openssl rand -hex 32
+SUITEST_AUTH_SECRET=<32-char-random-hex>     # generate: openssl rand -hex 32
 SUITEST_SUPERADMIN_EMAIL=admin@example.com
 SUITEST_SUPERADMIN_PASSWORD=<strong-password>
 ```
 
+**Run it:**
+
 ```bash
-make docker-up            # pulls prebuilt ghcr.io/suiflex/suitest-* images + boots the stack
+make docker-up            # pull images and boot the stack
 open http://localhost:3000
 ```
 
-The app images (`api`, `web`, `runner`) are prebuilt on GHCR per `images-v*`
-release — no local build. Pin one with `SUITEST_IMAGE_TAG=<version>`; build
-from source instead with `make docker-up-prod`.
+> 💡 **What is Docker Compose?** Docker runs apps in "containers" (isolated environments). Docker Compose makes it easy to run multiple containers together. If you don't have Docker, install it from [docker.com](https://docker.com).
 
-Log in with the super-admin email/password. From **Settings → invite** others by link — onboarding is invite-only by default. Default tier is **ZERO** — no LLM calls are ever made. Optional profiles: `--profile local` adds an Ollama service for air-gapped LOCAL-tier inference.
+### 4. ☸️ Kubernetes — Helm
 
-Demo data: `make seed` (or `docker compose -f infra/docker/docker-compose.yml exec api python -m suitest_db.seed`).
-
-### 4. Kubernetes — Helm
-
-Requirements: a cluster + [Helm](https://helm.sh); Postgres/Redis/object storage as external services (URLs in `values.yaml`).
+For deploying to a Kubernetes cluster:
 
 ```bash
 helm install suitest infra/helm/suitest -f infra/helm/suitest/values.yaml
-# air-gapped (LOCAL tier via in-cluster Ollama):
-helm install suitest infra/helm/suitest -f infra/helm/suitest/values-airgapped.yaml
 ```
 
-The chart deploys `api`, `web`, and `runner` separately with a PodDisruptionBudget. Full guide (env vars, TLS, backups, air-gapped checklist): [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) · chart notes: [infra/README.md](./infra/README.md).
+> 💡 **Requires:** Kubernetes cluster + Helm + PostgreSQL/Redis/object storage as external services.
 
-### 5. Local development (no Docker for the app)
+### 5. 🔧 Local Development (For Contributors)
 
-Requirements: **Python 3.12 + [uv](https://docs.astral.sh/uv/)**, **Node 20 + [pnpm](https://pnpm.io/)**, and Postgres/Redis/MinIO (easiest: `docker compose -f infra/docker/docker-compose.yml up -d postgres redis minio`).
+If you want to contribute to Suitest:
 
 ```bash
-make setup     # cp .env → install deps → run migrations → seed DB
+# Requires: Python 3.12 + uv, Node 20 + pnpm, PostgreSQL/Redis/MinIO
+make setup     # copy .env → install deps → run migrations → seed DB
 make dev       # start API (:4000) + web (:3000) + runner together
 ```
 
-Other useful targets (`make help` for the full list):
+**Other useful commands:**
 
-| Command | Does |
-|---------|------|
-| `make dev-api` / `dev-web` / `dev-runner` | Start one service |
-| `make migrate` / `migrate-new m="..."` | Apply / create Alembic migration |
-| `make seed` | Seed demo data |
-| `make ci` | Everything CI runs: lint + typecheck + tests (py + web) |
-| `make check-all` | Lint + typecheck only (no tests) |
-| `make docker-up-local` / `docker-up-cloud` | Boot with Ollama / cloud-LLM profile |
-
----
-
-## Your first test (UI only, no LLM)
-
-From an empty install you can bootstrap and run a real browser test without touching the API:
-
-1. **Log in** (super-admin email/password). A first **workspace** is created on install; the sidebar picker (`＋ New workspace`) makes more.
-2. **Create a project, then a suite** — the Test Cases screen prompts you when each is empty.
-3. **Author a test case** — "New case", then add steps. A step targets an MCP provider (e.g. the bundled **`playwright-mcp`**, `target_kind = FE_WEB`) with a JSON tool call, e.g. `{"tool":"browser_navigate","arguments":{"url":"https://www.saucedemo.com"}}`.
-4. **Run now** — the deterministic runner dispatches each step through MCP (Playwright drives a real browser) and the run-detail page **streams live status to PASS/FAIL**.
-5. **Triage** — a failing step **auto-files a defect** (rule-based at ZERO); mark a suite **gating** to block deploys; watch pass-rate/readiness on the **dashboard**.
-
-This whole journey is locked by a no-mock, real-backend Playwright suite — `make e2e-real` (boots a ZERO api + web + runner, seeds an empty workspace, and drives the UI against the live stack).
+| Command | What it does |
+|---------|--------------|
+| `make dev-api` | Start API only |
+| `make dev-web` | Start web only |
+| `make dev-runner` | Start runner only |
+| `make migrate` | Run database migration |
+| `make seed` | Load demo data |
+| `make ci` | Lint + typecheck + tests (same as CI) |
+| `make help` | See all commands |
 
 ---
 
-## Enable AI (optional)
+## Tiers: ZERO, LOCAL, CLOUD
 
-LLM providers are configured **per workspace from the web UI** — `Settings → LLM` — not via env vars. Keys are AES-GCM encrypted at rest and never shown again. Setting a provider upgrades the workspace tier (ZERO → CLOUD/LOCAL) and unlocks agent chat, PRD-driven generation, and LLM codegen.
+Suitest has 3 capability levels. **You don't need AI to use Suitest.**
 
-- **CLOUD** — bring your own key: Anthropic, OpenAI, Gemini, Groq, OpenRouter, DeepSeek, … (100+ providers via [LiteLLM](https://docs.litellm.ai)), or **`custom`** — any OpenAI-compatible base URL (gateways, routers, proxies).
-- **LOCAL** — privacy-first / air-gapped: Ollama, llama.cpp, vLLM, LM Studio (`make docker-up-local` ships an Ollama service).
+### 🟢 ZERO — Free, No AI Required
 
-The default is always **ZERO**: no LLM call is ever made until a workspace explicitly configures one.
+**When:** No LLM is configured (default)
+
+**What you get:**
+- ✅ Full Test Case Management (manual)
+- ✅ Automated Runner via MCP (Playwright, API, Postgres, etc.)
+- ✅ Live run logs via WebSocket
+- ✅ Screenshot & video evidence
+- ✅ Rule-based defect tracking
+- ✅ Traceability matrix
+- ✅ Analytics dashboard
+- ✅ CI/CD webhooks (GitHub, GitLab, Jira, Slack)
+- ✅ Deterministic generators (OpenAPI, Browser Recorder, URL Crawler)
+- ✅ Blackbox DOM engine (test web apps from just a URL)
+
+> 💡 **This tier is already very powerful.** It can replace TestRail + Playwright in a single platform.
+
+### 🟡 LOCAL — AI on Your Own Hardware
+
+**When:** LLM configured = Ollama / llama.cpp / vLM / LM Studio
+
+**What's added:**
+- ✅ AI test generation (from PRDs, URLs, or MCP discovery)
+- ✅ AI failure diagnosis (auto-categorize: FLAKE / REGRESSION / ENVIRONMENT / TEST_BUG)
+- ✅ Conversational testing (chat with AI to generate tests)
+- ✅ Air-gapped friendly (no internet required)
+
+### 🔵 CLOUD — AI via Cloud Provider
+
+**When:** LLM configured = Anthropic / OpenAI / Gemini / Groq / OpenRouter / etc.
+
+**What's added:**
+- ✅ Everything in LOCAL
+- ✅ 100+ LLM providers via LiteLLM
+- ✅ Cost tracking + budget guard
+- ✅ Custom OpenAI-compatible base URL (gateways, routers, proxies)
+
+> 💡 **LOCAL and CLOUD tiers are activated from the web UI: Settings → LLM.** No need to edit env files.
 
 ---
 
-## Capability tiers
+## Your First Test (No AI Needed)
 
-| Tier | Trigger | What you get |
-|------|---------|--------------|
-| **ZERO** | no workspace LLM configured (default) | Full manual TCM, deterministic runner via MCP, deterministic generators, blackbox engine, rule-based defects, traceability, analytics, integrations + CI webhooks. No LLM call ever. |
-| **LOCAL** | workspace LLM = `ollama` / `llamacpp` / `vllm` / `lmstudio` | Everything ZERO has + AI features, all inference on your hardware. |
-| **CLOUD** | workspace LLM = `anthropic` / `openai` / `gemini` / `custom` / … | Same as LOCAL using a cloud LLM, with cost tracking + budget guard. |
+From a fresh install, you can bootstrap and run a real browser test:
 
-Detail: [docs/CAPABILITY_TIERS.md](./docs/CAPABILITY_TIERS.md).
+1. **Log in** (super-admin email/password)
+2. **Create a project and suite** — the Test Cases screen will guide you
+3. **Create a test case** — "New case", add steps. Each step targets an MCP provider (e.g. `playwright-mcp`)
+4. **Click "Run"** — the runner executes each step via MCP (Playwright drives a real browser)
+5. **See results** — the run detail page shows live status → PASS/FAIL
+6. **Triage** — failed tests auto-create defects; mark a suite as "gating" to block deploys
+
+> 💡 **This entire journey is tested with a real Playwright suite** — `make e2e-real`
 
 ---
 
-## Repository structure
+## Enable AI (Optional)
+
+LLMs are configured **per workspace from the web UI** — `Settings → LLM` — not via env files.
+
+**How to activate:**
+1. Go to **Settings → LLM**
+2. Choose a provider (Anthropic, OpenAI, Gemini, Groq, Ollama, etc.)
+3. Enter your API key (encrypted with AES-GCM, never shown again)
+4. Your workspace tier automatically upgrades (ZERO → CLOUD/LOCAL)
+
+**Supported providers:**
+
+| Tier | Providers |
+|------|-----------|
+| **CLOUD** | Anthropic, OpenAI, Gemini, Groq, OpenRouter, DeepSeek, etc. (100+ via LiteLLM) |
+| **LOCAL** | Ollama, llama.cpp, vLM, LM Studio |
+| **Custom** | Any OpenAI-compatible URL (gateways, routers, proxies) |
+
+> 💡 **Default is always ZERO.** No LLM calls are made until a workspace explicitly configures a provider.
+
+---
+
+## Repository Structure
 
 ```
 suitest/
 ├── README.md                ← you are here
-├── CLAUDE.md                ← coding rules for AI agents (Cursor / Claude Code)
+├── CLAUDE.md                ← coding rules for AI agents
 ├── Makefile                 ← all dev commands (make help)
 │
 ├── apps/
-│   ├── web/                 ← Vite 6 + React 19 (Suitest UI)
-│   ├── api/                 ← FastAPI backend
-│   └── runner/              ← ARQ worker (per-step MCP dispatch)
+│   ├── web/                 ← Frontend (Vite + React 19)
+│   ├── api/                 ← Backend (FastAPI Python)
+│   └── runner/              ← Worker that runs tests via MCP
 │
 ├── packages/
-│   ├── agent/               ← LiteLLM router + agent graphs
-│   ├── db/                  ← SQLAlchemy 2 async + Alembic + seed
-│   ├── mcp/                 ← MCP client + registry + pool + bundled providers
-│   ├── lifecycle/           ← the MCP server: analyze→generate→run→publish + blackbox engine
-│   ├── mcp-npx/             ← @suiflex/suitest-mcp — npx launcher for the MCP server
-│   ├── suitest-npx/         ← @suiflex/suitest — one-command local platform launcher
-│   ├── shared/              ← cross-package Pydantic schemas
-│   └── core/                ← capability resolver, autonomy, AES-GCM crypto
+│   ├── agent/               ← AI agent (LiteLLM + LangGraph)
+│   ├── db/                  ← Database (SQLAlchemy + Alembic)
+│   ├── mcp/                 ← MCP client + registry + bundled providers
+│   ├── lifecycle/           ← MCP server: analyze→generate→run→publish
+│   ├── mcp-npx/             ← @suiflex/suitest-mcp (npm launcher)
+│   ├── suitest-npx/         ← @suiflex/suitest (one-command launcher)
+│   ├── shared/              ← Shared Pydantic schemas
+│   └── core/                ← Capability resolver, autonomy, crypto
 │
 ├── sdk/
-│   ├── python/              ← suiflex-suitest-sdk (REST client used by the lifecycle)
-│   └── typescript/          ← @suiflex/suitest-sdk
-│
-├── assets/brand/            ← logo.svg + light/dark lockups + mark + readme hero
+│   ├── python/              ← Python SDK (REST client)
+│   └── typescript/          ← TypeScript SDK
 │
 ├── infra/
 │   ├── docker/              ← Dockerfile per service
 │   └── helm/suitest/        ← Helm chart
 │
-└── docs/                    ← see Documentation index below
+└── docs/                    ← Full documentation
 ```
 
 ---
 
 ## Documentation
 
-**Start at [docs/ROADMAP.md](./docs/ROADMAP.md)** — it is the single entry point for picking up any feature. Open the spec docs below only when the roadmap item you're working on needs them.
+**Start at [docs/ROADMAP.md](./docs/ROADMAP.md)** — the single entry point for all features.
 
-| Doc | Topic |
-|-----|-------|
-| [ROADMAP.md](./docs/ROADMAP.md) | Milestones M0 → M15 + build status (start here) |
-| [PRODUCT.md](./docs/PRODUCT.md) | Vision, personas, user journeys |
-| [ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Stack, services, topology |
-| [DATA_MODEL.md](./docs/DATA_MODEL.md) | SQLAlchemy schema + entity diagram |
-| [API.md](./docs/API.md) | REST + WebSocket contract |
-| [UI_SPEC.md](./docs/UI_SPEC.md) | Per-screen component spec |
-| [CAPABILITY_TIERS.md](./docs/CAPABILITY_TIERS.md) | ZERO/LOCAL/CLOUD gating |
-| [MCP_PLUGINS.md](./docs/MCP_PLUGINS.md) | MCP registry + routing + sandbox security |
-| [GENERATORS.md](./docs/GENERATORS.md) | Generator design (deterministic + LLM) |
-| [AUTONOMY.md](./docs/AUTONOMY.md) | Per-workspace autonomy dial |
-| [AI_AGENT.md](./docs/AI_AGENT.md) | Prompts + LangGraph + tool registry (spec, M3) |
-| [BLACKBOX_UI_TESTING.md](./docs/BLACKBOX_UI_TESTING.md) | Blackbox DOM engine — test any web app from a URL (Zero + MCP) |
-| [DESKTOP_TESTING.md](./docs/DESKTOP_TESTING.md) | Desktop targets — computer-use, Electron, Slint (bundled, in-process) |
-| [DEPLOYMENT.md](./docs/DEPLOYMENT.md) | Compose / Helm / air-gapped |
-| [docs-site/](./docs-site) | The public site (Astro + Starlight). `npm run dev` regenerates the release notes first |
+| Document | Topic | Who is it for? |
+|----------|-------|----------------|
+| [ROADMAP.md](./docs/ROADMAP.md) | Milestones M0 → M15 + build status | Developers who want to contribute |
+| [PRODUCT.md](./docs/PRODUCT.md) | Vision, personas, user journeys | Product Managers, QA Leads |
+| [ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Stack, services, topology | Developers, DevOps |
+| [DATA_MODEL.md](./docs/DATA_MODEL.md) | Database schema + entity diagram | Backend Developers |
+| [API.md](./docs/API.md) | REST + WebSocket contract | Frontend Developers, API consumers |
+| [UI_SPEC.md](./docs/UI_SPEC.md) | Per-screen component spec | Frontend Developers, Designers |
+| [CAPABILITY_TIERS.md](./docs/CAPABILITY_TIERS.md) | ZERO/LOCAL/CLOUD gating | Everyone (important for understanding features) |
+| [MCP_PLUGINS.md](./docs/MCP_PLUGINS.md) | MCP registry + routing + security | Developers, DevOps |
+| [GENERATORS.md](./docs/GENERATORS.md) | Generator design (deterministic + LLM) | QA Engineers, Developers |
+| [AUTONOMY.md](./docs/AUTONOMY.md) | Per-workspace autonomy dial | Admins, QA Leads |
+| [AI_AGENT.md](./docs/AI_AGENT.md) | Prompts + LangGraph + tool registry | AI/ML Engineers |
+| [BLACKBOX_UI_TESTING.md](./docs/BLACKBOX_UI_TESTING.md) | Blackbox DOM engine | QA Engineers (test from URL only) |
+| [DESKTOP_TESTING.md](./docs/DESKTOP_TESTING.md) | Desktop targets (computer-use, Electron, Slint) | QA Engineers (test desktop apps) |
+| [DEPLOYMENT.md](./docs/DEPLOYMENT.md) | Compose / Helm / air-gapped | DevOps, SRE |
+| [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) | Technical FAQ & common fixes | Everyone |
 
 ---
 
-## How it compares
+## FAQ (Frequently Asked Questions)
 
-| Capability | TestRail | Playwright | TestSprite | **Suitest ZERO** | **Suitest CLOUD** |
-|------------|:--:|:--:|:--:|:--:|:--:|
-| First-class manual TCM | ✓ | ✗ | partial | ✓ | ✓ |
-| Deterministic runner | ✗ | ✓ | ✓ | ✓ | ✓ |
-| Universal MCP plugin layer | ✗ | ✗ | partial | ✓ | ✓ |
-| AI generation / diagnosis | ✗ | ✗ | ✓ | ✗ | ✓ |
-| Self-host | ✓ | ✓ | ✗ | ✓ | ✓ |
-| BYO LLM (100+ providers) | n/a | n/a | ✗ locked | n/a | ✓ |
-| Air-gapped | ✓ | ✓ | ✗ | ✓ | ✓ (Ollama) |
-| Open source | ✗ | runner only | ✗ | ✓ | ✓ |
+### ❓ Is Suitest free?
+**Yes.** Suitest is open-source (Apache 2.0 License). No subscription fees. You can self-host without limits.
+
+### ❓ Do I need to know how to code to use Suitest?
+**No.** Suitest ZERO (default) works 100% without coding. You just create test cases through the web dashboard, and the runner executes them automatically.
+
+### ❓ Do I need AI/LLM to use Suitest?
+**No.** ZERO tier works fully without AI. AI only adds features like generating tests from PRDs, automatic diagnosis, and conversational testing.
+
+### ❓ How do I install Suitest?
+See [Get Started in 3 Steps](#get-started-in-3-steps) above. Just one command: `npx @suiflex/suitest onboard`
+
+### ❓ Is my data safe?
+**Yes.** Suitest is self-hosted — your data never leaves your server. API keys are encrypted with AES-GCM. No mandatory telemetry.
+
+### ❓ Can Suitest test things other than browsers?
+**Yes.** Suitest can test: browsers (Playwright), APIs (HTTP/GraphQL/gRPC), databases (Postgres/Mongo/MySQL), mobile (Appium), desktop (Slint/Electron/computer-use), infrastructure (Kubernetes), and other MCP servers.
+
+### ❓ What if I'm stuck / get an error?
+Check [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) or open an issue at [GitHub Issues](https://github.com/suiflex/suitest/issues).
+
+### ❓ How do I contribute?
+Read [CONTRIBUTING.md](./CONTRIBUTING.md). In short:
+1. Read [CLAUDE.md](./CLAUDE.md) — coding rules
+2. Pick an unchecked item in [ROADMAP.md](./docs/ROADMAP.md)
+3. Branch: `feat/<scope>-<short-desc>`
+4. Commits: conventional commits (`feat(api): ...`)
+5. Make sure `make ci` passes before pushing
+
+### ❓ Is there a demo I can try?
+**Yes.** Run `make demo` → open `http://localhost:3000` → login `demo@suitest.dev` / `demo1234`
+
+### ❓ Port 4000 is already in use, what do I do?
+Use the `--port` flag: `npx @suiflex/suitest onboard --port 5000`
+
+### ❓ Does Suitest work on Windows?
+**Yes.** Suitest supports Windows, macOS, and Linux. Make sure Node.js ≥ 18 and uv are installed.
+
+---
+
+## Feature Comparison
+
+| Feature | TestRail | Playwright | TestSprite | **Suitest ZERO** | **Suitest CLOUD** |
+|---------|:--------:|:----------:|:----------:|:----------------:|:-----------------:|
+| Manual Test Case Management | ✅ | ❌ | Partial | ✅ | ✅ |
+| Automated Runner | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Universal MCP Plugin Layer | ❌ | ❌ | Partial | ✅ | ✅ |
+| AI Generation / Diagnosis | ❌ | ❌ | ✅ | ❌ | ✅ |
+| Self-host | ✅ | ✅ | ❌ | ✅ | ✅ |
+| BYO LLM (100+ providers) | n/a | n/a | ❌ Locked | n/a | ✅ |
+| Air-gapped | ✅ | ✅ | ❌ | ✅ | ✅ (Ollama) |
+| Open Source | ❌ | Runner only | ❌ | ✅ | ✅ |
+
+---
+
+## Releases
+
+Suitest ships as two independently versioned packages:
+
+| Package | What it carries | Update with |
+|---------|----------------|-------------|
+| [`@suiflex/suitest`](https://www.npmjs.com/package/@suiflex/suitest) (launcher) | Local platform: web dashboard + all Python wheels | `npx @suiflex/suitest@latest onboard` |
+| [`@suiflex/suitest-mcp`](https://www.npmjs.com/package/@suiflex/suitest-mcp) (MCP server) | IDE tools + lifecycle engine | `npx -y @suiflex/suitest-mcp@latest` |
+
+**Release notes:** [suitest.suiflex.dev/docs/changelog](https://suitest.suiflex.dev/docs/changelog/)
 
 ---
 
 ## Contributing
 
-1. **Read [CLAUDE.md](./CLAUDE.md)** — binding conventions for this repo (also applies to AI coding agents).
-2. **Pick the next unchecked item in [docs/ROADMAP.md](./docs/ROADMAP.md)** — one PR = one acceptance criterion. The roadmap tells you which spec doc to open.
-3. **Branch:** `feat/<scope>-<short-desc>`. **Commits:** conventional commits (`feat(api): ...`).
-4. **Before pushing:** `make ci` must pass (ruff + mypy strict, tsc strict + ESLint, pytest async + vitest).
+1. **Read [CLAUDE.md](./CLAUDE.md)** — coding conventions (also applies to AI coding agents)
+2. **Pick the next unchecked item in [docs/ROADMAP.md](./docs/ROADMAP.md)** — one PR = one acceptance criterion
+3. **Branch:** `feat/<scope>-<short-desc>`. **Commits:** conventional commits (`feat(api): ...`)
+4. **Before pushing:** `make ci` must pass (ruff + mypy strict, tsc strict + ESLint, pytest async + vitest)
 
 See also [CONTRIBUTING.md](./CONTRIBUTING.md), [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md), and [SECURITY.md](./SECURITY.md).
 
