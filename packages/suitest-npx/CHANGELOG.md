@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.9](https://github.com/suiflex/suitest/compare/launcher-v0.6.8...launcher-v0.6.9) (2026-08-20)
+
+
+### Bug Fixes
+
+* **launcher:** guard cwd and drop brew/scoop launcher distribution ([#110](https://github.com/suiflex/suitest/issues/110)) ([d76cf0f](https://github.com/suiflex/suitest/commit/d76cf0fa3aabdb08219ab484867c76c25cab7fad))
+* **launcher:** guard cwd before onboard and up ([085ef66](https://github.com/suiflex/suitest/commit/085ef66c0fa1c549eaec13ea5d4d82de6274829e))
+
 ## [0.6.8](https://github.com/suiflex/suitest/compare/launcher-v0.6.7...launcher-v0.6.8) (2026-08-16)
 
 
