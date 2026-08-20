@@ -134,7 +134,7 @@ npx @suiflex/suitest onboard
 
 **What this command does:**
 
-Downloads and installs everything in one go — all components are bundled, no manual setup needed.
+Downloads and installs all required components.
 
 **Managing Suitest after installation:**
 

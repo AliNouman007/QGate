@@ -134,7 +134,7 @@ npx @suiflex/suitest onboard
 
 **Yang dilakukan command ini:**
 
-Cukup download dan install — semua komponen sudah bundling di dalamnya, tanpa setup manual.
+Mengunduh dan menginstall semua komponen yang dibutuhkan.
 
 **Mengelola Suitest setelah install:**
 
