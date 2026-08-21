@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.10](https://github.com/suiflex/suitest/compare/launcher-v0.6.9...launcher-v0.6.10) (2026-08-21)
+
+
+### Bug Fixes
+
+* **launcher:** clear the stale venv before reinstalling it ([69356e9](https://github.com/suiflex/suitest/commit/69356e9a51092ca97fd310d28a9f628a5c17e9be))
+* **launcher:** key the venv cache on the wheel set, not the version ([a68568f](https://github.com/suiflex/suitest/commit/a68568fd55d6058ea2ffc4639a536196e77a935c))
+
 ## [0.6.9](https://github.com/suiflex/suitest/compare/launcher-v0.6.8...launcher-v0.6.9) (2026-08-20)
 
 
