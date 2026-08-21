@@ -26,7 +26,10 @@ jobs:
           path-to-document: https://github.com/suiflex/suitest/blob/main/CLA.md
           branch: cla-signatures
           allowlist: badrus123,mulhamna,*[bot]
-          custom-notsigned-comment: >
+          # `custom-notsigned-prcomment`, not `custom-notsigned-comment`. The
+          # action ignores an unknown input with only a warning, so the wrong
+          # name silently fell back to the default text instead of failing.
+          custom-notsigned-prcomment: >
             Thanks for your contribution! Before we can merge, please read our
             [Contributor License Agreement](https://github.com/suiflex/suitest/blob/main/CLA.md)
             and sign it by posting the comment below.
