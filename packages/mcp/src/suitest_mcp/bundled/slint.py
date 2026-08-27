@@ -72,6 +72,8 @@ from mcp.types import BlobResourceContents, EmbeddedResource, ImageContent, Text
 from suitest_mcp.bundled.in_process_runtime import BundledServer, register_bundled_builder
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from suitest_mcp.models import McpProviderConfig
 
 PROVIDER_NAME = "slint-mcp"
@@ -333,6 +335,40 @@ class SlintServer:
         if handle is None:
             raise AssertionError(f"element labelled {label!r} exposes no handle")
         return cast("dict[str, Any]", handle)
+
+    async def _await_text(
+        self, arguments: dict[str, Any], matches: Callable[[str], bool]
+    ) -> tuple[bool, str]:
+        """Poll an element's text until it matches, or the timeout expires.
+
+        Reading once is a race: the click that changed the text returns before
+        the property behind it has settled, so a correct assertion failed
+        depending on how fast the runner got there. Same deadline the element
+        lookup already uses.
+        """
+        raw_timeout = arguments.get("timeout_s", _DEFAULT_WAIT_SECONDS)
+        timeout = (
+            float(raw_timeout) if isinstance(raw_timeout, (int, float)) else _DEFAULT_WAIT_SECONDS
+        )
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        actual = ""
+        while True:
+            try:
+                actual = self._text_of(await self._properties(arguments))
+            except AssertionError:
+                # No readable text *yet*. Only worth reporting if it never
+                # arrives — an element gains its label a frame after the
+                # interaction that gave it one.
+                if loop.time() >= deadline:
+                    raise
+                await asyncio.sleep(0.25)
+                continue
+            if matches(actual):
+                return True, actual
+            if loop.time() >= deadline:
+                return False, actual
+            await asyncio.sleep(0.25)
 
     async def _properties(self, arguments: dict[str, Any]) -> dict[str, Any]:
         handle = await self._element(arguments)
@@ -854,8 +890,11 @@ class SlintServer:
             # Both ends are validated before either is resolved, so a step that
             # named only one of them is told that, not that the app is missing.
             wanted = _drag_destination(arguments)
-            source = await self._element(arguments)
+            # Destination first: resolving it costs a lookup, and a handle goes
+            # stale the moment the row under it is recycled. The source handle
+            # is the one `drag_element` dereferences, so it is taken last.
             destination = await self._drag_target(wanted)
+            source = await self._element(arguments)
             payload: dict[str, Any] = {"elementHandle": source, "target": destination}
             button = arguments.get("button")
             if isinstance(button, str) and button:
@@ -900,23 +939,24 @@ class SlintServer:
             return [TextContent(type="text", text=f"{target} is visible")]
 
         if name == "slint.assert_text":
-            actual = self._text_of(await self._properties(arguments))
             if "contains" in arguments:
                 needle = str(arguments["contains"])
-                if needle not in actual:
+                ok, actual = await self._await_text(arguments, lambda text: needle in text)
+                if not ok:
                     raise AssertionError(
                         f"{target}: expected text containing {needle!r}, got {actual!r}"
                     )
             else:
                 expected = str(arguments.get("equals", ""))
-                if actual != expected:
+                ok, actual = await self._await_text(arguments, lambda text: text == expected)
+                if not ok:
                     raise AssertionError(f"{target}: expected text {expected!r}, got {actual!r}")
             return [TextContent(type="text", text=f"{target} text matched")]
 
         if name == "slint.assert_value":
-            actual = self._text_of(await self._properties(arguments))
             expected = str(arguments.get("equals", ""))
-            if actual != expected:
+            ok, actual = await self._await_text(arguments, lambda text: text == expected)
+            if not ok:
                 raise AssertionError(f"{target}: expected value {expected!r}, got {actual!r}")
             return [TextContent(type="text", text=f"{target} value matched")]
 
