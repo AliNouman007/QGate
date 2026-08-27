@@ -681,7 +681,13 @@ class SlintServer:
                 },
                 [],
             ),
-            tool("slint.click", "Click an element.", dict(element), ["id"]),
+            tool(
+                "slint.click",
+                "Click an element. `double: true` for a double-click, which is "
+                "how a list row is usually opened.",
+                {**element, "double": {"type": "boolean"}},
+                ["id"],
+            ),
             tool(
                 "slint.drag",
                 "Press on an element, drag, release. Name a destination "
@@ -925,8 +931,11 @@ class SlintServer:
         target = _selector(arguments)[0] or _selector(arguments)[1] or "element"
 
         if name == "slint.click":
-            await self._act_on_element("click_element", arguments, {})
-            return [TextContent(type="text", text=f"clicked {target}")]
+            double = bool(arguments.get("double"))
+            how_args = {"action": "DoubleClick"} if double else {}
+            await self._act_on_element("click_element", arguments, how_args)
+            how = "double-clicked" if double else "clicked"
+            return [TextContent(type="text", text=f"{how} {target}")]
 
         if name == "slint.drag":
             # Both ends are validated before either is resolved, so a step that
