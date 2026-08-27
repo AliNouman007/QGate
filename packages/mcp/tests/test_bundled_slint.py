@@ -124,3 +124,34 @@ async def test_launch_without_a_command_is_rejected() -> None:
 async def test_aclose_is_safe_before_launch() -> None:
     """Session teardown runs whether or not a step ever launched anything."""
     await build_slint_server(_config()).aclose()
+
+
+@pytest.mark.asyncio
+async def test_video_tools_report_the_missing_half_of_the_pair() -> None:
+    """Filming is two calls. Each half should name the other when used alone,
+    rather than failing on empty frames or a stray background task."""
+    server = build_slint_server(_config())
+    with pytest.raises(AssertionError, match=r"slint\.start_video"):
+        await server.call_tool("slint.stop_video", {})
+
+
+def test_a_video_blob_becomes_a_video_artifact() -> None:
+    """An embedded resource is the only way a tool can hand back a file that is
+    not an image; mapping it by mime is what gives the run something to play."""
+    import base64 as _base64
+    from types import SimpleNamespace
+
+    from suitest_mcp.client import _resource_artifact
+
+    resource = SimpleNamespace(
+        blob=_base64.b64encode(b"\x00\x01mp4").decode(),
+        mimeType="video/mp4",
+        uri="slint://window/recording.mp4",
+    )
+    artifact = _resource_artifact(resource, 0)
+    assert artifact is not None
+    assert artifact.kind == "VIDEO"
+    assert artifact.filename == "recording.mp4"
+    assert artifact.bytes_ == b"\x00\x01mp4"
+
+    assert _resource_artifact(SimpleNamespace(text="not a blob"), 0) is None

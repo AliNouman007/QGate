@@ -27,6 +27,9 @@ Tool surface (mirrored in :mod:`suitest_mcp.providers.builtin_specs`):
   steps against an app whose ids you don't know yet.
 * ``slint.start_recording`` / ``slint.stop_recording`` — the events Slint
   actually received, and whether it accepted or ignored each one.
+* ``slint.start_video`` / ``slint.stop_video`` — sample the window while a
+  gesture runs and hand back an MP4, so a run shows the interaction rather than
+  its end state.
 * ``slint.accessibility_action`` — invoke an accessible action (``Default_``,
   ``Increment``, ``Decrement``, ...) on an element.
 * ``slint.press_key``      — send a key/text event to the focused element.
@@ -52,14 +55,18 @@ reached through ``get_window_properties`` instead.
 from __future__ import annotations
 
 import asyncio
+import base64
+import contextlib
 import json
 import os
 import shutil
 import socket
+import subprocess
 from typing import TYPE_CHECKING, Any, cast
 
 import httpx
-from mcp.types import ImageContent, TextContent, Tool
+from mcp.types import BlobResourceContents, EmbeddedResource, ImageContent, TextContent, Tool
+from pydantic import AnyUrl
 
 from suitest_mcp.bundled.in_process_runtime import BundledServer, register_bundled_builder
 
@@ -77,6 +84,11 @@ _DEFAULT_WAIT_SECONDS = 15.0
 # Slint's HTTP transport only accepts localhost origins, and binding the probe
 # socket to the same interface is what makes "is it up yet" meaningful.
 _HOST = "127.0.0.1"
+# Video sampling. Slint serves single frames, not a stream, so a "video" here is
+# screenshots on a timer stitched by ffmpeg. 5 fps is enough to read a drag or a
+# panel opening, and cheap enough not to perturb what it is filming.
+_VIDEO_INTERVAL_MS = 200
+_VIDEO_MAX_FRAMES = 900
 
 
 def _free_port() -> int:
@@ -155,6 +167,9 @@ class SlintServer:
         self._client: httpx.AsyncClient | None = None
         self._rpc_id = 0
         self._window: dict[str, Any] | None = None
+        self._video_task: asyncio.Task[None] | None = None
+        self._video_frames: list[bytes] = []
+        self._video_interval_ms = _VIDEO_INTERVAL_MS
 
     # ---------------------------------------------------------------- plumbing
 
@@ -417,6 +432,7 @@ class SlintServer:
         )
 
     async def _stop(self) -> None:
+        await self._stop_sampling()
         if self._client is not None:
             await self._client.aclose()
             self._client = None
@@ -431,6 +447,84 @@ class SlintServer:
             self._proc = None
         self._port = None
         self._window = None
+
+    # ------------------------------------------------------------------- video
+
+    async def _sample_frames(self) -> None:
+        """Screenshot the window on a timer until cancelled."""
+        while True:
+            try:
+                blocks = await self._call(
+                    "take_screenshot", {"windowHandle": await self._window_handle()}
+                )
+            except Exception:  # a frame lost to a busy UI must not end the recording
+                blocks = []
+            for block in blocks:
+                if block.get("type") == "image" and isinstance(block.get("data"), str):
+                    with contextlib.suppress(ValueError, TypeError):
+                        self._video_frames.append(base64.b64decode(block["data"], validate=False))
+                    break
+            if len(self._video_frames) >= _VIDEO_MAX_FRAMES:
+                return
+            await asyncio.sleep(self._video_interval_ms / 1000)
+
+    async def _stop_sampling(self) -> None:
+        task, self._video_task = self._video_task, None
+        if task is None:
+            return
+        task.cancel()
+        # Teardown must not raise: a cancelled sampler, or one that died on a
+        # busy UI, still has to leave the session closable.
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await task
+
+    def _encode_video(self, frames: list[bytes]) -> bytes:
+        """PNG frames -> MP4, through ffmpeg on stdin.
+
+        H.264 in an MP4 is what the dashboard's `<video>` element plays. ffmpeg
+        is not vendored, so its absence is reported as the missing dependency it
+        is rather than as a broken step.
+        """
+        ffmpeg = shutil.which("ffmpeg")
+        if ffmpeg is None:
+            raise AssertionError(
+                "ffmpeg is not on PATH — `slint.stop_video` needs it to encode "
+                "the sampled frames; install it or drop the video steps"
+            )
+        fps = max(1, round(1000 / self._video_interval_ms))
+        result = subprocess.run(  # fixed argv, no shell
+            [
+                ffmpeg,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "image2pipe",
+                "-framerate",
+                str(fps),
+                "-i",
+                "-",
+                # yuv420p + even dimensions: what every browser will actually play.
+                "-vf",
+                "pad=ceil(iw/2)*2:ceil(ih/2)*2",
+                "-pix_fmt",
+                "yuv420p",
+                "-c:v",
+                "libx264",
+                "-movflags",
+                "+faststart",
+                "-f",
+                "mp4",
+                "-",
+            ],
+            input=b"".join(frames),
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0 or not result.stdout:
+            detail = result.stderr.decode(errors="replace").strip()[:400]
+            raise AssertionError(f"ffmpeg could not encode the frames: {detail}")
+        return result.stdout
 
     @staticmethod
     def _text_of(properties: dict[str, Any]) -> str:
@@ -615,6 +709,26 @@ class SlintServer:
                 [],
             ),
             tool(
+                "slint.start_video",
+                "Start filming the window: screenshots on a timer, stitched "
+                "into an MP4 by `slint.stop_video`. Wrap the interaction you "
+                "want a reviewer to watch, not the whole run.",
+                {
+                    "interval_ms": {
+                        "type": "integer",
+                        "description": "Milliseconds between frames. Default 200 (5 fps).",
+                    },
+                },
+                [],
+            ),
+            tool(
+                "slint.stop_video",
+                "Stop filming and attach the MP4 to the run, so the case shows "
+                "the interaction instead of only its end state. Needs ffmpeg.",
+                {},
+                [],
+            ),
+            tool(
                 "slint.accessibility_action",
                 "Invoke an accessible action on an element, e.g. `Default_` "
                 "(the element's primary action), `Increment`, `Decrement`. "
@@ -628,7 +742,7 @@ class SlintServer:
 
     async def call_tool(
         self, name: str, arguments: dict[str, Any]
-    ) -> list[TextContent | ImageContent]:
+    ) -> list[TextContent | ImageContent | EmbeddedResource]:
         if name == "slint.launch":
             return [TextContent(type="text", text=await self._launch(arguments))]
 
@@ -642,7 +756,7 @@ class SlintServer:
             )
             # Passed through untouched: the runner turns image blocks into
             # SCREENSHOT artifacts, which is what surfaces them in the web UI.
-            out: list[TextContent | ImageContent] = []
+            out: list[TextContent | ImageContent | EmbeddedResource] = []
             for block in blocks:
                 if block.get("type") == "image":
                     out.append(
@@ -665,6 +779,40 @@ class SlintServer:
                 {"windowHandle": await self._window_handle(), "text": text},
             )
             return [TextContent(type="text", text=f"sent {text!r}")]
+
+        if name == "slint.start_video":
+            if self._video_task is not None:
+                raise AssertionError("already filming — call `slint.stop_video` first")
+            raw_interval = arguments.get("interval_ms", _VIDEO_INTERVAL_MS)
+            self._video_interval_ms = (
+                int(raw_interval)
+                if isinstance(raw_interval, int) and raw_interval > 0
+                else _VIDEO_INTERVAL_MS
+            )
+            self._video_frames = []
+            await self._window_handle()  # fail here, not inside the sampler
+            self._video_task = asyncio.create_task(self._sample_frames())
+            return [TextContent(type="text", text="filming the window")]
+
+        if name == "slint.stop_video":
+            if self._video_task is None:
+                raise AssertionError("not filming — call `slint.start_video` first")
+            await self._stop_sampling()
+            frames, self._video_frames = self._video_frames, []
+            if not frames:
+                raise AssertionError("no frames were captured")
+            video = await asyncio.to_thread(self._encode_video, frames)
+            return [
+                TextContent(type="text", text=f"captured {len(frames)} frame(s)"),
+                EmbeddedResource(
+                    type="resource",
+                    resource=BlobResourceContents(
+                        uri=AnyUrl("slint://window/recording.mp4"),
+                        mimeType="video/mp4",
+                        blob=base64.b64encode(video).decode(),
+                    ),
+                ),
+            ]
 
         if name == "slint.start_recording":
             await self._call("start_event_recording", {})

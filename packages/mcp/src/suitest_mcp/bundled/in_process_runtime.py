@@ -32,7 +32,13 @@ from typing import TYPE_CHECKING, Any, Protocol
 import anyio
 from mcp.server import Server
 from mcp.shared.memory import create_client_server_memory_streams
-from mcp.types import CallToolResult, ImageContent, ListToolsResult, TextContent
+from mcp.types import (
+    CallToolResult,
+    EmbeddedResource,
+    ImageContent,
+    ListToolsResult,
+    TextContent,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Sequence
@@ -57,12 +63,14 @@ class BundledServer(Protocol):
 
     async def call_tool(
         self, name: str, arguments: dict[str, Any]
-    ) -> Sequence[TextContent | ImageContent]:
+    ) -> Sequence[TextContent | ImageContent | EmbeddedResource]:
         """Dispatch a tool invocation and return MCP content blocks.
 
-        Image blocks are carried through to ``CallToolResult`` unchanged, which
-        is how a provider produces a run artifact (the client decodes them in
-        ``suitest_mcp.client``).
+        Image and embedded-resource blocks are carried through to
+        ``CallToolResult`` unchanged, which is how a provider produces a run
+        artifact — a screenshot as an image, anything else (a recording, a
+        trace) as a resource blob. The client decodes both in
+        ``suitest_mcp.client``.
         """
         ...
 

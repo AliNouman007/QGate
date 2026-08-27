@@ -52,6 +52,33 @@ log = structlog.get_logger(__name__)
 tracer = trace.get_tracer("suitest.mcp.client")
 
 
+#: Artifact kind for an embedded resource, by mime type. Anything else is
+#: CUSTOM: the bytes are still worth keeping, they just have no viewer.
+_RESOURCE_KINDS = (
+    ("video/", "VIDEO"),
+    ("image/", "SCREENSHOT"),
+    ("text/html", "DOM_SNAPSHOT"),
+)
+
+
+def _resource_artifact(resource: object, idx: int) -> McpArtifact | None:
+    """One embedded-resource block -> an artifact, or None if it carries no blob."""
+    blob = getattr(resource, "blob", None)
+    if not isinstance(blob, str):
+        return None
+    try:
+        raw = base64.b64decode(blob, validate=False)
+    except (ValueError, TypeError):
+        return None
+    mime = str(getattr(resource, "mimeType", None) or "application/octet-stream")
+    kind = next((k for prefix, k in _RESOURCE_KINDS if mime.startswith(prefix)), "CUSTOM")
+    uri = str(getattr(resource, "uri", "") or "")
+    name = uri.rsplit("/", 1)[-1] or f"resource-{idx}"
+    if "." not in name:
+        name = f"{name}.{mime.split('/', 1)[-1].split('+', 1)[0] or 'bin'}"
+    return McpArtifact(kind=kind, filename=name, content_type=mime, bytes=raw)
+
+
 @dataclass
 class McpSession:
     """Single open MCP session (one underlying transport + ClientSession)."""
@@ -144,6 +171,16 @@ class McpSession:
                         )
                     else:
                         output.setdefault("blocks", []).append({"type": ctype, "data": data_b64})
+                elif ctype == "resource":
+                    # An embedded resource is how a tool hands back a file that
+                    # is not an image — a screen recording, a trace. Without
+                    # this the blob was stashed in `output` and the run kept no
+                    # artifact, so the dashboard had nothing to play.
+                    artifact = _resource_artifact(getattr(content, "resource", None), idx)
+                    if artifact is not None:
+                        artifacts.append(artifact)
+                    else:
+                        output.setdefault("blocks", []).append({"type": ctype})
                 else:
                     output.setdefault("blocks", []).append(
                         {"type": ctype, "data": getattr(content, "data", None)}
