@@ -270,8 +270,16 @@ async def _find_case(
 
 
 def _target(mode: str) -> tuple[TargetKind, str]:
+    """Target kind and default provider for a publisher's `mode`.
+
+    Desktop suites default to screen-level automation; an app with its own
+    bridge (`slint-mcp`, `electron-mcp`) names it via `mcpProvider`, since the
+    mode alone cannot tell a Slint window from an Electron one.
+    """
     if mode == "frontend":
         return TargetKind.FE_WEB, "playwright-mcp"
+    if mode == "desktop":
+        return TargetKind.FE_DESKTOP, "computer-use-mcp"
     return TargetKind.BE_REST, "api-http-mcp"
 
 
@@ -287,7 +295,8 @@ async def bulk_import_cases(
     )
     suite_id = await _ensure_suite(session, project_id, body.suite_name)
     case_repo = TestCaseRepo(session)
-    target_kind, mcp_provider = _target(body.mode)
+    target_kind, default_provider = _target(body.mode)
+    mcp_provider = body.mcp_provider or default_provider
     imported: list[ImportedCase] = []
     strategy_ids = {case.strategy_id for case in body.cases if case.strategy_id}
     if strategy_ids:

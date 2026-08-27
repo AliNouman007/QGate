@@ -63,7 +63,11 @@ class BulkImportBody(_Camel):
     project_slug: str = Field(default="", alias="projectSlug")
     project_name: str = Field(default="", alias="projectName")
     suite_name: str = Field(alias="suiteName")
-    mode: str = "backend"  # backend | frontend -> target_kind / mcp_provider defaults
+    mode: str = "backend"  # backend | frontend | desktop -> target_kind / provider defaults
+    # Overrides the mode's default provider. A desktop suite needs it: FE_DESKTOP
+    # defaults to screen-level automation, while a Slint or Electron app is
+    # driven through its own bridge.
+    mcp_provider: str = Field(default="", alias="mcpProvider")
     cases: list[IngestCase] = Field(default_factory=list)
     # Retest change-detection: mark MCP-sourced cases in this suite that the
     # current generation no longer produced as STALE (re-import reactivates).
