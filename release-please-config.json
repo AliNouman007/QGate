@@ -14,10 +14,19 @@
       "component": "tssdk",
       "package-name": "@suiflex/suitest-sdk"
     },
-    "packages/suitest-npx": {
-      "release-type": "node",
+    ".": {
+      "release-type": "simple",
       "component": "launcher",
-      "package-name": "@suiflex/suitest"
+      "package-name": "@suiflex/suitest",
+      "changelog-path": "packages/suitest-npx/CHANGELOG.md",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "packages/suitest-npx/package.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "exclude-paths": ["packages/mcp-npx", "packages/lifecycle", "sdk/typescript"]
     }
   }
 }
