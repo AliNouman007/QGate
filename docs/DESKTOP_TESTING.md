@@ -188,6 +188,7 @@ describing the catalog below. Suitest's `invoker` calls them through the normal
 |------|--------|---------|
 | `slint.screenshot` | `selector?` | base64 PNG of window / element |
 | `slint.element_tree` | `max_elements?` | flat dump of the window's elements (ids, labels, handles) for debugging/stepping |
+| `slint.start_recording` / `slint.stop_recording` | — | the events the app received between the two calls, each with `Accepted` or `Ignored` — separates "the step never arrived" from "the app ignored it" |
 
 ---
 

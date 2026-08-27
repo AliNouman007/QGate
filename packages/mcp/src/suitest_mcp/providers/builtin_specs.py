@@ -213,6 +213,8 @@ BUILTIN_SPECS: list[McpProviderConfig] = [
                 "slint.assert_value",
                 "slint.screenshot",
                 "slint.element_tree",
+                "slint.start_recording",
+                "slint.stop_recording",
                 "slint.accessibility_action",
                 "slint.close",
             ]

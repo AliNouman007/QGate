@@ -103,6 +103,17 @@ async def test_element_tree_needs_no_selector_but_needs_an_app() -> None:
 
 
 @pytest.mark.asyncio
+async def test_recording_tools_need_no_selector_but_need_an_app() -> None:
+    """Recording is what you reach for when a step did nothing and you cannot
+    tell whether the app never got it — so it addresses no element, and before
+    launch it can only say there is no app."""
+    server = build_slint_server(_config())
+    for tool in ("slint.start_recording", "slint.stop_recording"):
+        with pytest.raises(AssertionError, match=r"slint\.launch"):
+            await server.call_tool(tool, {})
+
+
+@pytest.mark.asyncio
 async def test_launch_without_a_command_is_rejected() -> None:
     server = build_slint_server(_config())
     with pytest.raises(AssertionError, match=r"`command` is required"):

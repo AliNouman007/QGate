@@ -6,7 +6,8 @@ Slint 1.17 embeds an MCP server *inside the application under test*: build with
 ``127.0.0.1:<port>/mcp``. Its tools are ``find_elements_by_id``,
 ``get_element_properties``, ``click_element``, ``drag_element``,
 ``set_element_value``, ``dispatch_key_event``, ``invoke_accessibility_action``,
-``take_screenshot`` and friends.
+``take_screenshot``, ``start_event_recording``/``stop_event_recording`` and
+friends.
 
 So this provider is a **bridge, not a driver**. It owns the app process and
 translates Suitest's stable ``slint.*`` step contract onto whatever the running
@@ -24,6 +25,8 @@ Tool surface (mirrored in :mod:`suitest_mcp.providers.builtin_specs`):
 * ``slint.get_property``   — read an element's properties.
 * ``slint.element_tree``   — flat dump of the window's elements, for authoring
   steps against an app whose ids you don't know yet.
+* ``slint.start_recording`` / ``slint.stop_recording`` — the events Slint
+  actually received, and whether it accepted or ignored each one.
 * ``slint.accessibility_action`` — invoke an accessible action (``Default_``,
   ``Increment``, ``Decrement``, ...) on an element.
 * ``slint.press_key``      — send a key/text event to the focused element.
@@ -595,6 +598,23 @@ class SlintServer:
                 [],
             ),
             tool(
+                "slint.start_recording",
+                "Start recording the events the application receives. Pair it "
+                "with `slint.stop_recording` around an interaction to see what "
+                "the app actually got.",
+                {},
+                [],
+            ),
+            tool(
+                "slint.stop_recording",
+                "Stop recording and return the events since the last start, "
+                "each with the result Slint gave it: `Accepted` when something "
+                "handled it, `Ignored` when nothing did. This is what separates "
+                '"the step never arrived" from "the app ignored it".',
+                {},
+                [],
+            ),
+            tool(
                 "slint.accessibility_action",
                 "Invoke an accessible action on an element, e.g. `Default_` "
                 "(the element's primary action), `Increment`, `Decrement`. "
@@ -645,6 +665,14 @@ class SlintServer:
                 {"windowHandle": await self._window_handle(), "text": text},
             )
             return [TextContent(type="text", text=f"sent {text!r}")]
+
+        if name == "slint.start_recording":
+            await self._call("start_event_recording", {})
+            return [TextContent(type="text", text="recording events")]
+
+        if name == "slint.stop_recording":
+            recorded = await self._call_json("stop_event_recording", {})
+            return [TextContent(type="text", text=json.dumps(recorded or {}, indent=2))]
 
         if name == "slint.element_tree":
             raw_cap = arguments.get("max_elements", 200)
