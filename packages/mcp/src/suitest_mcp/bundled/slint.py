@@ -170,6 +170,10 @@ class SlintServer:
         self._client: httpx.AsyncClient | None = None
         self._rpc_id = 0
         self._window: dict[str, Any] | None = None
+        # One RPC at a time: the video sampler shares this client with the step
+        # that is running, and a frame competing with a connect starved the
+        # lookup that step was waiting on.
+        self._rpc_lock = asyncio.Lock()
         self._video_task: asyncio.Task[None] | None = None
         self._filming = False
         self._video_frames: list[bytes] = []
@@ -182,6 +186,10 @@ class SlintServer:
         return f"http://{_HOST}:{self._port}/mcp"
 
     async def _rpc(self, method: str, params: dict[str, Any] | None = None) -> Any:
+        async with self._rpc_lock:
+            return await self._rpc_locked(method, params)
+
+    async def _rpc_locked(self, method: str, params: dict[str, Any] | None = None) -> Any:
         """One JSON-RPC round trip to the app's embedded server.
 
         The transport may answer as plain JSON or as a single SSE ``data:``
