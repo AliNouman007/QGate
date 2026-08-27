@@ -3929,6 +3929,11 @@ export interface components {
              */
             markStale: boolean;
             /**
+             * Mcpprovider
+             * @default
+             */
+            mcpProvider: string;
+            /**
              * Mode
              * @default backend
              */
@@ -6952,6 +6957,8 @@ export interface components {
             run_id: string;
             /** Started At */
             started_at?: string | null;
+            /** Stdout */
+            stdout?: string | null;
             /** Step Order */
             step_order: number;
             /**
