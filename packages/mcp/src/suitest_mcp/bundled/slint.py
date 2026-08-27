@@ -398,6 +398,25 @@ class SlintServer:
         payload = await self._call_json("get_element_properties", {"elementHandle": handle})
         return cast("dict[str, Any]", payload or {})
 
+    async def _act_on_element(
+        self, tool: str, arguments: dict[str, Any], payload: dict[str, Any]
+    ) -> None:
+        """Call a handle-taking tool, re-resolving once if the handle went stale.
+
+        A list recycles the element under a handle as it scrolls or repaints, and
+        the app answers "refers to element that was destroyed". Re-resolving and
+        trying again is what a person does without thinking about it; failing the
+        step instead made a correct test flaky.
+        """
+        handle = await self._element(arguments)
+        try:
+            await self._call(tool, {**payload, "elementHandle": handle})
+        except AssertionError as exc:
+            if "destroyed" not in str(exc):
+                raise
+            handle = await self._element(arguments)
+            await self._call(tool, {**payload, "elementHandle": handle})
+
     async def _centre(self, handle: dict[str, Any]) -> dict[str, float]:
         """Logical centre of an element, the point a drag aims at.
 
@@ -906,7 +925,7 @@ class SlintServer:
         target = _selector(arguments)[0] or _selector(arguments)[1] or "element"
 
         if name == "slint.click":
-            await self._call("click_element", {"elementHandle": await self._element(arguments)})
+            await self._act_on_element("click_element", arguments, {})
             return [TextContent(type="text", text=f"clicked {target}")]
 
         if name == "slint.drag":
@@ -917,12 +936,11 @@ class SlintServer:
             # stale the moment the row under it is recycled. The source handle
             # is the one `drag_element` dereferences, so it is taken last.
             destination = await self._drag_target(wanted)
-            source = await self._element(arguments)
-            payload: dict[str, Any] = {"elementHandle": source, "target": destination}
+            payload: dict[str, Any] = {"target": destination}
             button = arguments.get("button")
             if isinstance(button, str) and button:
                 payload["button"] = button
-            await self._call("drag_element", payload)
+            await self._act_on_element("drag_element", arguments, payload)
             return [
                 TextContent(
                     type="text",
