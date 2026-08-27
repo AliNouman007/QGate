@@ -4,8 +4,10 @@ Slint 1.17 embeds an MCP server *inside the application under test*: build with
 ``--features slint/mcp`` and run with ``SLINT_EMIT_DEBUG_INFO=1`` and
 ``SLINT_MCP_PORT=<port>``, and the process serves MCP over Streamable HTTP on
 ``127.0.0.1:<port>/mcp``. Its tools are ``find_elements_by_id``,
-``get_element_properties``, ``click_element``, ``set_element_value``,
-``dispatch_key_event``, ``take_screenshot`` and friends.
+``get_element_properties``, ``click_element``, ``drag_element``,
+``set_element_value``, ``dispatch_key_event``, ``invoke_accessibility_action``,
+``take_screenshot``, ``start_event_recording``/``stop_event_recording`` and
+friends.
 
 So this provider is a **bridge, not a driver**. It owns the app process and
 translates Suitest's stable ``slint.*`` step contract onto whatever the running
@@ -17,8 +19,19 @@ Tool surface (mirrored in :mod:`suitest_mcp.providers.builtin_specs`):
 
 * ``slint.launch``         — start the app, wait for its MCP port, handshake.
 * ``slint.click``          — click the element with the given id.
+* ``slint.drag``           — press on an element, drag to another element or to
+  a point, release: the gesture behind range selections, sliders and reorders.
 * ``slint.set_property``   — set an element's value (text inputs, sliders, ...).
 * ``slint.get_property``   — read an element's properties.
+* ``slint.element_tree``   — flat dump of the window's elements, for authoring
+  steps against an app whose ids you don't know yet.
+* ``slint.start_recording`` / ``slint.stop_recording`` — the events Slint
+  actually received, and whether it accepted or ignored each one.
+* ``slint.start_video`` / ``slint.stop_video`` — sample the window while a
+  gesture runs and hand back an MP4, so a run shows the interaction rather than
+  its end state.
+* ``slint.accessibility_action`` — invoke an accessible action (``Default_``,
+  ``Increment``, ``Decrement``, ...) on an element.
 * ``slint.press_key``      — send a key/text event to the focused element.
 * ``slint.assert_visible`` — element exists and is not fully transparent.
 * ``slint.assert_text``    — element's label/value equals or contains a string.
@@ -42,18 +55,25 @@ reached through ``get_window_properties`` instead.
 from __future__ import annotations
 
 import asyncio
+import base64
+import contextlib
 import json
 import os
 import shutil
 import socket
+import subprocess
+import tempfile
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import httpx
-from mcp.types import ImageContent, TextContent, Tool
+from mcp.types import BlobResourceContents, EmbeddedResource, ImageContent, TextContent, Tool
 
 from suitest_mcp.bundled.in_process_runtime import BundledServer, register_bundled_builder
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from suitest_mcp.models import McpProviderConfig
 
 PROVIDER_NAME = "slint-mcp"
@@ -67,6 +87,11 @@ _DEFAULT_WAIT_SECONDS = 15.0
 # Slint's HTTP transport only accepts localhost origins, and binding the probe
 # socket to the same interface is what makes "is it up yet" meaningful.
 _HOST = "127.0.0.1"
+# Video sampling. Slint serves single frames, not a stream, so a "video" here is
+# screenshots on a timer stitched by ffmpeg. 5 fps is enough to read a drag or a
+# panel opening, and cheap enough not to perturb what it is filming.
+_VIDEO_INTERVAL_MS = 200
+_VIDEO_MAX_FRAMES = 900
 
 
 def _free_port() -> int:
@@ -109,6 +134,26 @@ def _selector(arguments: dict[str, Any]) -> tuple[str | None, str | None, int]:
     return element_id, label, int(raw_index) if isinstance(raw_index, int) else 0
 
 
+def _drag_destination(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Where a drag ends: an explicit point, or another element's selector.
+
+    Parsed before anything touches the application, so a step that forgot the
+    far end of the gesture says so instead of failing later on a lookup.
+    """
+    x, y = arguments.get("x"), arguments.get("y")
+    if isinstance(x, (int, float)) and isinstance(y, (int, float)):
+        return {"x": float(x), "y": float(y)}
+    destination = {
+        key[3:]: arguments[key] for key in ("to_id", "to_label", "to_index") if key in arguments
+    }
+    if not destination:
+        raise AssertionError(
+            "no drag destination — pass `to_id`/`to_label` for another "
+            "element, or `x` and `y` for a point"
+        )
+    return destination
+
+
 class SlintServer:
     """``BundledServer`` implementation for the bundled slint-mcp provider.
 
@@ -125,6 +170,10 @@ class SlintServer:
         self._client: httpx.AsyncClient | None = None
         self._rpc_id = 0
         self._window: dict[str, Any] | None = None
+        self._video_task: asyncio.Task[None] | None = None
+        self._filming = False
+        self._video_frames: list[bytes] = []
+        self._video_interval_ms = _VIDEO_INTERVAL_MS
 
     # ---------------------------------------------------------------- plumbing
 
@@ -267,7 +316,30 @@ class SlintServer:
                 )
             return cast("dict[str, Any]", handles[index])
 
-        # Label lookup walks the tree, since Slint only indexes by id.
+        if element_id is not None:
+            # Both given: start from the id index and keep the ones carrying the
+            # label. The tree walk below also sees elements the id index does
+            # not — including ones that are not on screen — so with an id in
+            # hand the index is the more faithful source, and a click that
+            # landed on an off-screen twin is exactly the bug this avoids.
+            payload = await self._call_json(
+                "find_elements_by_id",
+                {"windowHandle": await self._window_handle(), "elementsId": element_id},
+            )
+            candidates = (payload or {}).get("elementHandles") or []
+            labelled: list[dict[str, Any]] = []
+            for handle in candidates:
+                props = await self._call_json("get_element_properties", {"elementHandle": handle})
+                if label in self._labels_of(cast("dict[str, Any]", props or {})):
+                    labelled.append(cast("dict[str, Any]", handle))
+            if labelled:
+                if index >= len(labelled):
+                    raise AssertionError(
+                        f"{label!r} matched {len(labelled)} element(s), asked for #{index}"
+                    )
+                return labelled[index]
+
+        # Label-only lookup walks the tree, since Slint only indexes by id.
         matches = [
             el
             for el in await self._tree()
@@ -287,10 +359,72 @@ class SlintServer:
             raise AssertionError(f"element labelled {label!r} exposes no handle")
         return cast("dict[str, Any]", handle)
 
+    async def _await_text(
+        self, arguments: dict[str, Any], matches: Callable[[str], bool]
+    ) -> tuple[bool, str]:
+        """Poll an element's text until it matches, or the timeout expires.
+
+        Reading once is a race: the click that changed the text returns before
+        the property behind it has settled, so a correct assertion failed
+        depending on how fast the runner got there. Same deadline the element
+        lookup already uses.
+        """
+        raw_timeout = arguments.get("timeout_s", _DEFAULT_WAIT_SECONDS)
+        timeout = (
+            float(raw_timeout) if isinstance(raw_timeout, (int, float)) else _DEFAULT_WAIT_SECONDS
+        )
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        actual = ""
+        while True:
+            try:
+                actual = self._text_of(await self._properties(arguments))
+            except AssertionError:
+                # No readable text *yet*. Only worth reporting if it never
+                # arrives — an element gains its label a frame after the
+                # interaction that gave it one.
+                if loop.time() >= deadline:
+                    raise
+                await asyncio.sleep(0.25)
+                continue
+            if matches(actual):
+                return True, actual
+            if loop.time() >= deadline:
+                return False, actual
+            await asyncio.sleep(0.25)
+
     async def _properties(self, arguments: dict[str, Any]) -> dict[str, Any]:
         handle = await self._element(arguments)
         payload = await self._call_json("get_element_properties", {"elementHandle": handle})
         return cast("dict[str, Any]", payload or {})
+
+    async def _centre(self, handle: dict[str, Any]) -> dict[str, float]:
+        """Logical centre of an element, the point a drag aims at.
+
+        ``drag_element`` presses at the source element's own centre, so aiming
+        at the destination's centre keeps a step readable as "drag A onto B"
+        instead of asking the author for pixels. ``absolutePosition`` comes back
+        empty for an element at the origin, hence the 0.0 defaults.
+        """
+        payload = await self._call_json("get_element_properties", {"elementHandle": handle})
+        props = cast("dict[str, Any]", payload or {})
+        position = props.get("absolutePosition") or {}
+        size = props.get("size") or {}
+
+        def number(source: dict[str, Any], key: str) -> float:
+            value = source.get(key)
+            return float(value) if isinstance(value, (int, float)) else 0.0
+
+        return {
+            "x": number(position, "x") + number(size, "width") / 2,
+            "y": number(position, "y") + number(size, "height") / 2,
+        }
+
+    async def _drag_target(self, destination: dict[str, Any]) -> dict[str, float]:
+        """Resolve a destination from :func:`_drag_destination` to a point."""
+        if "x" in destination and "y" in destination:
+            return {"x": float(destination["x"]), "y": float(destination["y"])}
+        return await self._centre(await self._element(destination))
 
     # ------------------------------------------------------------------- tools
 
@@ -359,6 +493,7 @@ class SlintServer:
         )
 
     async def _stop(self) -> None:
+        await self._stop_sampling()
         if self._client is not None:
             await self._client.aclose()
             self._client = None
@@ -373,6 +508,90 @@ class SlintServer:
             self._proc = None
         self._port = None
         self._window = None
+
+    # ------------------------------------------------------------------- video
+
+    async def _sample_frames(self) -> None:
+        """Screenshot the window on a timer until cancelled."""
+        while True:
+            try:
+                blocks = await self._call(
+                    "take_screenshot", {"windowHandle": await self._window_handle()}
+                )
+            except Exception:  # a frame lost to a busy UI must not end the recording
+                blocks = []
+            for block in blocks:
+                if block.get("type") == "image" and isinstance(block.get("data"), str):
+                    with contextlib.suppress(ValueError, TypeError):
+                        self._video_frames.append(base64.b64decode(block["data"], validate=False))
+                    break
+            if len(self._video_frames) >= _VIDEO_MAX_FRAMES:
+                return
+            await asyncio.sleep(self._video_interval_ms / 1000)
+
+    async def _stop_sampling(self) -> None:
+        # A sampler that finished on its own must not read as "never started".
+        self._filming = False
+        task, self._video_task = self._video_task, None
+        if task is None:
+            return
+        task.cancel()
+        # Teardown must not raise: a cancelled sampler, or one that died on a
+        # busy UI, still has to leave the session closable.
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await task
+
+    def _encode_video(self, frames: list[bytes]) -> bytes:
+        """PNG frames -> MP4, through ffmpeg on stdin.
+
+        H.264 in an MP4 is what the dashboard's `<video>` element plays. ffmpeg
+        is not vendored, so its absence is reported as the missing dependency it
+        is rather than as a broken step.
+        """
+        ffmpeg = shutil.which("ffmpeg")
+        if ffmpeg is None:
+            raise AssertionError(
+                "ffmpeg is not on PATH — `slint.stop_video` needs it to encode "
+                "the sampled frames; install it or drop the video steps"
+            )
+        fps = max(1, round(1000 / self._video_interval_ms))
+        # Written to a file, not a pipe: the MP4 muxer seeks back to finish its
+        # header, so `-f mp4 -` fails with "muxer does not support non seekable
+        # output".
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "recording.mp4"
+            result = subprocess.run(  # fixed argv, no shell
+                [
+                    ffmpeg,
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-y",
+                    "-f",
+                    "image2pipe",
+                    "-framerate",
+                    str(fps),
+                    "-i",
+                    "-",
+                    # yuv420p + even dimensions: what a browser will actually play.
+                    "-vf",
+                    "pad=ceil(iw/2)*2:ceil(ih/2)*2",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-c:v",
+                    "libx264",
+                    "-movflags",
+                    "+faststart",
+                    str(target),
+                ],
+                input=b"".join(frames),
+                capture_output=True,
+                check=False,
+            )
+            if result.returncode != 0 or not target.exists():
+                detail = result.stderr.decode(errors="replace").strip()[:400]
+                raise AssertionError(f"ffmpeg could not encode the frames: {detail}")
+            return target.read_bytes()
 
     @staticmethod
     def _text_of(properties: dict[str, Any]) -> str:
@@ -445,6 +664,35 @@ class SlintServer:
             ),
             tool("slint.click", "Click an element.", dict(element), ["id"]),
             tool(
+                "slint.drag",
+                "Press on an element, drag, release. Name a destination "
+                "element with `to_id`/`to_label`, or a point with `x`/`y`. "
+                "This is the gesture a click cannot stand in for: range "
+                "selection across a grid, sliders, reordering.",
+                {
+                    **element,
+                    "to_id": {
+                        "type": "string",
+                        "description": "Destination element id; the drag ends at its centre.",
+                    },
+                    "to_label": {
+                        "type": "string",
+                        "description": "Destination element's visible/accessible label.",
+                    },
+                    "to_index": {
+                        "type": "integer",
+                        "description": "Which destination match to use. Default 0.",
+                    },
+                    "x": {"type": "number", "description": "Destination x, logical pixels."},
+                    "y": {"type": "number", "description": "Destination y, logical pixels."},
+                    "button": {
+                        "type": "string",
+                        "description": "Left (default), Right, or Middle.",
+                    },
+                },
+                ["id"],
+            ),
+            tool(
                 "slint.set_property",
                 "Set an element's value.",
                 {**element, "value": {"type": "string"}},
@@ -497,12 +745,71 @@ class SlintServer:
                 {},
                 [],
             ),
+            tool(
+                "slint.element_tree",
+                "Flat list of the window's elements — ids, labels and handles. "
+                "Use it to find what to address in an app whose ids you don't "
+                "know yet; every other tool takes those ids.",
+                {
+                    "max_elements": {
+                        "type": "integer",
+                        "description": "Cap on elements returned. Default 200.",
+                    },
+                },
+                [],
+            ),
+            tool(
+                "slint.start_recording",
+                "Start recording the events the application receives. Pair it "
+                "with `slint.stop_recording` around an interaction to see what "
+                "the app actually got.",
+                {},
+                [],
+            ),
+            tool(
+                "slint.stop_recording",
+                "Stop recording and return the events since the last start, "
+                "each with the result Slint gave it: `Accepted` when something "
+                "handled it, `Ignored` when nothing did. This is what separates "
+                '"the step never arrived" from "the app ignored it".',
+                {},
+                [],
+            ),
+            tool(
+                "slint.start_video",
+                "Start filming the window: screenshots on a timer, stitched "
+                "into an MP4 by `slint.stop_video`. Wrap the interaction you "
+                "want a reviewer to watch, not the whole run.",
+                {
+                    "interval_ms": {
+                        "type": "integer",
+                        "description": "Milliseconds between frames. Default 200 (5 fps).",
+                    },
+                },
+                [],
+            ),
+            tool(
+                "slint.stop_video",
+                "Stop filming and attach the MP4 to the run, so the case shows "
+                "the interaction instead of only its end state. Needs ffmpeg.",
+                {},
+                [],
+            ),
+            tool(
+                "slint.accessibility_action",
+                "Invoke an accessible action on an element, e.g. `Default_` "
+                "(the element's primary action), `Increment`, `Decrement`. "
+                "Reaches controls that respond to assistive tech rather than "
+                "to a raw click.",
+                {**element, "action": {"type": "string"}},
+                ["id", "action"],
+            ),
             tool("slint.close", "Stop the application.", {}, []),
         ]
 
     async def call_tool(
         self, name: str, arguments: dict[str, Any]
-    ) -> list[TextContent | ImageContent]:
+    ) -> list[TextContent | ImageContent | EmbeddedResource]:
         if name == "slint.launch":
             return [TextContent(type="text", text=await self._launch(arguments))]
 
@@ -516,7 +823,7 @@ class SlintServer:
             )
             # Passed through untouched: the runner turns image blocks into
             # SCREENSHOT artifacts, which is what surfaces them in the web UI.
-            out: list[TextContent | ImageContent] = []
+            out: list[TextContent | ImageContent | EmbeddedResource] = []
             for block in blocks:
                 if block.get("type") == "image":
                     out.append(
@@ -540,11 +847,98 @@ class SlintServer:
             )
             return [TextContent(type="text", text=f"sent {text!r}")]
 
+        if name == "slint.start_video":
+            if self._filming:
+                raise AssertionError("already filming — call `slint.stop_video` first")
+            raw_interval = arguments.get("interval_ms", _VIDEO_INTERVAL_MS)
+            self._video_interval_ms = (
+                int(raw_interval)
+                if isinstance(raw_interval, int) and raw_interval > 0
+                else _VIDEO_INTERVAL_MS
+            )
+            self._video_frames = []
+            await self._window_handle()  # fail here, not inside the sampler
+            self._filming = True
+            self._video_task = asyncio.create_task(self._sample_frames())
+            return [TextContent(type="text", text="filming the window")]
+
+        if name == "slint.stop_video":
+            if not self._filming:
+                raise AssertionError("not filming — call `slint.start_video` first")
+            await self._stop_sampling()
+            frames, self._video_frames = self._video_frames, []
+            if not frames:
+                raise AssertionError("no frames were captured")
+            video = await asyncio.to_thread(self._encode_video, frames)
+            return [
+                TextContent(type="text", text=f"captured {len(frames)} frame(s)"),
+                EmbeddedResource(
+                    type="resource",
+                    resource=BlobResourceContents(
+                        uri="slint://window/recording.mp4",
+                        mimeType="video/mp4",
+                        blob=base64.b64encode(video).decode(),
+                    ),
+                ),
+            ]
+
+        if name == "slint.start_recording":
+            await self._call("start_event_recording", {})
+            return [TextContent(type="text", text="recording events")]
+
+        if name == "slint.stop_recording":
+            recorded = await self._call_json("stop_event_recording", {})
+            return [TextContent(type="text", text=json.dumps(recorded or {}, indent=2))]
+
+        if name == "slint.element_tree":
+            raw_cap = arguments.get("max_elements", 200)
+            cap = int(raw_cap) if isinstance(raw_cap, int) and raw_cap > 0 else 200
+            elements = [
+                {
+                    "ids": [d.get("id") for d in el.get("typeNamesAndIds") or []],
+                    "labels": self._labels_of(el),
+                    "handle": el.get("handle"),
+                }
+                for el in (await self._tree())[:cap]
+            ]
+            return [TextContent(type="text", text=json.dumps(elements, indent=2))]
+
         target = _selector(arguments)[0] or _selector(arguments)[1] or "element"
 
         if name == "slint.click":
             await self._call("click_element", {"elementHandle": await self._element(arguments)})
             return [TextContent(type="text", text=f"clicked {target}")]
+
+        if name == "slint.drag":
+            # Both ends are validated before either is resolved, so a step that
+            # named only one of them is told that, not that the app is missing.
+            wanted = _drag_destination(arguments)
+            # Destination first: resolving it costs a lookup, and a handle goes
+            # stale the moment the row under it is recycled. The source handle
+            # is the one `drag_element` dereferences, so it is taken last.
+            destination = await self._drag_target(wanted)
+            source = await self._element(arguments)
+            payload: dict[str, Any] = {"elementHandle": source, "target": destination}
+            button = arguments.get("button")
+            if isinstance(button, str) and button:
+                payload["button"] = button
+            await self._call("drag_element", payload)
+            return [
+                TextContent(
+                    type="text",
+                    text=f"dragged {target} to ({destination['x']:.0f}, {destination['y']:.0f})",
+                )
+            ]
+
+        if name == "slint.accessibility_action":
+            action = arguments.get("action")
+            if not isinstance(action, str) or not action:
+                raise AssertionError("`action` is required")
+            await self._call(
+                "invoke_accessibility_action",
+                {"elementHandle": await self._element(arguments), "action": action},
+            )
+            return [TextContent(type="text", text=f"invoked {action} on {target}")]
 
         if name == "slint.set_property":
             value = arguments.get("value")
@@ -568,23 +962,24 @@ class SlintServer:
             return [TextContent(type="text", text=f"{target} is visible")]
 
         if name == "slint.assert_text":
-            actual = self._text_of(await self._properties(arguments))
             if "contains" in arguments:
                 needle = str(arguments["contains"])
-                if needle not in actual:
+                ok, actual = await self._await_text(arguments, lambda text: needle in text)
+                if not ok:
                     raise AssertionError(
                         f"{target}: expected text containing {needle!r}, got {actual!r}"
                     )
             else:
                 expected = str(arguments.get("equals", ""))
-                if actual != expected:
+                ok, actual = await self._await_text(arguments, lambda text: text == expected)
+                if not ok:
                     raise AssertionError(f"{target}: expected text {expected!r}, got {actual!r}")
             return [TextContent(type="text", text=f"{target} text matched")]
 
         if name == "slint.assert_value":
-            actual = self._text_of(await self._properties(arguments))
             expected = str(arguments.get("equals", ""))
-            if actual != expected:
+            ok, actual = await self._await_text(arguments, lambda text: text == expected)
+            if not ok:
                 raise AssertionError(f"{target}: expected value {expected!r}, got {actual!r}")
             return [TextContent(type="text", text=f"{target} value matched")]
 

@@ -23,16 +23,26 @@ from suitest_api.schemas.ingest import (
 from suitest_api.services.ingest_service import (
     ProjectNotFoundError,
     _sanitize_automation_code,
+    _target,
     bulk_import_cases,
     ingest_run,
     resolve_project,
 )
 from suitest_db.models.case import TestCase
 from suitest_db.models.run import Run, RunStep
-from suitest_shared.domain.enums import CaseStatus, RunStatus
+from suitest_shared.domain.enums import CaseStatus, RunStatus, TargetKind
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from api_harness import ApiDb
+
+
+def test_target_routes_desktop_away_from_the_rest_default() -> None:
+    """A desktop suite used to land on BE_REST + the HTTP provider, because
+    anything that was not "frontend" fell through to the backend default — so
+    its steps were dispatched to a provider that cannot drive a window."""
+    assert _target("frontend") == (TargetKind.FE_WEB, "playwright-mcp")
+    assert _target("backend") == (TargetKind.BE_REST, "api-http-mcp")
+    assert _target("desktop") == (TargetKind.FE_DESKTOP, "computer-use-mcp")
 
 
 def test_ingest_sanitizes_legacy_inline_credentials() -> None:

@@ -105,6 +105,16 @@ export function StepTable({
                       {s.error_message}
                     </pre>
                   ) : null}
+                  {s.stdout ? (
+                    <details data-testid="step-output">
+                      <summary className="cursor-pointer font-mono text-[10.5px] uppercase tracking-wide text-fg-5">
+                        Output
+                      </summary>
+                      <pre className="mt-1 max-h-64 overflow-auto rounded-md bg-bg-code p-2 font-mono text-[11px] text-fg-3">
+                        {s.stdout}
+                      </pre>
+                    </details>
+                  ) : null}
                 </div>
               </td>
               <td className="px-3 py-2">

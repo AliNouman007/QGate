@@ -57,6 +57,10 @@ class RunStepPublic(BaseModel):
     completed_at: datetime | None = None
     duration_ms: int | None = None
     error_message: str | None = None
+    # What the step's tool returned. A diagnostic step (an event recording, a
+    # tree dump) carries its whole answer here, so leaving it out of the
+    # response made the step look like it had done nothing at all.
+    stdout: str | None = None
 
 
 class StateChangePublic(BaseModel):

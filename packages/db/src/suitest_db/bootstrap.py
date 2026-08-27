@@ -1,20 +1,60 @@
 """Schema creation for local mode (SQLite) — straight from models, no Alembic.
 
-ponytail: fresh local DBs only. There is no local-schema upgrade path between
-releases yet — add versioning (e.g. PRAGMA user_version) once local mode first
-needs a migration.
+`create_all` only ever adds missing *tables*, so a database created by an
+earlier release kept its old columns and every query naming a new one failed
+with ``no such column`` — the release notes said nothing, and the dashboard
+answered 500. Local mode now also adds columns that the models grew.
+
+ponytail: additive only. A column that was dropped, renamed or retyped still
+needs a real migration; this covers the case local mode actually hits, which is
+a release adding a nullable-or-defaulted column.
 """
 
-from sqlalchemy.ext.asyncio import AsyncEngine
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from sqlalchemy import inspect, text
+from sqlalchemy.schema import CreateColumn
 
 import suitest_db.models  # noqa: F401  # side-effect: register every model on Base.metadata
 from suitest_db.base import Base
 
+if TYPE_CHECKING:
+    from sqlalchemy.engine import Connection
+    from sqlalchemy.ext.asyncio import AsyncEngine
+
 
 async def create_local_schema(engine: AsyncEngine) -> None:
-    """Create all tables for a fresh local database."""
+    """Create the local schema, and add any columns the models have grown."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_add_missing_columns)
+
+
+def _add_missing_columns(conn: Connection) -> None:
+    """``ALTER TABLE ... ADD COLUMN`` for model columns the database lacks.
+
+    The column spec is rendered by SQLAlchemy's own `CreateColumn`, so a NOT
+    NULL column with a server default arrives exactly as the model declares it. A NOT NULL column
+    *without* a default cannot be added to a table that already has rows, so it
+    is skipped rather than crashing startup: adding one is a real migration.
+    """
+    inspector = inspect(conn)
+    existing_tables = set(inspector.get_table_names())
+    # Not `sorted_tables`: ALTER order is irrelevant here, and sorting warns
+    # about the projects/suites FK cycle for nothing.
+    for table in Base.metadata.tables.values():
+        if table.name not in existing_tables:
+            continue
+        present = {column["name"] for column in inspector.get_columns(table.name)}
+        for column in table.columns:
+            if column.name in present:
+                continue
+            if not column.nullable and column.server_default is None:
+                continue
+            spec = CreateColumn(column).compile(dialect=conn.dialect)
+            conn.execute(text(f"ALTER TABLE {table.name} ADD COLUMN {spec}"))
 
 
 def _main() -> None:

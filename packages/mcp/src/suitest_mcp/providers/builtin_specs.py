@@ -203,6 +203,7 @@ BUILTIN_SPECS: list[McpProviderConfig] = [
             "tools": [
                 "slint.launch",
                 "slint.click",
+                "slint.drag",
                 "slint.set_property",
                 "slint.get_property",
                 "slint.press_key",
@@ -211,6 +212,12 @@ BUILTIN_SPECS: list[McpProviderConfig] = [
                 "slint.assert_checked",
                 "slint.assert_value",
                 "slint.screenshot",
+                "slint.element_tree",
+                "slint.start_video",
+                "slint.stop_video",
+                "slint.start_recording",
+                "slint.stop_recording",
+                "slint.accessibility_action",
                 "slint.close",
             ]
         },

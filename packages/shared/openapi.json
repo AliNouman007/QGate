@@ -1035,6 +1035,11 @@
             "title": "Markstale",
             "type": "boolean"
           },
+          "mcpProvider": {
+            "default": "",
+            "title": "Mcpprovider",
+            "type": "string"
+          },
           "mode": {
             "default": "backend",
             "title": "Mode",
@@ -8131,6 +8136,17 @@
               }
             ],
             "title": "Started At"
+          },
+          "stdout": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stdout"
           },
           "step_order": {
             "title": "Step Order",
