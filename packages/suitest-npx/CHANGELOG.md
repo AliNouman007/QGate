@@ -1,5 +1,58 @@
 # Changelog
 
+## [0.7.0](https://github.com/suiflex/suitest/compare/launcher-v0.6.10...launcher-v0.7.0) (2026-08-27)
+
+
+### Features
+
+* **agent:** add the code assist provider ([a0c936f](https://github.com/suiflex/suitest/commit/a0c936fe1a6dd53164fbbfbaabe74019b24d3b91))
+* **agent:** call the chatgpt backend through the responses api ([44dc312](https://github.com/suiflex/suitest/commit/44dc3123f64f2732113e9d7ecdec58ddc52d113e))
+* **api:** add sign in with google login flow ([4de1c46](https://github.com/suiflex/suitest/commit/4de1c4658259b30a128b409c7ca1c29a2c4fb371))
+* **api:** expose sign in with google routes ([61cf876](https://github.com/suiflex/suitest/commit/61cf8763918e8d9b0db41ca0b222be10219d6762))
+* **api:** expose the google project list route ([2a0c2a4](https://github.com/suiflex/suitest/commit/2a0c2a42a77fac91e6e1863a36882cc469f6a437))
+* **api:** finish a google sign-in into code assist ([d55b8c1](https://github.com/suiflex/suitest/commit/d55b8c178af35783d6d202ba40d65e53381192ed))
+* **api:** let a publisher import desktop cases ([ae7af26](https://github.com/suiflex/suitest/commit/ae7af267345df1a83644f0df460a632b4185afc3))
+* **core:** add google installed-app oauth flow ([f640d67](https://github.com/suiflex/suitest/commit/f640d67d73b4920eedcead196de59278bc3aef1f))
+* **core:** add google-vertex provider reached by google sign-in ([e52847c](https://github.com/suiflex/suitest/commit/e52847c1dcf6e4e08d1b456a238e60bdc2ceb748))
+* **core:** add the code assist onboarding protocol ([5548dea](https://github.com/suiflex/suitest/commit/5548dea09afd18a32f81eef7eb8766565bf74c53))
+* **core:** list the models a code assist account can use ([6e6d675](https://github.com/suiflex/suitest/commit/6e6d6750ac37f896cbca5ff7be09e55ebcb7f680))
+* **core:** list the signed-in user's gcp projects ([2b6f10b](https://github.com/suiflex/suitest/commit/2b6f10bebe65a3c2158913d597902e28968ce145))
+* **core:** register the code assist oauth backends ([8d1d8ef](https://github.com/suiflex/suitest/commit/8d1d8efa4a13d6bec7815fdeeb10e3479a6ad290))
+* **mcp:** assert any property a slint element exposes ([0bf8bee](https://github.com/suiflex/suitest/commit/0bf8beecdfa28d8376af3bbee99adb80218828e5))
+* **mcp:** double-click through slint.click ([230fd1c](https://github.com/suiflex/suitest/commit/230fd1c16bbc88f4f90d42c25f2984048f0c0870))
+* **mcp:** drag, element tree and a11y actions for slint ([2190370](https://github.com/suiflex/suitest/commit/21903705df29956f52dfa4f7ceb3398038a4bbc8))
+* **mcp:** drag, video and event recording for slint desktop tests ([c50d9ab](https://github.com/suiflex/suitest/commit/c50d9ab5f49e74240b2380bc6750c55eb1fe70cf))
+* **mcp:** expose slint's event recording ([ff5aa0a](https://github.com/suiflex/suitest/commit/ff5aa0a234db19d0f0fd9b05e64883a7433810e5))
+* **mcp:** film a slint window into a run video ([e204ec4](https://github.com/suiflex/suitest/commit/e204ec4d65e89ba373d664d88822a7b37393c5e2))
+* **runs:** show what a step's tool returned ([1096b8c](https://github.com/suiflex/suitest/commit/1096b8ca44c01a45080254a18d7254632cb554cd))
+* **web:** add antigravity as a vendor ([ddc2e16](https://github.com/suiflex/suitest/commit/ddc2e160c4f6ba6e7eb40845ed50760b4134e795))
+* **web:** add llm vendor table and provider labels ([bd7f57c](https://github.com/suiflex/suitest/commit/bd7f57caff7c1f949ac9acf1ed6a33019c81e28e))
+* **web:** add screenshot diff viewer (M12-1) ([9ca5650](https://github.com/suiflex/suitest/commit/9ca5650c8d2e8ccf6a1ce1e14f9fbeb758b3bcc4))
+* **web:** add sign in with google to the llm settings panel ([5ac3308](https://github.com/suiflex/suitest/commit/5ac330864abffd1a69e27cbf6ef17dfdaf5b0c34))
+* **web:** choose the backend after signing in with google ([29aeda3](https://github.com/suiflex/suitest/commit/29aeda3fea5a44bf4afb4b4bae2d528dd2bbadde))
+* **web:** pick a gcp project from a list ([64392cc](https://github.com/suiflex/suitest/commit/64392ccaef99969b8ebff234d60fd7f2bc745d73))
+* **web:** warn where a sign-in spends an unlicensed session ([99de9bf](https://github.com/suiflex/suitest/commit/99de9bf67c405d7018ae77f9c579c581cde24b4c))
+
+
+### Bug Fixes
+
+* **api:** test an oauth config against its stored credential ([9649d98](https://github.com/suiflex/suitest/commit/9649d985574a9000c1a33fcc043e20fd7a12a811))
+* **ci:** use the input name the CLA action actually reads ([9c8d05d](https://github.com/suiflex/suitest/commit/9c8d05d8dbdff46d20211b87f850f09a6bc7c982))
+* **ci:** use the input name the CLA action actually reads ([46d4817](https://github.com/suiflex/suitest/commit/46d4817c30c95b1b418cb85e0cf59b20791b5da3))
+* **core:** stop bundling antigravity's oauth client ([c5e2f29](https://github.com/suiflex/suitest/commit/c5e2f298a1c21433a35de3902cb905702af34b6f))
+* **db:** add columns a release grew to a local database ([660a7cc](https://github.com/suiflex/suitest/commit/660a7cca7d79dcd3b2c3022bcce1bb9904588e1c))
+* **mcp:** encode the video through a file, not a pipe ([51bf8f8](https://github.com/suiflex/suitest/commit/51bf8f8f415ccf2c1d7f17a405419669dcecb1ba))
+* **mcp:** fall back to the filename when a resource has no mime ([a82aa0f](https://github.com/suiflex/suitest/commit/a82aa0f5989306889146bde4233be4695c6296a4))
+* **mcp:** poll a text assertion instead of reading once ([4227b86](https://github.com/suiflex/suitest/commit/4227b86b54956368e0a5ac7c874b3f35f7a9fb2d))
+* **mcp:** resolve id+label through the id index ([715a062](https://github.com/suiflex/suitest/commit/715a062ee353412cd128711e7a6e9e478d7adcff))
+* **mcp:** retry once when an element handle went stale ([e26856d](https://github.com/suiflex/suitest/commit/e26856db9eaf4405d221a8f8dd79d330b71740e8))
+* **mcp:** send the video resource uri as a plain string ([b15909e](https://github.com/suiflex/suitest/commit/b15909e63a9520c91b3b1f7652ab76abc927b090))
+* **mcp:** steadier slint driving, double-click and property assertions ([6623eab](https://github.com/suiflex/suitest/commit/6623eab56490e2a3e2bb784bca87ef074c7cb5d5))
+* **mcp:** stop the video sampler from starving the step it films ([ff9ef87](https://github.com/suiflex/suitest/commit/ff9ef8737c54114597481430828c6d9da48bd4ed))
+* **runs:** pass a step's output through the steps endpoint ([70ca700](https://github.com/suiflex/suitest/commit/70ca700787e41e87d609c191a46f2cf1cc57b6d4))
+* **web:** name the provider in the badge and agent panel ([f1e2d27](https://github.com/suiflex/suitest/commit/f1e2d2758e9a265f503caff4011ebfc57e049adf))
+* **web:** stop the browser autofilling the model field ([8ffd7e0](https://github.com/suiflex/suitest/commit/8ffd7e02c6f9f88c681bfaef90a54aaae9a6857e))
+
 ## [0.6.10](https://github.com/suiflex/suitest/compare/launcher-v0.6.9...launcher-v0.6.10) (2026-08-21)
 
 
