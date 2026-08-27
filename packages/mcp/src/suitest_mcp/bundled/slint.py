@@ -4,8 +4,9 @@ Slint 1.17 embeds an MCP server *inside the application under test*: build with
 ``--features slint/mcp`` and run with ``SLINT_EMIT_DEBUG_INFO=1`` and
 ``SLINT_MCP_PORT=<port>``, and the process serves MCP over Streamable HTTP on
 ``127.0.0.1:<port>/mcp``. Its tools are ``find_elements_by_id``,
-``get_element_properties``, ``click_element``, ``set_element_value``,
-``dispatch_key_event``, ``take_screenshot`` and friends.
+``get_element_properties``, ``click_element``, ``drag_element``,
+``set_element_value``, ``dispatch_key_event``, ``invoke_accessibility_action``,
+``take_screenshot`` and friends.
 
 So this provider is a **bridge, not a driver**. It owns the app process and
 translates Suitest's stable ``slint.*`` step contract onto whatever the running
@@ -17,8 +18,14 @@ Tool surface (mirrored in :mod:`suitest_mcp.providers.builtin_specs`):
 
 * ``slint.launch``         — start the app, wait for its MCP port, handshake.
 * ``slint.click``          — click the element with the given id.
+* ``slint.drag``           — press on an element, drag to another element or to
+  a point, release: the gesture behind range selections, sliders and reorders.
 * ``slint.set_property``   — set an element's value (text inputs, sliders, ...).
 * ``slint.get_property``   — read an element's properties.
+* ``slint.element_tree``   — flat dump of the window's elements, for authoring
+  steps against an app whose ids you don't know yet.
+* ``slint.accessibility_action`` — invoke an accessible action (``Default_``,
+  ``Increment``, ``Decrement``, ...) on an element.
 * ``slint.press_key``      — send a key/text event to the focused element.
 * ``slint.assert_visible`` — element exists and is not fully transparent.
 * ``slint.assert_text``    — element's label/value equals or contains a string.
@@ -107,6 +114,26 @@ def _selector(arguments: dict[str, Any]) -> tuple[str | None, str | None, int]:
         )
     raw_index = arguments.get("index", 0)
     return element_id, label, int(raw_index) if isinstance(raw_index, int) else 0
+
+
+def _drag_destination(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Where a drag ends: an explicit point, or another element's selector.
+
+    Parsed before anything touches the application, so a step that forgot the
+    far end of the gesture says so instead of failing later on a lookup.
+    """
+    x, y = arguments.get("x"), arguments.get("y")
+    if isinstance(x, (int, float)) and isinstance(y, (int, float)):
+        return {"x": float(x), "y": float(y)}
+    destination = {
+        key[3:]: arguments[key] for key in ("to_id", "to_label", "to_index") if key in arguments
+    }
+    if not destination:
+        raise AssertionError(
+            "no drag destination — pass `to_id`/`to_label` for another "
+            "element, or `x` and `y` for a point"
+        )
+    return destination
 
 
 class SlintServer:
@@ -292,6 +319,34 @@ class SlintServer:
         payload = await self._call_json("get_element_properties", {"elementHandle": handle})
         return cast("dict[str, Any]", payload or {})
 
+    async def _centre(self, handle: dict[str, Any]) -> dict[str, float]:
+        """Logical centre of an element, the point a drag aims at.
+
+        ``drag_element`` presses at the source element's own centre, so aiming
+        at the destination's centre keeps a step readable as "drag A onto B"
+        instead of asking the author for pixels. ``absolutePosition`` comes back
+        empty for an element at the origin, hence the 0.0 defaults.
+        """
+        payload = await self._call_json("get_element_properties", {"elementHandle": handle})
+        props = cast("dict[str, Any]", payload or {})
+        position = props.get("absolutePosition") or {}
+        size = props.get("size") or {}
+
+        def number(source: dict[str, Any], key: str) -> float:
+            value = source.get(key)
+            return float(value) if isinstance(value, (int, float)) else 0.0
+
+        return {
+            "x": number(position, "x") + number(size, "width") / 2,
+            "y": number(position, "y") + number(size, "height") / 2,
+        }
+
+    async def _drag_target(self, destination: dict[str, Any]) -> dict[str, float]:
+        """Resolve a destination from :func:`_drag_destination` to a point."""
+        if "x" in destination and "y" in destination:
+            return {"x": float(destination["x"]), "y": float(destination["y"])}
+        return await self._centre(await self._element(destination))
+
     # ------------------------------------------------------------------- tools
 
     async def _launch(self, arguments: dict[str, Any]) -> str:
@@ -445,6 +500,35 @@ class SlintServer:
             ),
             tool("slint.click", "Click an element.", dict(element), ["id"]),
             tool(
+                "slint.drag",
+                "Press on an element, drag, release. Name a destination "
+                "element with `to_id`/`to_label`, or a point with `x`/`y`. "
+                "This is the gesture a click cannot stand in for: range "
+                "selection across a grid, sliders, reordering.",
+                {
+                    **element,
+                    "to_id": {
+                        "type": "string",
+                        "description": "Destination element id; the drag ends at its centre.",
+                    },
+                    "to_label": {
+                        "type": "string",
+                        "description": "Destination element's visible/accessible label.",
+                    },
+                    "to_index": {
+                        "type": "integer",
+                        "description": "Which destination match to use. Default 0.",
+                    },
+                    "x": {"type": "number", "description": "Destination x, logical pixels."},
+                    "y": {"type": "number", "description": "Destination y, logical pixels."},
+                    "button": {
+                        "type": "string",
+                        "description": "Left (default), Right, or Middle.",
+                    },
+                },
+                ["id"],
+            ),
+            tool(
                 "slint.set_property",
                 "Set an element's value.",
                 {**element, "value": {"type": "string"}},
@@ -497,6 +581,28 @@ class SlintServer:
                 {},
                 [],
             ),
+            tool(
+                "slint.element_tree",
+                "Flat list of the window's elements — ids, labels and handles. "
+                "Use it to find what to address in an app whose ids you don't "
+                "know yet; every other tool takes those ids.",
+                {
+                    "max_elements": {
+                        "type": "integer",
+                        "description": "Cap on elements returned. Default 200.",
+                    },
+                },
+                [],
+            ),
+            tool(
+                "slint.accessibility_action",
+                "Invoke an accessible action on an element, e.g. `Default_` "
+                "(the element's primary action), `Increment`, `Decrement`. "
+                "Reaches controls that respond to assistive tech rather than "
+                "to a raw click.",
+                {**element, "action": {"type": "string"}},
+                ["id", "action"],
+            ),
             tool("slint.close", "Stop the application.", {}, []),
         ]
 
@@ -540,11 +646,52 @@ class SlintServer:
             )
             return [TextContent(type="text", text=f"sent {text!r}")]
 
+        if name == "slint.element_tree":
+            raw_cap = arguments.get("max_elements", 200)
+            cap = int(raw_cap) if isinstance(raw_cap, int) and raw_cap > 0 else 200
+            elements = [
+                {
+                    "ids": [d.get("id") for d in el.get("typeNamesAndIds") or []],
+                    "labels": self._labels_of(el),
+                    "handle": el.get("handle"),
+                }
+                for el in (await self._tree())[:cap]
+            ]
+            return [TextContent(type="text", text=json.dumps(elements, indent=2))]
+
         target = _selector(arguments)[0] or _selector(arguments)[1] or "element"
 
         if name == "slint.click":
             await self._call("click_element", {"elementHandle": await self._element(arguments)})
             return [TextContent(type="text", text=f"clicked {target}")]
+
+        if name == "slint.drag":
+            # Both ends are validated before either is resolved, so a step that
+            # named only one of them is told that, not that the app is missing.
+            wanted = _drag_destination(arguments)
+            source = await self._element(arguments)
+            destination = await self._drag_target(wanted)
+            payload: dict[str, Any] = {"elementHandle": source, "target": destination}
+            button = arguments.get("button")
+            if isinstance(button, str) and button:
+                payload["button"] = button
+            await self._call("drag_element", payload)
+            return [
+                TextContent(
+                    type="text",
+                    text=f"dragged {target} to ({destination['x']:.0f}, {destination['y']:.0f})",
+                )
+            ]
+
+        if name == "slint.accessibility_action":
+            action = arguments.get("action")
+            if not isinstance(action, str) or not action:
+                raise AssertionError("`action` is required")
+            await self._call(
+                "invoke_accessibility_action",
+                {"elementHandle": await self._element(arguments), "action": action},
+            )
+            return [TextContent(type="text", text=f"invoked {action} on {target}")]
 
         if name == "slint.set_property":
             value = arguments.get("value")
