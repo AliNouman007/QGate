@@ -162,6 +162,8 @@ describing the catalog below. Suitest's `invoker` calls them through the normal
 | `slint.get_property` | `selector`, `property?` | current value of the resolved element (text / checked / value) |
 | `slint.set_property` | `selector`, `value`, `property?` | writes the value |
 | `slint.click` | `selector` | dispatches `accessible-action-default()` on the element |
+| `slint.drag` | `selector`, `to_id`/`to_label` or `x`+`y`, `button?` | presses at the element's centre, interpolates to the destination, releases — range selection, sliders, reordering |
+| `slint.accessibility_action` | `selector`, `action` | invokes an accessible action (`Default_`, `Increment`, `Decrement`, ...) |
 | `slint.type_text` | `selector`, `text`, `clear?` | sets text-input content (focused) |
 | `slint.check` / `slint.uncheck` | `selector` | toggles a check box |
 
@@ -185,7 +187,7 @@ describing the catalog below. Suitest's `invoker` calls them through the normal
 | Tool | Params | Returns |
 |------|--------|---------|
 | `slint.screenshot` | `selector?` | base64 PNG of window / element |
-| `slint.snapshot` | — | accessible-tree dump (id, role, label, text, state) for debugging/stepping |
+| `slint.element_tree` | `max_elements?` | flat dump of the window's elements (ids, labels, handles) for debugging/stepping |
 
 ---
 
