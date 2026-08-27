@@ -159,3 +159,29 @@ async def test_public_id_generated_on_sqlite(tmp_path: Path) -> None:
         assert await generate_public_id(session, "R", ws.id) == "R-1000"
         await session.commit()
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_create_local_schema_adds_columns_a_release_grew(tmp_path: Path) -> None:
+    """A database made by an earlier release keeps its tables, so `create_all`
+    skips them and any column added since stays missing — which surfaced as
+    `no such column` 500s, not as anything the user could act on."""
+    import sqlalchemy as sa
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from suitest_db.bootstrap import create_local_schema
+
+    url = f"sqlite+aiosqlite:///{tmp_path / 'old.db'}"
+    engine = create_async_engine(url)
+    try:
+        await create_local_schema(engine)
+        async with engine.begin() as conn:
+            await conn.execute(sa.text("ALTER TABLE llm_configs DROP COLUMN auth_method"))
+
+        await create_local_schema(engine)
+
+        async with engine.begin() as conn:
+            rows = await conn.execute(sa.text("PRAGMA table_info(llm_configs)"))
+            columns = {row[1] for row in rows}
+        assert "auth_method" in columns
+    finally:
+        await engine.dispose()
