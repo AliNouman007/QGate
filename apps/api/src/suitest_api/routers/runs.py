@@ -178,6 +178,20 @@ async def get_run(
     )
 
 
+#: A step's output rides along in the list response, so it is capped: a tree
+#: dump can run to megabytes, and the whole thing belongs in the log stream
+#: rather than in every row of a run's step table.
+_MAX_STEP_OUTPUT = 8000
+
+
+def _step_output(stdout: str | None) -> str | None:
+    if not stdout:
+        return None
+    if len(stdout) <= _MAX_STEP_OUTPUT:
+        return stdout
+    return stdout[:_MAX_STEP_OUTPUT] + "\n… truncated; see the run log for the rest"
+
+
 @router.get("/runs/{run_id}/steps", response_model=list[RunStepPublic])
 async def get_run_steps(
     run_id: str,
@@ -206,6 +220,7 @@ async def get_run_steps(
                 completed_at=step.completed_at,
                 duration_ms=step.duration_ms,
                 error_message=step.error_message,
+                stdout=_step_output(step.stdout),
             )
         )
     return out
