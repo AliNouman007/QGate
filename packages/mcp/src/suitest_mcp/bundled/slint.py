@@ -68,7 +68,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 from mcp.types import BlobResourceContents, EmbeddedResource, ImageContent, TextContent, Tool
-from pydantic import AnyUrl
 
 from suitest_mcp.bundled.in_process_runtime import BundledServer, register_bundled_builder
 
@@ -817,7 +816,7 @@ class SlintServer:
                 EmbeddedResource(
                     type="resource",
                     resource=BlobResourceContents(
-                        uri=AnyUrl("slint://window/recording.mp4"),
+                        uri="slint://window/recording.mp4",
                         mimeType="video/mp4",
                         blob=base64.b64encode(video).decode(),
                     ),
