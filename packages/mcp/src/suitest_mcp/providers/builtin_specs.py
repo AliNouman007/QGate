@@ -210,6 +210,7 @@ BUILTIN_SPECS: list[McpProviderConfig] = [
                 "slint.assert_visible",
                 "slint.assert_text",
                 "slint.assert_checked",
+                "slint.assert_property",
                 "slint.assert_value",
                 "slint.screenshot",
                 "slint.element_tree",

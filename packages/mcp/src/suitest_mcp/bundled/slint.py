@@ -134,6 +134,16 @@ def _selector(arguments: dict[str, Any]) -> tuple[str | None, str | None, int]:
     return element_id, label, int(raw_index) if isinstance(raw_index, int) else 0
 
 
+def _as_text(value: Any) -> str:
+    """Compare properties as text: a step writes `equals: 263`, and the app may
+    report 263, 263.0 or "263" for the same thing."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
 def _drag_destination(arguments: dict[str, Any]) -> dict[str, Any]:
     """Where a drag ends: an explicit point, or another element's selector.
 
@@ -767,6 +777,22 @@ class SlintServer:
                 ["id", "checked"],
             ),
             tool(
+                "slint.assert_property",
+                "Assert any property the element exposes, by dotted path — "
+                "`size.width`, `absolutePosition.x`, `accessibleRole`. The way "
+                "to check something the named assertions do not cover, such as "
+                "a row not having moved.",
+                {
+                    **element,
+                    "path": {
+                        "type": "string",
+                        "description": "Dotted path into the element's properties.",
+                    },
+                    "equals": {"description": "Expected value; compared as text."},
+                },
+                ["id", "path", "equals"],
+            ),
+            tool(
                 "slint.assert_value",
                 "Assert an element's value equals a string.",
                 {**element, "equals": {"type": "string"}},
@@ -1010,6 +1036,25 @@ class SlintServer:
                 if not ok:
                     raise AssertionError(f"{target}: expected text {expected!r}, got {actual!r}")
             return [TextContent(type="text", text=f"{target} text matched")]
+
+        if name == "slint.assert_property":
+            path = str(arguments.get("path") or "")
+            if not path:
+                raise AssertionError("`path` is required, e.g. `absolutePosition.x`")
+            found: Any = await self._properties(arguments)
+            for part in path.split("."):
+                if not isinstance(found, dict) or part not in found:
+                    raise AssertionError(
+                        f"{target} exposes no {path!r} (has: {sorted(found)})"
+                        if isinstance(found, dict)
+                        else f"{target}: {path!r} runs past a leaf value"
+                    )
+                found = found[part]
+            actual = _as_text(found)
+            expected = _as_text(arguments.get("equals"))
+            if actual != expected:
+                raise AssertionError(f"{target}: {path} is {actual!r}, expected {expected!r}")
+            return [TextContent(type="text", text=f"{target} {path} == {actual}")]
 
         if name == "slint.assert_value":
             expected = str(arguments.get("equals", ""))
