@@ -56,7 +56,9 @@ URLs in `values.yaml`).
 ## CI images
 
 `.github/workflows/ci.yml` (`build-images` job) builds every Dockerfile on
-each push — no publish, cache via GHA. Publishing happens on `images-v*` tags:
+each push — no publish, cache via GHA. Publishing happens on `launcher-v*` tags
+(the images and the npm launcher build from the same workspace, so they share
+one version):
 `.github/workflows/release-images.yml` pushes
 `ghcr.io/suiflex/{suitest-api,suitest-runner,suitest-web,suitest}` with both
 the version tag and `latest`. The compose file pulls these prebuilt images;

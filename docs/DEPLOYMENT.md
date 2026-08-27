@@ -35,7 +35,7 @@ open http://localhost:3000
 ```
 
 Migrations run automatically (the one-shot `migrate` service). App images are
-prebuilt on GHCR per `images-v*` release; `SUITEST_IMAGE_TAG=<version>` pins
+prebuilt on GHCR per `launcher-v*` release; `SUITEST_IMAGE_TAG=<version>` pins
 one, `make docker-up-prod` builds from source instead. Log in with the
 `SUITEST_SUPERADMIN_EMAIL` / `SUITEST_SUPERADMIN_PASSWORD` you set in `.env`.
 
