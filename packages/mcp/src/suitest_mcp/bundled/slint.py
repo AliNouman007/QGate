@@ -316,7 +316,30 @@ class SlintServer:
                 )
             return cast("dict[str, Any]", handles[index])
 
-        # Label lookup walks the tree, since Slint only indexes by id.
+        if element_id is not None:
+            # Both given: start from the id index and keep the ones carrying the
+            # label. The tree walk below also sees elements the id index does
+            # not — including ones that are not on screen — so with an id in
+            # hand the index is the more faithful source, and a click that
+            # landed on an off-screen twin is exactly the bug this avoids.
+            payload = await self._call_json(
+                "find_elements_by_id",
+                {"windowHandle": await self._window_handle(), "elementsId": element_id},
+            )
+            candidates = (payload or {}).get("elementHandles") or []
+            labelled: list[dict[str, Any]] = []
+            for handle in candidates:
+                props = await self._call_json("get_element_properties", {"elementHandle": handle})
+                if label in self._labels_of(cast("dict[str, Any]", props or {})):
+                    labelled.append(cast("dict[str, Any]", handle))
+            if labelled:
+                if index >= len(labelled):
+                    raise AssertionError(
+                        f"{label!r} matched {len(labelled)} element(s), asked for #{index}"
+                    )
+                return labelled[index]
+
+        # Label-only lookup walks the tree, since Slint only indexes by id.
         matches = [
             el
             for el in await self._tree()
