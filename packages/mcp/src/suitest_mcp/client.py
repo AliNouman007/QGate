@@ -29,6 +29,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import contextlib
+import mimetypes
 import time
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
@@ -70,7 +71,15 @@ def _resource_artifact(resource: object, idx: int) -> McpArtifact | None:
         raw = base64.b64decode(blob, validate=False)
     except (ValueError, TypeError):
         return None
-    mime = str(getattr(resource, "mimeType", None) or "application/octet-stream")
+    # The SDK spells it `mimeType`; a resource that round-tripped through JSON
+    # may carry `mime_type`, and one that carries neither still has a filename
+    # to go on — better than filing every recording as an opaque blob.
+    mime = str(
+        getattr(resource, "mimeType", None)
+        or getattr(resource, "mime_type", None)
+        or mimetypes.guess_type(str(getattr(resource, "uri", "") or ""))[0]
+        or "application/octet-stream"
+    )
     kind = next((k for prefix, k in _RESOURCE_KINDS if mime.startswith(prefix)), "CUSTOM")
     uri = str(getattr(resource, "uri", "") or "")
     name = uri.rsplit("/", 1)[-1] or f"resource-{idx}"
