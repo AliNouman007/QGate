@@ -134,6 +134,16 @@ def _selector(arguments: dict[str, Any]) -> tuple[str | None, str | None, int]:
     return element_id, label, int(raw_index) if isinstance(raw_index, int) else 0
 
 
+def _as_text(value: Any) -> str:
+    """Compare properties as text: a step writes `equals: 263`, and the app may
+    report 263, 263.0 or "263" for the same thing."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
 def _drag_destination(arguments: dict[str, Any]) -> dict[str, Any]:
     """Where a drag ends: an explicit point, or another element's selector.
 
@@ -170,6 +180,10 @@ class SlintServer:
         self._client: httpx.AsyncClient | None = None
         self._rpc_id = 0
         self._window: dict[str, Any] | None = None
+        # One RPC at a time: the video sampler shares this client with the step
+        # that is running, and a frame competing with a connect starved the
+        # lookup that step was waiting on.
+        self._rpc_lock = asyncio.Lock()
         self._video_task: asyncio.Task[None] | None = None
         self._filming = False
         self._video_frames: list[bytes] = []
@@ -182,6 +196,10 @@ class SlintServer:
         return f"http://{_HOST}:{self._port}/mcp"
 
     async def _rpc(self, method: str, params: dict[str, Any] | None = None) -> Any:
+        async with self._rpc_lock:
+            return await self._rpc_locked(method, params)
+
+    async def _rpc_locked(self, method: str, params: dict[str, Any] | None = None) -> Any:
         """One JSON-RPC round trip to the app's embedded server.
 
         The transport may answer as plain JSON or as a single SSE ``data:``
@@ -397,6 +415,25 @@ class SlintServer:
         handle = await self._element(arguments)
         payload = await self._call_json("get_element_properties", {"elementHandle": handle})
         return cast("dict[str, Any]", payload or {})
+
+    async def _act_on_element(
+        self, tool: str, arguments: dict[str, Any], payload: dict[str, Any]
+    ) -> None:
+        """Call a handle-taking tool, re-resolving once if the handle went stale.
+
+        A list recycles the element under a handle as it scrolls or repaints, and
+        the app answers "refers to element that was destroyed". Re-resolving and
+        trying again is what a person does without thinking about it; failing the
+        step instead made a correct test flaky.
+        """
+        handle = await self._element(arguments)
+        try:
+            await self._call(tool, {**payload, "elementHandle": handle})
+        except AssertionError as exc:
+            if "destroyed" not in str(exc):
+                raise
+            handle = await self._element(arguments)
+            await self._call(tool, {**payload, "elementHandle": handle})
 
     async def _centre(self, handle: dict[str, Any]) -> dict[str, float]:
         """Logical centre of an element, the point a drag aims at.
@@ -662,7 +699,13 @@ class SlintServer:
                 },
                 [],
             ),
-            tool("slint.click", "Click an element.", dict(element), ["id"]),
+            tool(
+                "slint.click",
+                "Click an element. `double: true` for a double-click, which is "
+                "how a list row is usually opened.",
+                {**element, "double": {"type": "boolean"}},
+                ["id"],
+            ),
             tool(
                 "slint.drag",
                 "Press on an element, drag, release. Name a destination "
@@ -732,6 +775,22 @@ class SlintServer:
                 "Assert an element's checked state.",
                 {**element, "checked": {"type": "boolean"}},
                 ["id", "checked"],
+            ),
+            tool(
+                "slint.assert_property",
+                "Assert any property the element exposes, by dotted path — "
+                "`size.width`, `absolutePosition.x`, `accessibleRole`. The way "
+                "to check something the named assertions do not cover, such as "
+                "a row not having moved.",
+                {
+                    **element,
+                    "path": {
+                        "type": "string",
+                        "description": "Dotted path into the element's properties.",
+                    },
+                    "equals": {"description": "Expected value; compared as text."},
+                },
+                ["id", "path", "equals"],
             ),
             tool(
                 "slint.assert_value",
@@ -906,8 +965,11 @@ class SlintServer:
         target = _selector(arguments)[0] or _selector(arguments)[1] or "element"
 
         if name == "slint.click":
-            await self._call("click_element", {"elementHandle": await self._element(arguments)})
-            return [TextContent(type="text", text=f"clicked {target}")]
+            double = bool(arguments.get("double"))
+            how_args = {"action": "DoubleClick"} if double else {}
+            await self._act_on_element("click_element", arguments, how_args)
+            how = "double-clicked" if double else "clicked"
+            return [TextContent(type="text", text=f"{how} {target}")]
 
         if name == "slint.drag":
             # Both ends are validated before either is resolved, so a step that
@@ -917,12 +979,11 @@ class SlintServer:
             # stale the moment the row under it is recycled. The source handle
             # is the one `drag_element` dereferences, so it is taken last.
             destination = await self._drag_target(wanted)
-            source = await self._element(arguments)
-            payload: dict[str, Any] = {"elementHandle": source, "target": destination}
+            payload: dict[str, Any] = {"target": destination}
             button = arguments.get("button")
             if isinstance(button, str) and button:
                 payload["button"] = button
-            await self._call("drag_element", payload)
+            await self._act_on_element("drag_element", arguments, payload)
             return [
                 TextContent(
                     type="text",
@@ -975,6 +1036,25 @@ class SlintServer:
                 if not ok:
                     raise AssertionError(f"{target}: expected text {expected!r}, got {actual!r}")
             return [TextContent(type="text", text=f"{target} text matched")]
+
+        if name == "slint.assert_property":
+            path = str(arguments.get("path") or "")
+            if not path:
+                raise AssertionError("`path` is required, e.g. `absolutePosition.x`")
+            found: Any = await self._properties(arguments)
+            for part in path.split("."):
+                if not isinstance(found, dict) or part not in found:
+                    raise AssertionError(
+                        f"{target} exposes no {path!r} (has: {sorted(found)})"
+                        if isinstance(found, dict)
+                        else f"{target}: {path!r} runs past a leaf value"
+                    )
+                found = found[part]
+            actual = _as_text(found)
+            expected = _as_text(arguments.get("equals"))
+            if actual != expected:
+                raise AssertionError(f"{target}: {path} is {actual!r}, expected {expected!r}")
+            return [TextContent(type="text", text=f"{target} {path} == {actual}")]
 
         if name == "slint.assert_value":
             expected = str(arguments.get("equals", ""))

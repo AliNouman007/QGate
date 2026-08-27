@@ -114,6 +114,24 @@ async def test_recording_tools_need_no_selector_but_need_an_app() -> None:
 
 
 @pytest.mark.asyncio
+async def test_assert_property_wants_a_path() -> None:
+    """The path is the whole point of the tool; without one there is nothing to
+    compare, and saying so beats reaching the app to find out."""
+    server = build_slint_server(_config())
+    with pytest.raises(AssertionError, match="`path` is required"):
+        await server.call_tool("slint.assert_property", {"id": "Grid::cell", "equals": 1})
+
+
+def test_property_values_compare_as_text() -> None:
+    """A step writes `equals: 263`; the app may report 263, 263.0 or "263"."""
+    from suitest_mcp.bundled.slint import _as_text
+
+    assert _as_text(263) == _as_text(263.0) == _as_text("263") == "263"
+    assert _as_text(True) == "true"
+    assert _as_text(1.5) == "1.5"
+
+
+@pytest.mark.asyncio
 async def test_launch_without_a_command_is_rejected() -> None:
     server = build_slint_server(_config())
     with pytest.raises(AssertionError, match=r"`command` is required"):
