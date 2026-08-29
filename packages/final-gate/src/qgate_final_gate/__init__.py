@@ -1,0 +1,37 @@
+from .integrity import validate_input_integrity
+from .models import (
+    CoverageItem,
+    CoverageOutcome,
+    CoverageSummary,
+    DecisionTraceEntry,
+    GateAIExplanation,
+    GateConfidence,
+    GateFinding,
+    GateInputBundle,
+    GateMetadata,
+    GateReasonKind,
+    GateReport,
+    GateVerdict,
+    HistoricalRisk,
+    InputIntegrityFinding,
+    VerdictEffect,
+)
+
+__all__ = [
+    "CoverageItem",
+    "CoverageOutcome",
+    "CoverageSummary",
+    "DecisionTraceEntry",
+    "GateAIExplanation",
+    "GateConfidence",
+    "GateFinding",
+    "GateInputBundle",
+    "GateMetadata",
+    "GateReasonKind",
+    "GateReport",
+    "GateVerdict",
+    "HistoricalRisk",
+    "InputIntegrityFinding",
+    "VerdictEffect",
+    "validate_input_integrity",
+]
