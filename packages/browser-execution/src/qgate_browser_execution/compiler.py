@@ -148,7 +148,7 @@ class ScenarioCompiler:
                 source_action=step.action,
                 source_expected=step.expected,
                 route=route,
-                target=TargetHint(text=value),
+                target=TargetHint(selector="body"),
                 expected=value,
             )
         visible_match = re.fullmatch(r'assert visible\s+"([^"]+)"', action, flags=re.IGNORECASE)
