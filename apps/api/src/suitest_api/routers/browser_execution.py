@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -28,7 +29,8 @@ def _store(request: Request) -> JsonExecutionReportStore:
     settings = request.app.state.settings
     if settings.mode != "local":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
-    return JsonExecutionReportStore(settings.browser_execution_dir)
+    root = os.environ.get("SUITEST_BROWSER_EXECUTION_DIR", "~/.qgate/browser-execution")
+    return JsonExecutionReportStore(root)
 
 
 @router.get("/reports", response_model=list[ExecutionReportListItem])
