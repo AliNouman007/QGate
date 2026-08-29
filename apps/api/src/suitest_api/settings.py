@@ -33,9 +33,10 @@ class Settings(BaseSettings):
     # so an accidental production setting fails closed instead of weakening auth.
     local_auth_bypass: bool = Field(default=False)
 
-    # Project Intelligence persists outside analyzed projects. The dashboard reads
-    # this store only in local mode. env: SUITEST_PROJECT_INTELLIGENCE_DIR
+    # QGate intelligence persists outside analyzed projects. Dashboard APIs read
+    # these stores only in local mode.
     project_intelligence_dir: str = Field(default="~/.qgate/project-intelligence")
+    impact_analysis_dir: str = Field(default="~/.qgate/impact-analysis")
 
     # Auth / OAuth — required for FastAPI-Users + Google OAuth
     auth_secret: str = Field(default="dev-secret-change-me")

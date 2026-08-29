@@ -25,6 +25,7 @@ dependencies = [
   "suitest-mcp",
   "suitest-shared",
   "qgate-project-intelligence",
+  "qgate-impact-analysis",
   "slowapi>=0.1.9",
   "arq>=0.26",
   "aioboto3>=12.4",

@@ -8,6 +8,7 @@ import {
   ChevronDown,
   FileCode2,
   FlaskConical,
+  GitPullRequest,
   Inbox,
   LayoutDashboard,
   Map,
@@ -130,6 +131,7 @@ export function Sidebar({
       eyebrow: "Insights",
       items: [
         { label: "Project Map", icon: Map, to: "/project-map" },
+        { label: "Impact Analysis", icon: GitPullRequest, to: "/impact" },
         { label: "Analytics", icon: BarChart3, to: "/analytics" },
         { label: "Traceability", icon: Network, to: "/trace" },
         { label: "Eval", icon: FlaskConical, to: "/eval" },

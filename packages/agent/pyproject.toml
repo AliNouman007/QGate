@@ -7,10 +7,10 @@ dependencies = [
     # Intra-workspace: classifier + future generators consume the shared
     # generator_input schemas (TargetKind, ClassificationResult, ...).
     "suitest-shared",
-    # QGate Project Intelligence exposes bounded EvidencePack + SemanticState
-    # contracts; the agent layer may enrich those packs without coupling the
-    # deterministic scanner to an LLM provider.
+    # QGate intelligence packages expose bounded evidence contracts; the agent
+    # layer may enrich those facts without coupling deterministic analysis to an LLM.
     "qgate-project-intelligence",
+    "qgate-impact-analysis",
     # M2 Task 2 — deterministic OpenAPI generator: parse specs, validate
     # response schemas, and synthesise example request bodies (ZERO tier, no LLM).
     "openapi-pydantic>=0.4.0",

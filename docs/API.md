@@ -1250,3 +1250,16 @@ Local-mode read-only endpoints for the Project Map UI. Disabled (404) when `SUIT
 | `GET /api/v1/project-intelligence/latest` | Retrieve latest full `ProjectKnowledge`. |
 | `GET /api/v1/project-intelligence/projects/{key}` | Retrieve one persisted `ProjectKnowledge` by stable 24-character hashed key. |
 
+---
+
+## 12. Impact Analysis (Local Read-Only API)
+
+Local-mode read-only endpoints for the Impact dashboard. Disabled (404) when `SUITEST_MODE=server`. Workspace authentication applies.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/v1/impact-analysis/reports` | List persisted impact report summaries. |
+| `GET /api/v1/impact-analysis/latest` | Retrieve latest full `ImpactReport`. |
+| `GET /api/v1/impact-analysis/reports/{key}` | Retrieve one persisted `ImpactReport` by stable 24-character hashed key. |
+
+
