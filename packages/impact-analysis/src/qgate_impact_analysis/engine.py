@@ -9,8 +9,8 @@ from .classifier import classify_changed_file
 from .mapping import knowledge_by_path, map_changed_symbols
 from .models import (
     ChangeCategory,
-    ChangeSet,
     ChangedFile,
+    ChangeSet,
     DependencyStep,
     ImpactCoverageGap,
     ImpactItem,

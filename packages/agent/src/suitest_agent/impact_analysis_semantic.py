@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pydantic import BaseModel, Field, ValidationError
-from qgate_impact_analysis.models import ImpactItem, ImpactReport
 from qgate_impact_analysis.semantic import build_impact_evidence_packs
 from qgate_project_intelligence.models import Confidence
+
+if TYPE_CHECKING:
+    from qgate_impact_analysis.models import ImpactItem, ImpactReport
 
 from suitest_agent.providers.base import ChatMessage, LLMProvider, ModelCall, ProviderError
 

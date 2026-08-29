@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from qgate_impact_analysis.engine import ImpactAnalyzer
 from qgate_impact_analysis.source import UnifiedDiffSource
 from qgate_project_intelligence.models import AnalysisMetadata, ProjectKnowledge, ProjectSummary
@@ -38,6 +39,7 @@ new file mode 100644
     return ImpactAnalyzer(knowledge).analyze(UnifiedDiffSource(patch).load())
 
 
+@pytest.mark.asyncio
 async def test_ai_can_only_enrich_existing_keys_and_cannot_raise_confidence_or_remove_runtime_flag() -> None:
     report = _report()
     unknown = report.unknown_impacts[0]
@@ -60,6 +62,7 @@ async def test_ai_can_only_enrich_existing_keys_and_cannot_raise_confidence_or_r
     assert "new.ts" in provider.calls[0].messages[-1].content
 
 
+@pytest.mark.asyncio
 async def test_malformed_ai_output_falls_back_to_deterministic_report() -> None:
     report = _report()
     provider = _FakeProvider("not-json")

@@ -4,11 +4,11 @@ import re
 from dataclasses import dataclass
 
 from .models import (
+    ChangedFile,
+    ChangedLineRange,
     ChangeGap,
     ChangeSet,
     ChangeSourceKind,
-    ChangedFile,
-    ChangedLineRange,
     DiffHunk,
     FileChangeStatus,
 )

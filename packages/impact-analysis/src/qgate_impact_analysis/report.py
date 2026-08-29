@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from .models import ImpactItem, ImpactReport
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .models import ImpactItem, ImpactReport
 
 
 def render_impact_report(report: ImpactReport) -> str:
