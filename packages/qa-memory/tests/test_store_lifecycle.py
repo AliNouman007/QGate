@@ -68,3 +68,23 @@ def test_reject_does_not_create_memory_and_preserves_audit(tmp_path: Path) -> No
     assert rejected.status == CandidateStatus.REJECTED
     assert store.list_memories() == []
     assert any(event.action.value == "rejected" for event in store.list_audit())
+
+
+def test_new_confirmation_after_deactivation_does_not_overwrite_history(tmp_path: Path) -> None:
+    store = JsonQAMemoryStore(tmp_path)
+    service = QAMemoryService(store)
+    first_candidate = service.ingest_candidate(_candidate("run1"))
+    _, first_memory, _ = service.confirm_candidate(first_candidate.key, reviewer="qa@example.test")
+    service.deactivate_memory(first_memory.key, reviewer="qa@example.test", note="old expectation paused")
+
+    replacement = _candidate("run2")
+    replacement.key = "candidate_reintroduced"
+    replacement.dedupe_signature = "distinct_reintroduction_signature"
+    replacement = service.ingest_candidate(replacement)
+    _, second_memory, _ = service.confirm_candidate(replacement.key, reviewer="qa@example.test")
+
+    assert first_memory.key != second_memory.key
+    stored_first = store.load_memory(first_memory.key)
+    stored_second = store.load_memory(second_memory.key)
+    assert stored_first is not None and stored_first.status == MemoryStatus.INACTIVE
+    assert stored_second is not None and stored_second.status == MemoryStatus.ACTIVE
