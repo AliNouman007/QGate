@@ -268,18 +268,26 @@ def verify_credentials() -> str | None:
     accepts empty or mismatched credentials silently drops all publishes.
 
     Local mode (``SUITEST_MODE=local``) runs against on-disk SQLite + artifacts
-    with no server and no API key, so the credential gate is skipped entirely
-    (P0 items #1/#3).
+    with no server and no API key, so the credential gate is skipped entirely.
+    Setting ``SUITEST_ALLOW_LOCAL_FALLBACK=1`` gracefully falls back to local mode
+    if the remote server is unreachable.
     """
-    if os.environ.get("SUITEST_MODE", "").strip().lower() == "local":
+    mode = os.environ.get("SUITEST_MODE", "").strip().lower()
+    if mode == "local":
         return None
+
     api_url = os.environ.get("SUITEST_API_URL", "").strip().rstrip("/")
     api_key = os.environ.get("SUITEST_API_KEY", "").strip()
+
     if not api_url or not api_key:
+        if os.environ.get("SUITEST_ALLOW_LOCAL_FALLBACK", "").strip().lower() in ("1", "true", "yes"):
+            sys.stderr.write("suitest-mcp: SUITEST_API_URL / SUITEST_API_KEY not set; defaulting to local mode\n")
+            return None
         return (
             "SUITEST_API_URL and SUITEST_API_KEY are both required "
-            "(set them in the mcpServers env block); refusing to start"
+            "(set them in the mcpServers env block, or set SUITEST_MODE=local); refusing to start"
         )
+
     req = urllib.request.Request(
         f"{api_url}/api/v1/api-keys/whoami",
         headers={"Authorization": f"Bearer {api_key}"},
@@ -290,7 +298,14 @@ def verify_credentials() -> str | None:
     except urllib.error.HTTPError as exc:
         return f"SUITEST_API_KEY rejected by {api_url} (HTTP {exc.code}); refusing to start"
     except (urllib.error.URLError, OSError) as exc:
-        return f"SUITEST_API_URL {api_url} unreachable ({exc}); refusing to start"
+        fallback_enabled = os.environ.get("SUITEST_ALLOW_LOCAL_FALLBACK", "").strip().lower() in ("1", "true", "yes")
+        if fallback_enabled:
+            sys.stderr.write(f"suitest-mcp: SUITEST_API_URL {api_url} unreachable ({exc}); falling back to local mode\n")
+            return None
+        return (
+            f"SUITEST_API_URL {api_url} unreachable ({exc}); refusing to start "
+            "(start your suitest-api server, or set SUITEST_MODE=local or SUITEST_ALLOW_LOCAL_FALLBACK=1 in mcpServers env)"
+        )
 
 
 def serve(stdin: TextIO = sys.stdin, stdout: TextIO = sys.stdout) -> None:
