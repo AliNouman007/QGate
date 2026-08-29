@@ -1,0 +1,21 @@
+[project]
+name = "qgate-browser-execution"
+version = "0.1.0"
+description = "QGate Browser Execution & Evidence"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "pydantic>=2.9.0",
+  "qgate-scenario-intelligence",
+  "qgate-project-intelligence",
+  "suiflex-suitest-lifecycle[frontend]",
+]
+
+[project.scripts]
+qgate-browser-execution = "qgate_browser_execution.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/qgate_browser_execution"]
