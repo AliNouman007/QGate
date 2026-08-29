@@ -34,10 +34,25 @@ dev-dependencies = [
   "pre-commit>=4.0.0",
   "aiosqlite>=0.20.0",
   "fakeredis>=2.26.0",
+  # M1d-13/14/15/29 — `respx` mocks Linear's GraphQL endpoint
+  # (test_linear_adapter.py), the GitHub App installation-token mint endpoint
+  # (test_github_adapter.py), the Slack incoming-webhook POST
+  # (test_slack_adapter.py), and the auto-defect E2E gate
+  # (apps/api/tests/e2e/test_auto_defect_e2e). The MCP test extras already
+  # pull respx but the API/root test suite needs the dep at root so it
+  # resolves without extras.
   "respx>=0.21.0",
+  # M1c Task 22 — E2E-only deps for tests/e2e/test_m1c_smoke.py. The test is
+  # marked ``e2e`` and excluded from the default ``pytest -m \"not e2e\"``
+  # selector, but the workflow that opts in (``.github/workflows/m1c-e2e.yml``)
+  # needs these resolved by ``uv sync``.
   "httpx-ws>=0.7.0",
+  # M2 Task 2 — mypy stubs for the OpenAPI generator's YAML spec fallback.
   "types-PyYAML>=6.0",
+  # Task 6 — litellm+langgraph moved to suitest-agent[cloud] optional extra;
+  # dev env opts in so test_providers.py + test_graphs.py keep working.
   "suitest-agent[cloud]",
+  # Lifecycle browser modules are type-checked and tested from the root dev env.
   "suiflex-suitest-lifecycle[frontend]",
 ]
 
@@ -61,24 +76,31 @@ qgate-final-gate = { workspace = true }
 line-length = 100
 target-version = "py312"
 src = ["apps", "packages"]
+# packages/mcp-npx/python is a generated copy of packages/lifecycle (prepack bundle)
 extend-exclude = ["alembic/versions", "packages/mcp-npx/python"]
 
 [tool.ruff.lint]
 select = [
-  "E",
-  "W",
-  "F",
-  "I",
-  "B",
-  "UP",
-  "ASYNC",
-  "RUF",
-  "SIM",
-  "TCH",
+  "E",      # pycodestyle errors
+  "W",      # pycodestyle warnings
+  "F",      # pyflakes
+  "I",      # isort
+  "B",      # bugbear
+  "UP",     # pyupgrade
+  "ASYNC",  # async correctness
+  "RUF",    # ruff-specific
+  "SIM",    # simplify
+  "TCH",    # type-checking-imports
 ]
-ignore = ["E501", "RUF101"]
+# RUF101: newer ruff redirects TCH00x → TC00x, but the pinned pre-commit ruff
+# (0.7.4) only recognises the legacy TCH00x codes. Ignore the redirect nag so the
+# same noqa codes satisfy both the pre-commit hook and a newer local ruff.
+ignore = ["E501", "RUF101"]  # E501: line length handled by formatter
 
 [tool.ruff.lint.flake8-type-checking]
+# SQLAlchemy 2 (Mapped[...]) and Pydantic v2 evaluate annotations at runtime even
+# with `from __future__ import annotations`, so imports used only in annotations on
+# these base classes must stay at module scope (not moved into a TYPE_CHECKING block).
 runtime-evaluated-base-classes = [
   "suitest_db.base.Base",
   "sqlalchemy.orm.DeclarativeBase",
@@ -87,7 +109,14 @@ runtime-evaluated-base-classes = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+# Tests annotate fixtures/params with runtime types (AsyncSession, Iterator); moving
+# those into TYPE_CHECKING blocks adds noise without benefit in test modules.
 "**/tests/**/*.py" = ["B018", "TCH001", "TCH002", "TCH003"]
+# FastAPI dependency providers must keep their annotation imports (User, AsyncSession)
+# at module scope so DI can resolve type hints at request time, and ``Depends(...)`` /
+# ``Header(...)`` in argument defaults is the canonical FastAPI idiom (B008). Service
+# constructors annotate injected repos with runtime types that we deliberately import
+# eagerly so the wiring is greppable; TYPE_CHECKING-only churn buys nothing here.
 "apps/api/src/suitest_api/deps/*.py" = ["B008", "TCH001", "TCH002", "TCH003"]
 "apps/api/src/suitest_api/routers/*.py" = ["B008", "TCH001", "TCH002", "TCH003"]
 "apps/api/src/suitest_api/services/*.py" = ["TCH001", "TCH002", "TCH003"]
@@ -110,24 +139,47 @@ plugins = ["pydantic.mypy"]
 mypy_path = ["apps/api/src", "apps/runner/src", "packages/agent/src", "packages/core/src", "packages/db/src", "packages/lifecycle/src", "packages/mcp/src", "packages/shared/src", "packages/project-intelligence/src", "packages/impact-analysis/src", "packages/scenario-intelligence/src", "packages/browser-execution/src", "packages/qa-memory/src", "packages/final-gate/src", "packages/db/tests", "packages/mcp/tests", "packages/agent/tests", "apps/api/tests"]
 explicit_package_bases = true
 namespace_packages = true
+# ``tests`` dirs are excluded from the strict static gate: each package test
+# dir ships its own ``conftest.py`` and several live as independent mypy_path
+# bases, so they collide as duplicate top-level modules (Duplicate module
+# named "conftest"). Tests stay enforced at runtime by pytest and at lint time
+# by ruff; only mypy defers to the application source trees (see the
+# ``mypy_path`` bases above).
 exclude = "(^|/)(\\.venv|alembic/versions|node_modules|dist|build|tests|mcp-npx/python)/"
 
 [[tool.mypy.overrides]]
 module = ["alembic.*", "fastembed.*", "cuid2.*", "pgvector.*", "testcontainers.*", "jsonpath_ng.*", "respx.*", "fakeredis.*", "aioboto3.*", "botocore.*", "moto.*", "boto3.*"]
 ignore_missing_imports = true
 
+# FastAPI-Users base annotates user_id as raw UUID_ID in its TYPE_CHECKING branch;
+# our SQLAlchemy 2 override uses Mapped[uuid.UUID] which triggers an assignment
+# warning under certain mypy configurations (e.g. pre-commit's --ignore-missing-imports).
 [[tool.mypy.overrides]]
 module = ["suitest_db.models.user"]
 warn_unused_ignores = false
 
+# The ARQ worker's WorkerSettings subclasses ``arq.typing.WorkerSettingsBase``
+# whose ``on_startup``/``on_shutdown`` slots are typed against the
+# ``StartupShutdown`` Protocol (``dict[Any, Any]``). Our hooks use the tighter
+# ``dict[str, object]`` to honor CLAUDE.md's "no Any" rule, so we silence the
+# resulting assignment mismatch with ``# type: ignore[assignment]``. Under
+# pre-commit's ``--ignore-missing-imports``, the base resolves to ``Any`` and
+# the ignore comments become "unused" — disable that warning here so both
+# strict and pre-commit mypy passes agree.
 [[tool.mypy.overrides]]
 module = ["suitest_runner.worker"]
 warn_unused_ignores = false
 
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
+# ``tests/e2e`` is NOT in the default ``testpaths`` — the M1c smoke E2E
+# imports ``httpx_ws`` + ``asyncpg`` (E2E-only deps) and drives the live
+# docker-compose stack. CI opts in by passing the path explicitly (see
+# ``.github/workflows/m1c-e2e.yml``). The ``e2e`` marker below is the deselect
+# hook used by every other suite — ``pytest -m \"not e2e\"`` skips it even if a
+# future invocation widens ``testpaths``.
 testpaths = ["apps/api/tests", "apps/runner/tests", "packages/core/tests", "packages/db/tests", "packages/mcp/tests", "packages/shared/tests", "packages/agent/tests", "packages/project-intelligence/tests", "packages/impact-analysis/tests", "packages/scenario-intelligence/tests", "packages/browser-execution/tests", "packages/qa-memory/tests", "packages/final-gate/tests"]
-addopts = "-ra -q --strict-markers --import-mode=importlib"
+addopts = "-ra -q --strict-markers --import-mode=importlib"  # NEW: --import-mode=importlib resolves test file name collisions across packages
 markers = [
     "e2e: end-to-end smoke / integration test. Two flavours: (a) live docker-compose stack (M1c DoD, ``tests/e2e/``) — opt-in via the M1c E2E workflow; (b) testcontainer-driven in-process E2E (M1d-29, ``apps/api/tests/e2e/``) — runs in the default ``pytest`` invocation because it self-provisions Postgres via testcontainers and mocks every external network call. Use ``pytest -m 'not e2e'`` to deselect both.",
 ]
