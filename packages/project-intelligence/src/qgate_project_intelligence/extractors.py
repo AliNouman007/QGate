@@ -21,15 +21,15 @@ _CONDITION_PATTERNS = [
     re.compile(r"\bif\s*\((.+?)\)"),
     re.compile(r"\belse\s+if\s*\((.+?)\)"),
     re.compile(r"^\s*if\s+(.+?):\s*$"),
-    re.compile(r"\?\s*([^:]+?)\s*:\s*"),
 ]
+_TERNARY_CONDITION = re.compile(r"(?:\{|\(|=|return\s+)([^?;{}]+?)\s*\?")
 
-_AUTH_TERMS = {"auth", "authenticated", "isloggedin", "loggedin", "session", "currentuser", "user"}
+_AUTH_TERMS = {"auth", "authenticated", "isloggedin", "loggedin", "session", "currentuser"}
 _PERMISSION_TERMS = {"permission", "permissions", "role", "roles", "canedit", "canwrite", "isadmin", "owner"}
-_FEATURE_TERMS = {"featureflag", "feature_flag", "flag", "experiment", "variant", "abtest", "a_b_test"}
+_FEATURE_TERMS = {"featureflag", "feature_flag", "experiment", "variant", "abtest", "a_b_test"}
 _LOADING_TERMS = {"loading", "isloading", "pending", "ispending", "fetching", "isfetching"}
 _ERROR_TERMS = {"error", "haserror", "iserror", "failed", "failure"}
-_EMPTY_TERMS = {"empty", "isempty", "length === 0", "length==0", "count === 0", "count==0"}
+_EMPTY_TERMS = {"empty", "isempty", "length===0", "length==0", "count===0", "count==0"}
 _STORAGE_TERMS = {"localstorage", "sessionstorage", "document.cookie", "cookie", "cookies"}
 _RESPONSIVE_TERMS = {"matchmedia", "innerwidth", "breakpoint", "ismobile", "isdesktop", "tablet", "viewport"}
 
@@ -37,8 +37,7 @@ _RESPONSIVE_TERMS = {"matchmedia", "innerwidth", "breakpoint", "ismobile", "isde
 def analyze_text_file(record: FileRecord, text: str) -> FileAnalysis:
     imports: list[ImportFact] = []
     behaviors: list[BehaviorFact] = []
-    lines = text.splitlines()
-    for index, line in enumerate(lines, start=1):
+    for index, line in enumerate(text.splitlines(), start=1):
         imports.extend(_extract_imports(record, line, index))
         behaviors.extend(_extract_behaviors(record, line, index))
         behaviors.extend(_extract_direct_signals(record, line, index))
@@ -65,28 +64,32 @@ def _extract_imports(record: FileRecord, line: str, line_number: int) -> list[Im
 
 
 def _extract_behaviors(record: FileRecord, line: str, line_number: int) -> list[BehaviorFact]:
-    facts: list[BehaviorFact] = []
+    expressions: list[str] = []
     for pattern in _CONDITION_PATTERNS:
-        for match in pattern.finditer(line):
-            expression = match.group(1).strip()
-            if not expression:
-                continue
-            category, confidence, meaningful = _classify_condition(expression, line)
-            facts.append(
-                BehaviorFact(
-                    expression=expression,
-                    category=category,
-                    confidence=confidence,
-                    meaningful=meaningful,
-                    evidence=_evidence(record, line_number, line, "condition"),
-                )
+        expressions.extend(match.group(1).strip() for match in pattern.finditer(line))
+    ternary = _TERNARY_CONDITION.search(line)
+    if ternary:
+        expressions.append(ternary.group(1).strip())
+
+    facts: list[BehaviorFact] = []
+    for expression in expressions:
+        if not expression:
+            continue
+        category, confidence, meaningful = _classify_condition(expression, line)
+        facts.append(
+            BehaviorFact(
+                expression=expression,
+                category=category,
+                confidence=confidence,
+                meaningful=meaningful,
+                evidence=_evidence(record, line_number, line, "condition"),
             )
+        )
     return facts
 
 
 def _extract_direct_signals(record: FileRecord, line: str, line_number: int) -> list[BehaviorFact]:
-    lowered = _normalize(line)
-    category = _category_for(lowered)
+    category = _category_for(_normalize(line))
     if category not in {BehaviorCategory.STORAGE, BehaviorCategory.RESPONSIVE}:
         return []
     return [
@@ -106,8 +109,7 @@ def _classify_condition(expression: str, full_line: str) -> tuple[BehaviorCatego
     if category != BehaviorCategory.GENERAL:
         return category, Confidence.HIGH, True
 
-    technical_guard = _looks_like_technical_guard(normalized, _normalize(full_line))
-    if technical_guard:
+    if _looks_like_technical_guard(normalized, _normalize(full_line)):
         return BehaviorCategory.TECHNICAL_GUARD, Confidence.MEDIUM, False
     return BehaviorCategory.GENERAL, Confidence.MEDIUM, True
 
@@ -133,9 +135,17 @@ def _category_for(normalized: str) -> BehaviorCategory:
 
 
 def _looks_like_technical_guard(expression: str, full_line: str) -> bool:
-    nil_check = bool(re.fullmatch(r"!?[\w.]+(?:\s*(?:===?|!==?|is|isnot)\s*(?:none|null|undefined))?", expression))
+    nil_check = bool(
+        re.fullmatch(
+            r"!?[\w.]+(?:\s*(?:===?|!==?|is|isnot)\s*(?:none|null|undefined))?",
+            expression,
+        )
+    )
     early_exit = any(token in full_line for token in ("return", "continue", "break", "raise"))
-    infrastructure_terms = any(token in expression for token in ("node", "element", "ref.current", "response", "client", "connection"))
+    infrastructure_terms = any(
+        token in expression
+        for token in ("node", "element", "ref.current", "response", "client", "connection")
+    )
     return (nil_check and early_exit) or (infrastructure_terms and early_exit)
 
 
