@@ -22,6 +22,8 @@ from .models import (
     SharedImpactGroup,
 )
 
+_HUNK_NEARBY_LINES = 3
+
 
 @dataclass(frozen=True)
 class TraversalLimits:
@@ -30,7 +32,9 @@ class TraversalLimits:
 
 
 class ImpactAnalyzer:
-    def __init__(self, project_knowledge: ProjectKnowledge, limits: TraversalLimits | None = None) -> None:
+    def __init__(
+        self, project_knowledge: ProjectKnowledge, limits: TraversalLimits | None = None
+    ) -> None:
         self.knowledge = project_knowledge
         self.limits = limits or TraversalLimits()
         self.by_path = knowledge_by_path(project_knowledge)
@@ -49,12 +53,17 @@ class ImpactAnalyzer:
             for gap in change_set.gaps
         ]
 
-        changed_paths = {file.path for file in change_set.files}
+        change_by_path = {file.path: file for file in change_set.files}
+        changed_paths = set(change_by_path)
         categories_by_path: dict[str, list[ChangeCategory]] = {}
 
         for change in change_set.files:
             analysis = self.by_path.get(change.path)
             categories = classify_changed_file(change, analysis)
+            if self.knowledge.summary.reused_modules.get(change.path, 0) >= 2:
+                categories = sorted(
+                    {*categories, ChangeCategory.SHARED}, key=lambda item: item.value
+                )
             change.categories = categories
             categories_by_path[change.path] = categories
             symbols = map_changed_symbols(change, analysis)
@@ -83,7 +92,10 @@ class ImpactAnalyzer:
                         ),
                         target=symbol.symbol_name,
                         level=ImpactLevel.DIRECT,
-                        reason=f"Symbol evidence overlaps or is adjacent to a changed hunk in {change.path}.",
+                        reason=(
+                            "Symbol evidence overlaps or is adjacent to a changed hunk in "
+                            f"{change.path}."
+                        ),
                         confidence=symbol.confidence,
                         evidence=[symbol.evidence],
                         categories=categories,
@@ -96,7 +108,10 @@ class ImpactAnalyzer:
                         target_type=ImpactTargetType.FILE,
                         target=change.path,
                         level=ImpactLevel.UNKNOWN,
-                        reason="Changed file is not present in the supplied ProjectKnowledge, so structural blast radius cannot be proven.",
+                        reason=(
+                            "Changed file is not present in the supplied ProjectKnowledge, so "
+                            "structural blast radius cannot be proven."
+                        ),
                         confidence=Confidence.LOW,
                         evidence=evidence,
                         categories=categories,
@@ -112,7 +127,9 @@ class ImpactAnalyzer:
             analysis = self.by_path.get(affected_path)
             if analysis is None:
                 continue
-            source_categories = self._categories_for_dependency_path(dependency_path, categories_by_path)
+            source_categories = self._categories_for_dependency_path(
+                dependency_path, categories_by_path
+            )
             indirect.append(
                 ImpactItem(
                     key=f"dependent:{affected_path}",
@@ -123,16 +140,21 @@ class ImpactAnalyzer:
                     ),
                     target=affected_path,
                     level=ImpactLevel.INDIRECT,
-                    reason=f"This file depends on changed code through {len(dependency_path)} deterministic import edge(s).",
+                    reason=(
+                        f"This file depends on changed code through {len(dependency_path)} "
+                        "deterministic import edge(s)."
+                    ),
                     confidence=Confidence.HIGH,
-                    evidence=[step_evidence for step_evidence in self._path_evidence(dependency_path)],
+                    evidence=self._path_evidence(dependency_path),
                     dependency_path=dependency_path,
                     categories=source_categories,
                 )
             )
 
         routes.extend(self._affected_routes(changed_paths, paths, categories_by_path))
-        states.extend(self._affected_states(changed_paths, paths, categories_by_path))
+        states.extend(
+            self._affected_states(change_by_path, paths, categories_by_path)
+        )
         shared.extend(self._shared_groups(changed_paths, paths, routes))
 
         impacted_paths = changed_paths | set(paths)
@@ -155,10 +177,11 @@ class ImpactAnalyzer:
         states = _dedupe_items(states)
         gaps = _dedupe_gaps(gaps)
 
+        all_items = _dedupe_items(
+            [*direct, *indirect, *possible, *unknown, *routes, *states]
+        )
         runtime_count = sum(
-            1
-            for item in [*direct, *indirect, *possible, *unknown, *routes, *states]
-            if item.needs_runtime_verification
+            1 for item in all_items if item.needs_runtime_verification
         ) + len(gaps)
         summary = ImpactSummary(
             changed_files=len(change_set.files),
@@ -190,7 +213,9 @@ class ImpactAnalyzer:
             coverage_gaps=gaps,
         )
 
-    def _reverse_paths(self, changed_paths: set[str]) -> tuple[dict[str, list[DependencyStep]], list[ImpactCoverageGap]]:
+    def _reverse_paths(
+        self, changed_paths: set[str]
+    ) -> tuple[dict[str, list[DependencyStep]], list[ImpactCoverageGap]]:
         reverse: dict[str, list[tuple[str, str]]] = defaultdict(list)
         for edge in self.knowledge.dependencies:
             reverse[edge.target].append((edge.source, edge.module))
@@ -209,7 +234,10 @@ class ImpactAnalyzer:
                         ImpactCoverageGap(
                             path=target,
                             reason="traversal_depth_limit",
-                            detail=f"Reverse dependency traversal stopped at depth {self.limits.max_depth}.",
+                            detail=(
+                                "Reverse dependency traversal stopped at depth "
+                                f"{self.limits.max_depth}."
+                            ),
                         )
                     )
                 continue
@@ -225,7 +253,10 @@ class ImpactAnalyzer:
                         ImpactCoverageGap(
                             path=source,
                             reason="traversal_node_limit",
-                            detail=f"Reverse dependency traversal exceeded {self.limits.max_nodes} nodes.",
+                            detail=(
+                                "Reverse dependency traversal exceeded "
+                                f"{self.limits.max_nodes} nodes."
+                            ),
                         )
                     )
                     return result, gaps
@@ -256,42 +287,63 @@ class ImpactAnalyzer:
                         reason=(
                             f"Route is declared in directly changed file {path}."
                             if direct
-                            else f"Route-owning file {path} depends on changed code through a deterministic dependency path."
+                            else (
+                                f"Route-owning file {path} depends on changed code through "
+                                "a deterministic dependency path."
+                            )
                         ),
                         confidence=Confidence.HIGH,
                         evidence=[route.evidence],
                         dependency_path=dependency_path,
-                        categories=self._categories_for_dependency_path(dependency_path, categories_by_path),
+                        categories=self._categories_for_dependency_path(
+                            dependency_path, categories_by_path
+                        ),
                     )
                 )
         return items
 
     def _affected_states(
         self,
-        changed_paths: set[str],
+        change_by_path: dict[str, ChangedFile],
         paths: dict[str, list[DependencyStep]],
         categories_by_path: dict[str, list[ChangeCategory]],
     ) -> list[ImpactItem]:
         items: list[ImpactItem] = []
+        changed_paths = set(change_by_path)
         impacted_paths = changed_paths | set(paths)
         for state in self.knowledge.semantic_states:
             evidence_paths = {evidence.path for evidence in state.evidence}
             relevant = evidence_paths & impacted_paths
             if not relevant:
                 continue
-            direct_paths = evidence_paths & changed_paths
-            if direct_paths:
+
+            exact_change = any(
+                evidence.path in change_by_path
+                and self._evidence_overlaps_change(
+                    evidence, change_by_path[evidence.path]
+                )
+                for evidence in state.evidence
+            )
+            if exact_change:
                 level = ImpactLevel.DIRECT
                 confidence = state.confidence
                 dependency_path: list[DependencyStep] = []
-                reason = "State evidence is located in directly changed code."
+                reason = "State evidence overlaps or is adjacent to a directly changed hunk."
                 runtime = state.needs_runtime_verification
             else:
                 level = ImpactLevel.POSSIBLE
-                confidence = Confidence.MEDIUM if state.confidence == Confidence.HIGH else state.confidence
-                path = sorted(relevant)[0]
-                dependency_path = paths.get(path, [])
-                reason = "State belongs to a deterministic dependent surface, but runtime reachability after this change is not proven statically."
+                confidence = (
+                    Confidence.MEDIUM
+                    if state.confidence == Confidence.HIGH
+                    else state.confidence
+                )
+                dependent_paths = sorted(relevant - changed_paths)
+                dependency_path = paths.get(dependent_paths[0], []) if dependent_paths else []
+                reason = (
+                    "State is associated with changed or deterministically dependent code, but "
+                    "the changed hunk does not directly overlap its evidence; runtime relevance "
+                    "must be verified."
+                )
                 runtime = True
             items.append(
                 ImpactItem(
@@ -303,7 +355,9 @@ class ImpactAnalyzer:
                     confidence=confidence,
                     evidence=state.evidence,
                     dependency_path=dependency_path,
-                    categories=self._categories_for_dependency_path(dependency_path, categories_by_path),
+                    categories=self._categories_for_dependency_path(
+                        dependency_path, categories_by_path
+                    ),
                     needs_runtime_verification=runtime,
                     explanation=state.explanation,
                 )
@@ -327,7 +381,11 @@ class ImpactAnalyzer:
                 if dependency_path and dependency_path[-1].target == changed
             )
             affected_routes = sorted(
-                {item.target for item in routes if any(step.target == changed for step in item.dependency_path)}
+                {
+                    item.target
+                    for item in routes
+                    if any(step.target == changed for step in item.dependency_path)
+                }
             )
             groups.append(
                 SharedImpactGroup(
@@ -339,30 +397,69 @@ class ImpactAnalyzer:
             )
         return groups
 
-    def _change_evidence(self, change: ChangedFile, analysis: FileAnalysis | None) -> list[Evidence]:
+    def _change_evidence(
+        self, change: ChangedFile, analysis: FileAnalysis | None
+    ) -> list[Evidence]:
         if change.hunks:
             hunk = change.hunks[0]
             line = hunk.new_range.start or hunk.old_range.start or 1
-            return [Evidence(path=change.path, line=max(line, 1), excerpt=hunk.excerpt[:240] or hunk.header, kind="diff_hunk")]
+            return [
+                Evidence(
+                    path=change.path,
+                    line=max(line, 1),
+                    excerpt=hunk.excerpt[:240] or hunk.header,
+                    kind="diff_hunk",
+                )
+            ]
         if analysis is not None and analysis.symbols:
             return [analysis.symbols[0].evidence]
-        return [Evidence(path=change.path, line=1, excerpt="File changed; no parsed hunk evidence available.", kind="change")]
+        return [
+            Evidence(
+                path=change.path,
+                line=1,
+                excerpt="File changed; no parsed hunk evidence available.",
+                kind="change",
+            )
+        ]
 
     def _path_evidence(self, path: list[DependencyStep]) -> list[Evidence]:
         evidence: list[Evidence] = []
         for step in path:
             for edge in self.knowledge.dependencies:
-                if edge.source == step.source and edge.target == step.target and edge.module == step.module:
+                if (
+                    edge.source == step.source
+                    and edge.target == step.target
+                    and edge.module == step.module
+                ):
                     evidence.append(edge.evidence)
                     break
         return evidence
+
+    @staticmethod
+    def _evidence_overlaps_change(evidence: Evidence, change: ChangedFile) -> bool:
+        for hunk in change.hunks:
+            ranges = (hunk.old_range, hunk.new_range)
+            for line_range in ranges:
+                if line_range.start == 0:
+                    continue
+                if (
+                    line_range.start - _HUNK_NEARBY_LINES
+                    <= evidence.line
+                    <= line_range.end + _HUNK_NEARBY_LINES
+                ):
+                    return True
+        return False
 
     @staticmethod
     def _categories_for_dependency_path(
         path: list[DependencyStep], categories_by_path: dict[str, list[ChangeCategory]]
     ) -> list[ChangeCategory]:
         if not path:
-            merged = {category for categories in categories_by_path.values() for category in categories}
+            merged = {
+                category
+                for categories in categories_by_path.values()
+                for category in categories
+            }
         else:
             changed_target = path[-1].target
             merged = set(categories_by_path.get(changed_target, []))
