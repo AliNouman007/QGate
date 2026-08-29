@@ -20,6 +20,12 @@ class JsonQAMemoryStore:
     def _safe_key(key: str) -> bool:
         return bool(_KEY_RE.fullmatch(key))
 
+    @staticmethod
+    def _paths(directory: Path) -> list[Path]:
+        if not directory.exists():
+            return []
+        return sorted(directory.glob("*.json"))
+
     def save_candidate(self, candidate: MemoryCandidate) -> Path:
         self.candidates_dir.mkdir(parents=True, exist_ok=True)
         path = self.candidates_dir / f"{candidate.key}.json"
@@ -35,7 +41,15 @@ class JsonQAMemoryStore:
         return MemoryCandidate.model_validate_json(path.read_text(encoding="utf-8"))
 
     def list_candidates(self, *, project_source_id: str | None = None) -> list[MemoryCandidate]:
-        return self._list_models(self.candidates_dir, MemoryCandidate, project_source_id)
+        items: list[MemoryCandidate] = []
+        for path in self._paths(self.candidates_dir):
+            try:
+                item = MemoryCandidate.model_validate_json(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if project_source_id is None or item.project_source_id == project_source_id:
+                items.append(item)
+        return items
 
     def save_memory(self, memory: ConfirmedMemory) -> Path:
         self.memories_dir.mkdir(parents=True, exist_ok=True)
@@ -52,7 +66,15 @@ class JsonQAMemoryStore:
         return ConfirmedMemory.model_validate_json(path.read_text(encoding="utf-8"))
 
     def list_memories(self, *, project_source_id: str | None = None) -> list[ConfirmedMemory]:
-        return self._list_models(self.memories_dir, ConfirmedMemory, project_source_id)
+        items: list[ConfirmedMemory] = []
+        for path in self._paths(self.memories_dir):
+            try:
+                item = ConfirmedMemory.model_validate_json(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if project_source_id is None or item.project_source_id == project_source_id:
+                items.append(item)
+        return items
 
     def save_rule(self, rule: RegressionRule) -> Path:
         self.rules_dir.mkdir(parents=True, exist_ok=True)
@@ -69,7 +91,15 @@ class JsonQAMemoryStore:
         return RegressionRule.model_validate_json(path.read_text(encoding="utf-8"))
 
     def list_rules(self, *, project_source_id: str | None = None) -> list[RegressionRule]:
-        return self._list_models(self.rules_dir, RegressionRule, project_source_id)
+        items: list[RegressionRule] = []
+        for path in self._paths(self.rules_dir):
+            try:
+                item = RegressionRule.model_validate_json(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if project_source_id is None or item.project_source_id == project_source_id:
+                items.append(item)
+        return items
 
     def append_audit(self, event: MemoryAuditEvent) -> Path:
         self.audit_dir.mkdir(parents=True, exist_ok=True)
@@ -78,26 +108,10 @@ class JsonQAMemoryStore:
         return path
 
     def list_audit(self) -> list[MemoryAuditEvent]:
-        if not self.audit_dir.exists():
-            return []
         events: list[MemoryAuditEvent] = []
-        for path in sorted(self.audit_dir.glob("*.json")):
+        for path in self._paths(self.audit_dir):
             try:
                 events.append(MemoryAuditEvent.model_validate_json(path.read_text(encoding="utf-8")))
             except (OSError, ValueError):
                 continue
         return events
-
-    @staticmethod
-    def _list_models(directory: Path, model_type: type, project_source_id: str | None) -> list:
-        if not directory.exists():
-            return []
-        items = []
-        for path in sorted(directory.glob("*.json")):
-            try:
-                item = model_type.model_validate_json(path.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                continue
-            if project_source_id is None or item.project_source_id == project_source_id:
-                items.append(item)
-        return items
