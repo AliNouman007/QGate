@@ -5,7 +5,6 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-
 SCHEMA_VERSION = "1.0"
 RUNNER_VERSION = "0.1.0"
 

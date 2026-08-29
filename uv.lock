@@ -4,6 +4,7 @@ requires-python = "==3.12.*"
 
 [manifest]
 members = [
+    "qgate-browser-execution",
     "qgate-impact-analysis",
     "qgate-project-intelligence",
     "qgate-scenario-intelligence",
@@ -2366,6 +2367,25 @@ wheels = [
 ]
 
 [[package]]
+name = "qgate-browser-execution"
+version = "0.1.0"
+source = { editable = "packages/browser-execution" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "qgate-project-intelligence" },
+    { name = "qgate-scenario-intelligence" },
+    { name = "suiflex-suitest-lifecycle", extra = ["frontend"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2.9.0" },
+    { name = "qgate-project-intelligence", editable = "packages/project-intelligence" },
+    { name = "qgate-scenario-intelligence", editable = "packages/scenario-intelligence" },
+    { name = "suiflex-suitest-lifecycle", extras = ["frontend"], editable = "packages/lifecycle" },
+]
+
+[[package]]
 name = "qgate-impact-analysis"
 version = "0.1.0"
 source = { editable = "packages/impact-analysis" }
@@ -2771,6 +2791,7 @@ dependencies = [
     { name = "prometheus-fastapi-instrumentator" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "qgate-browser-execution" },
     { name = "qgate-impact-analysis" },
     { name = "qgate-project-intelligence" },
     { name = "qgate-scenario-intelligence" },
@@ -2803,6 +2824,7 @@ requires-dist = [
     { name = "prometheus-fastapi-instrumentator", specifier = ">=8.1.0" },
     { name = "pydantic", specifier = ">=2.9.0" },
     { name = "pydantic-settings", specifier = ">=2.6.0" },
+    { name = "qgate-browser-execution", editable = "packages/browser-execution" },
     { name = "qgate-impact-analysis", editable = "packages/impact-analysis" },
     { name = "qgate-project-intelligence", editable = "packages/project-intelligence" },
     { name = "qgate-scenario-intelligence", editable = "packages/scenario-intelligence" },

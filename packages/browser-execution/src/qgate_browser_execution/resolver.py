@@ -21,7 +21,7 @@ class ResolutionResult:
 async def resolve_target(page: Page, hint: TargetHint, *, timeout_ms: int) -> ResolutionResult:
     candidates: list[tuple[str, Locator]] = []
     if hint.role and hint.name:
-        candidates.append((f"role={hint.role} name={hint.name}", page.get_by_role(hint.role, name=hint.name)))
+        candidates.append((f"role={hint.role} name={hint.name}", page.get_by_role(hint.role, name=hint.name)))  # type: ignore[arg-type]
     if hint.label:
         candidates.append((f"label={hint.label}", page.get_by_label(hint.label)))
     if hint.test_id:

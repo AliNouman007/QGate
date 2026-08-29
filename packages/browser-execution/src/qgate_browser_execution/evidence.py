@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import hashlib
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .models import ArtifactRef, DomEvidence, StepEvidence
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from playwright.async_api import Locator, Page
 
 
@@ -97,6 +98,6 @@ async def capture_dom_evidence(
         visible=visible,
         enabled=enabled,
         html_excerpt=str(html),
-        bounding_box={k: float(v) for k, v in box.items()} if box else None,
+        bounding_box={k: float(v) for k, v in box.items()} if box else None,  # type: ignore[arg-type]
         computed_css={str(k): str(v) for k, v in dict(css).items()},
     )

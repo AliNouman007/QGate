@@ -6,7 +6,6 @@ from pathlib import Path
 
 from .models import ExecutionReport
 
-
 _KEY_RE = re.compile(r"^[0-9a-f]{24}$")
 
 

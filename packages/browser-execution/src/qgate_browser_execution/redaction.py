@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-
 _REDACTED = "<redacted>"
 _SENSITIVE_KEYS = {
     "authorization",

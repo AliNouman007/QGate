@@ -80,7 +80,7 @@ async def test_browser_execution_latest_list_and_detail_are_local_and_authentica
         listing = await client.get("/api/v1/browser-execution/reports", headers=headers)
         detail = await client.get(f"/api/v1/browser-execution/reports/{key}", headers=headers)
 
-    assert latest.status_code == 200
+    assert latest.status_code == 200, f"Got status {latest.status_code}: {latest.json()}"
     assert latest.json()["summary"]["passed"] == 1
     assert listing.status_code == 200
     assert listing.json()[0]["key"] == key

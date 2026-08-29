@@ -6,14 +6,17 @@ import time
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import urljoin
 
 from suitest_lifecycle.frontend_runtime import ensure_browser
 
+if TYPE_CHECKING:
+    from playwright.async_api import Browser, Locator, Page
+
 from .classification import assertion_failure, classify_exception
 from .evidence import capture_page_evidence
 from .models import (
-    ArtifactRef,
     AttemptRecord,
     CompiledScenario,
     CompiledStep,
@@ -96,13 +99,10 @@ class BrowserExecutor:
             )
         return self._finish(report)
 
-    async def _run_scenario(self, browser: object, request: ExecutionRequest, scenario: CompiledScenario, run_id: str) -> ScenarioExecution:
-        from playwright.async_api import Browser
-
-        typed_browser: Browser = browser  # type: ignore[assignment]
+    async def _run_scenario(self, browser: Browser, request: ExecutionRequest, scenario: CompiledScenario, run_id: str) -> ScenarioExecution:
         start_clock = time.perf_counter()
         started = datetime.now(UTC)
-        context = await typed_browser.new_context()
+        context = await browser.new_context()
         page = await context.new_page()
         page.set_default_timeout(request.config.step_timeout_ms)
         console: list[ConsoleEvidence] = []
@@ -150,7 +150,7 @@ class BrowserExecutor:
             started_at=started,
             source_impact_keys=scenario.source_impact_keys,
         )
-        artifact_root = Path(request.config.artifact_dir).expanduser() / run_id / scenario.scenario_key
+        artifact_root = Path(request.config.artifact_dir).expanduser() / run_id / scenario.scenario_key  # noqa: ASYNC240
         try:
             for step in scenario.steps:
                 result = await self._run_step(
@@ -184,7 +184,7 @@ class BrowserExecutor:
 
     async def _run_step(
         self,
-        page: object,
+        page: Page,
         request: ExecutionRequest,
         step: CompiledStep,
         *,
@@ -192,9 +192,6 @@ class BrowserExecutor:
         console: list[ConsoleEvidence],
         network: list[NetworkEvidence],
     ) -> StepExecution:
-        from playwright.async_api import Page
-
-        typed_page: Page = page  # type: ignore[assignment]
         started = datetime.now(UTC)
         start_clock = time.perf_counter()
         result = StepExecution(
@@ -216,17 +213,17 @@ class BrowserExecutor:
                     result.detail = "navigate operation missing route"
                 else:
                     url = urljoin(request.config.base_url.rstrip("/") + "/", step.route.lstrip("/"))
-                    response = await typed_page.goto(url, wait_until="domcontentloaded", timeout=request.config.global_timeout_ms)
+                    response = await page.goto(url, wait_until="domcontentloaded", timeout=request.config.global_timeout_ms)
                     if response is not None and response.status >= 500:
                         result.status = ExecutionStatus.EXECUTION_ERROR
                         result.failure_category = FailureCategory.ENVIRONMENT_FAILURE
                         result.detail = f"navigation returned HTTP {response.status}"
                     else:
-                        result.actual = typed_page.url
+                        result.actual = page.url
             elif step.operation == OperationKind.CAPTURE:
                 pass
             elif step.operation == OperationKind.ASSERT_URL:
-                actual = typed_page.url
+                actual = page.url
                 result.actual = actual
                 if step.expected and step.expected not in actual:
                     result.status, result.failure_category = assertion_failure()
@@ -238,7 +235,7 @@ class BrowserExecutor:
                     result.detail = "operation requires target metadata"
                 else:
                     resolution = await resolve_target(
-                        typed_page, step.target, timeout_ms=request.config.step_timeout_ms
+                        page, step.target, timeout_ms=request.config.step_timeout_ms
                     )
                     if not resolution.resolved or resolution.locator is None:
                         result.status = ExecutionStatus.UNVERIFIED
@@ -257,14 +254,14 @@ class BrowserExecutor:
             screenshot = artifact_root / f"step-{step.index}-failure.png"
         try:
             result.evidence = await capture_page_evidence(
-                typed_page,
+                page,
                 requested_route=step.route,
                 locator=locator,
                 locator_description=locator_description,
                 screenshot_path=screenshot,
             )
         except Exception as exc:
-            result.evidence = StepEvidence(requested_route=step.route, final_url=typed_page.url)
+            result.evidence = StepEvidence(requested_route=step.route, final_url=page.url)
             if result.detail is None:
                 result.detail = f"evidence capture failed: {exc}"
         result.evidence.console = list(console[-50:])
@@ -273,42 +270,38 @@ class BrowserExecutor:
         result.duration_ms = (time.perf_counter() - start_clock) * 1000
         return result
 
-    async def _apply_target_operation(self, locator: object, step: CompiledStep, result: StepExecution) -> None:
-        from playwright.async_api import Locator
-
-        target: Locator = locator  # type: ignore[assignment]
+    async def _apply_target_operation(self, locator: Locator, step: CompiledStep, result: StepExecution) -> None:
         if step.operation == OperationKind.CLICK:
-            await target.click()
+            await locator.click()
         elif step.operation == OperationKind.FILL:
-            await target.fill(step.value or "")
+            await locator.fill(step.value or "")
         elif step.operation == OperationKind.SELECT:
-            await target.select_option(step.value or "")
+            await locator.select_option(step.value or "")
         elif step.operation == OperationKind.ASSERT_VISIBLE:
-            actual = await target.is_visible()
-            result.actual = str(actual)
-            if not actual:
+            is_visible = await locator.is_visible()
+            result.actual = str(is_visible)
+            if not is_visible:
                 result.status, result.failure_category = assertion_failure()
                 result.detail = "expected target to be visible"
         elif step.operation == OperationKind.ASSERT_HIDDEN:
-            actual = await target.is_visible()
-            result.actual = str(actual)
-            if actual:
+            is_visible = await locator.is_visible()
+            result.actual = str(is_visible)
+            if is_visible:
                 result.status, result.failure_category = assertion_failure()
                 result.detail = "expected target to be hidden"
         elif step.operation == OperationKind.ASSERT_TEXT:
-            actual = (await target.inner_text()).strip()
-            expected = step.expected or ""
-            result.actual = actual
-            if expected not in actual:
+            actual_text = (await locator.inner_text()).strip()
+            expected_text = step.expected or ""
+            result.actual = actual_text
+            if expected_text not in actual_text:
                 result.status, result.failure_category = assertion_failure()
-                result.detail = f"expected text containing {expected!r}, observed {actual!r}"
+                result.detail = f"expected text containing {expected_text!r}, observed {actual_text!r}"
         elif step.operation == OperationKind.ASSERT_VALUE:
-            actual = await target.input_value()
-            expected = step.expected or ""
-            result.actual = actual
-            if actual != expected:
+            actual_val = await locator.input_value()
+            expected_val = step.expected or ""
+            result.actual = actual_val
+            if actual_val != expected_val:
                 result.status, result.failure_category = assertion_failure()
-                result.detail = f"expected value {expected!r}, observed {actual!r}"
         else:
             result.status = ExecutionStatus.UNVERIFIED
             result.failure_category = FailureCategory.TEST_DEFINITION_ERROR
