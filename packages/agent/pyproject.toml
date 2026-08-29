@@ -11,6 +11,7 @@ dependencies = [
     # layer may enrich those facts without coupling deterministic analysis to an LLM.
     "qgate-project-intelligence",
     "qgate-impact-analysis",
+    "qgate-scenario-intelligence",
     # M2 Task 2 — deterministic OpenAPI generator: parse specs, validate
     # response schemas, and synthesise example request bodies (ZERO tier, no LLM).
     "openapi-pydantic>=0.4.0",
