@@ -1303,7 +1303,7 @@ Local-mode endpoints for the QA Memory dashboard and lifecycle management. Disab
 | `POST /api/v1/qa-memory/candidates/{key}/reject` | Reject candidate using caller user_id as actor. |
 | `POST /api/v1/qa-memory/memories/{key}/supersede` | Replaces memory with another confirmed memory. |
 | `POST /api/v1/qa-memory/memories/{key}/deactivate` | Deactivates active confirmed memory. |
-| `POST /api/v1/qa-memory/candidates/{key}/reactivate` | Reactivates inactive confirmed memory. |
+| `POST /api/v1/qa-memory/memories/{key}/reactivate` | Reactivates inactive confirmed memory. |
 
 
 
