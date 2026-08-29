@@ -9,8 +9,17 @@ evidence and cannot raise confidence above the deterministic supporting facts.
 from __future__ import annotations
 
 from pydantic import BaseModel, Field, ValidationError
-from qgate_project_intelligence.models import Confidence, SemanticState, SemanticStateKind
-from qgate_project_intelligence.semantic import EvidencePack, HeuristicSemanticClassifier
+from qgate_project_intelligence.models import (
+    Confidence,
+    ProjectKnowledge,
+    SemanticState,
+    SemanticStateKind,
+)
+from qgate_project_intelligence.semantic import (
+    EvidencePack,
+    HeuristicSemanticClassifier,
+    build_evidence_packs,
+)
 
 from suitest_agent.providers.base import ChatMessage, LLMProvider, ModelCall, ProviderError
 
@@ -21,6 +30,18 @@ class _AIClassification(BaseModel):
     explanation: str = Field(min_length=1, max_length=600)
     confidence: Confidence
     needs_runtime_verification: bool
+
+
+async def enrich_project_knowledge(
+    provider: LLMProvider,
+    *,
+    model: str,
+    knowledge: ProjectKnowledge,
+) -> ProjectKnowledge:
+    """Return a copy of ProjectKnowledge with bounded provider-enriched semantic states."""
+    packs = build_evidence_packs(knowledge.files)
+    semantic_states = await enrich_evidence_packs(provider, model=model, packs=packs)
+    return knowledge.model_copy(update={"semantic_states": semantic_states})
 
 
 async def enrich_evidence_pack(
