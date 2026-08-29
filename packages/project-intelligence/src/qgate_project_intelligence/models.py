@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
@@ -106,7 +106,7 @@ class ProjectSummary(BaseModel):
 class AnalysisMetadata(BaseModel):
     schema_version: str = SCHEMA_VERSION
     analyzer_version: str = ANALYZER_VERSION
-    analyzed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    analyzed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     source_id: str
     source_fingerprint: str
     reused_files: int = 0
