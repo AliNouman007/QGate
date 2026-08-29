@@ -79,11 +79,48 @@ def test_react_next_and_typescript_facts_are_evidence_backed(tmp_path: Path) -> 
     assert legacy_page.routes[0].route == "/account"
     assert legacy_page.routes[0].router == "next_pages"
 
+    assert set(knowledge.summary.declared_frameworks) == {"nextjs", "react", "typescript"}
     assert knowledge.summary.frameworks["nextjs"] >= 1
     assert knowledge.summary.frameworks["react"] >= 1
     assert knowledge.summary.route_count == 2
     assert knowledge.summary.component_count >= 2
     assert knowledge.summary.hook_count >= 2
+
+
+def test_pages_folder_without_next_evidence_is_not_promoted_to_nextjs(tmp_path: Path) -> None:
+    (tmp_path / "src/pages").mkdir(parents=True)
+    (tmp_path / "package.json").write_text(
+        '{"dependencies":{"react":"19.0.0"},"devDependencies":{"typescript":"5.7.0"}}',
+        encoding="utf-8",
+    )
+    (tmp_path / "src/pages/home.tsx").write_text(
+        "export function Home() { return <main>Home</main>; }\n",
+        encoding="utf-8",
+    )
+
+    knowledge = ProjectIntelligenceAnalyzer().analyze(LocalPathSource(tmp_path))
+    page = next(file for file in knowledge.files if file.record.path == "src/pages/home.tsx")
+
+    assert FrameworkKind.NEXTJS not in {fact.framework for fact in page.frameworks}
+    assert page.routes == []
+    assert "nextjs" not in knowledge.summary.declared_frameworks
+
+
+def test_manifest_framework_change_invalidates_unchanged_frontend_analysis(tmp_path: Path) -> None:
+    _write_next_project(tmp_path)
+    analyzer = ProjectIntelligenceAnalyzer()
+    first = analyzer.analyze(LocalPathSource(tmp_path))
+
+    (tmp_path / "package.json").write_text(
+        '{"dependencies":{"react":"19.0.0"},"devDependencies":{"typescript":"5.7.0"}}',
+        encoding="utf-8",
+    )
+    second = analyzer.analyze(LocalPathSource(tmp_path), previous=first)
+    by_path = {file.record.path: file for file in second.files}
+
+    assert "nextjs" not in second.summary.declared_frameworks
+    assert by_path["src/pages/account.tsx"].routes == []
+    assert second.metadata.analyzed_files >= 4
 
 
 def test_semantic_states_keep_evidence_and_framework_context(tmp_path: Path) -> None:
