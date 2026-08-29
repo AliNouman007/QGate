@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import time
 import uuid
 from datetime import UTC, datetime
@@ -156,8 +157,12 @@ class BrowserExecutor:
             started_at=started,
             source_impact_keys=scenario.source_impact_keys,
         )
-        artifact_root = (
-            Path(request.config.artifact_dir).expanduser() / run_id / scenario.scenario_key
+        artifact_root = Path(
+            os.path.join(
+                os.path.expanduser(request.config.artifact_dir),
+                run_id,
+                scenario.scenario_key,
+            )
         )
         try:
             for step in scenario.steps:
