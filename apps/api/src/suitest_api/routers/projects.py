@@ -24,6 +24,7 @@ from suitest_api.auth.db import get_async_session
 from suitest_api.deps.role import require_role
 from suitest_api.deps.scope import TenantContext, require_workspace_membership
 from suitest_api.routers._pagination import decode_cursor_or_400, encode_next
+from suitest_api.routers.project_intelligence import router as project_intelligence_router
 from suitest_api.schemas.project import (
     ProjectCreate,
     ProjectPublic,
@@ -39,6 +40,7 @@ from suitest_api.services.project_service import (
 from suitest_api.ws.publisher import publish_event
 
 router = APIRouter(prefix="/api/v1", tags=["projects"])
+router.include_router(project_intelligence_router)
 
 # Role gate shared by every mutating endpoint per docs/API.md §3.2 — project
 # CRUD is ADMIN/OWNER only (QA can author cases but not own projects).

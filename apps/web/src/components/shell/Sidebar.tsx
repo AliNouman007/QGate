@@ -10,6 +10,7 @@ import {
   FlaskConical,
   Inbox,
   LayoutDashboard,
+  Map,
   Network,
   Play,
   Plug,
@@ -128,6 +129,7 @@ export function Sidebar({
     {
       eyebrow: "Insights",
       items: [
+        { label: "Project Map", icon: Map, to: "/project-map" },
         { label: "Analytics", icon: BarChart3, to: "/analytics" },
         { label: "Traceability", icon: Network, to: "/trace" },
         { label: "Eval", icon: FlaskConical, to: "/eval" },
