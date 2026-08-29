@@ -162,10 +162,11 @@ async def create_project(
     try:
         outcome = await svc.create(body)
     except SlugConflictError as exc:
+        # service already rolled back; map to 409.
         _raise_slug_conflict(exc)
     await session.commit()
     project_row = await ProjectRepo(session).get_active_by_id(outcome.project.id)
-    if project_row is None:
+    if project_row is None:  # pragma: no cover — flushed row must exist
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
     public = ProjectPublic.model_validate(project_row)
     await publish_event(
@@ -185,7 +186,12 @@ async def update_project(
     ctx: TenantContext = Depends(_writer_dep),
     session: AsyncSession = Depends(get_async_session),
 ) -> ProjectPublic:
-    """Patch metadata (ADMIN/OWNER only)."""
+    """Patch metadata (ADMIN/OWNER only).
+
+    Slug is immutable — PATCH with a ``slug`` field returns 400
+    ``IMMUTABLE_SLUG``. ``gating_suite_id`` must belong to the target project,
+    else 400 ``INVALID_GATING_SUITE``.
+    """
     svc = _build_service(session, ctx)
     try:
         outcome = await svc.update(project_id, body)
@@ -199,7 +205,7 @@ async def update_project(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="project not found")
     await session.commit()
     project_row = await ProjectRepo(session).get_active_by_id(outcome.project.id)
-    if project_row is None:
+    if project_row is None:  # pragma: no cover — flushed row must exist
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
     public = ProjectPublic.model_validate(project_row)
     await publish_event(
@@ -219,7 +225,13 @@ async def delete_project(
     ctx: TenantContext = Depends(_writer_dep),
     session: AsyncSession = Depends(get_async_session),
 ) -> Response:
-    """Soft-delete the project + cascade child suites + cases."""
+    """Soft-delete the project + cascade child suites + cases (with ``confirmCascade=true``).
+
+    Returns 204 on success. Without ``confirmCascade=true`` against a project
+    that has at least one active child suite, returns 409
+    ``CONFIRM_CASCADE_REQUIRED`` with ``suiteCount`` / ``caseCount`` /
+    ``resourceType``.
+    """
     svc = _build_service(session, ctx)
     try:
         outcome = await svc.soft_delete_with_cascade(project_id, confirm_cascade=confirm_cascade)
@@ -245,7 +257,12 @@ async def restore_project(
     ctx: TenantContext = Depends(_writer_dep),
     session: AsyncSession = Depends(get_async_session),
 ) -> Response:
-    """Revive a soft-deleted project (idempotent; children stay tombstoned)."""
+    """Revive a soft-deleted project (idempotent; children stay tombstoned).
+
+    Re-POST after a successful restore returns 204 (idempotent). Does NOT
+    auto-restore child suites + cases — restore each individually via
+    ``POST /suites/:id/restore`` / ``POST /test-cases/:id/restore``.
+    """
     svc = _build_service(session, ctx)
     outcome = await svc.restore(project_id)
     if outcome is None:
