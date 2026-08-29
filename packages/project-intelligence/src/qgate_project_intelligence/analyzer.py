@@ -11,8 +11,8 @@ from .models import (
     AnalysisMetadata,
     BehaviorCategory,
     CoverageGap,
+    DependencyEdge,
     FileAnalysis,
-    FileRole,
     ProjectKnowledge,
     ProjectSummary,
 )
@@ -55,10 +55,9 @@ class ProjectIntelligenceAnalyzer:
 
         dependencies = build_dependency_graph(analyses)
         summary = self._summary(analyses, dependencies)
-        fingerprint = self._fingerprint(analyses)
         metadata = AnalysisMetadata(
             source_id=source.source_id,
-            source_fingerprint=fingerprint,
+            source_fingerprint=self._fingerprint(analyses),
             reused_files=reused,
             analyzed_files=analyzed,
         )
@@ -87,7 +86,7 @@ class ProjectIntelligenceAnalyzer:
         return digest.hexdigest()
 
     @staticmethod
-    def _summary(files: list[FileAnalysis], dependencies: list) -> ProjectSummary:
+    def _summary(files: list[FileAnalysis], dependencies: list[DependencyEdge]) -> ProjectSummary:
         languages = Counter(file.record.language for file in files if file.record.language)
         roles = Counter(file.record.role.value for file in files)
         categories = Counter(
@@ -98,7 +97,7 @@ class ProjectIntelligenceAnalyzer:
         )
         return ProjectSummary(
             total_files=len(files),
-            analyzed_files=sum(bool(file.imports or file.behaviors or file.record.role in {FileRole.CONFIG, FileRole.OTHER}) for file in files),
+            analyzed_files=len(files),
             total_source_bytes=sum(file.record.size_bytes for file in files),
             languages=dict(sorted(languages.items())),
             roles=dict(sorted(roles.items())),
