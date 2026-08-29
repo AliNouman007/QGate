@@ -60,7 +60,10 @@ class FinalGateJudge:
                 decision_trace=[
                     DecisionTraceEntry(
                         rule_id="FG-INTEGRITY-FAIL-CLOSED",
-                        reason="Input artifact identity validation failed, so current execution evidence is not trusted for PASS/BLOCK.",
+                        reason=(
+                            "Input artifact identity validation failed, so current execution "
+                            "evidence is not trusted for PASS/BLOCK."
+                        ),
                     )
                 ],
             )
@@ -72,25 +75,34 @@ class FinalGateJudge:
             bundle.memory_recall,
             bundle.regression_hints,
         )
-        blocking = self._blocking_findings(bundle, coverage)
-        manual = self._manual_findings(bundle, coverage, risks)
+        conflicting = self._conflicting_required_scenarios(bundle, coverage)
+        blocking = self._blocking_findings(bundle, coverage, conflicting)
+        manual = self._manual_findings(bundle, coverage)
+        manual.extend(self._conflict_findings(conflicting))
         informational: list[GateFinding] = []
         trace = [
             DecisionTraceEntry(
                 rule_id="FG-INTEGRITY-VALID",
-                reason="Project, impact, scenario, execution and supplied memory artifacts belong to the same evidence chain.",
+                reason=(
+                    "Project, impact, scenario, execution and supplied memory artifacts belong "
+                    "to the same evidence chain."
+                ),
             )
         ]
 
         if summary.truncated:
-            finding = GateFinding(
-                key=self._finding_key("coverage", "truncated", metadata.change_source_id),
-                kind=GateReasonKind.COVERAGE_TRUNCATED,
-                title="Required coverage may be truncated",
-                reason="One or more scenario/memory generation budgets truncated evidence that could affect required coverage.",
-                verdict_effect=VerdictEffect.MANUAL_REVIEW,
+            manual.append(
+                GateFinding(
+                    key=self._finding_key("coverage", "truncated", metadata.change_source_id),
+                    kind=GateReasonKind.COVERAGE_TRUNCATED,
+                    title="Required coverage may be truncated",
+                    reason=(
+                        "One or more scenario/memory generation budgets truncated evidence that "
+                        "could affect required coverage."
+                    ),
+                    verdict_effect=VerdictEffect.MANUAL_REVIEW,
+                )
             )
-            manual.append(finding)
 
         for risk in risks:
             if risk.strong_match and not risk.covered:
@@ -103,7 +115,7 @@ class FinalGateJudge:
             trace.append(
                 DecisionTraceEntry(
                     rule_id="FG-BLOCK-VERIFIED-PRODUCT",
-                    reason="At least one relevant verified product assertion failed.",
+                    reason="At least one relevant non-conflicting verified product assertion failed.",
                     scenario_key=blocking[0].scenario_key,
                     finding_key=blocking[0].key,
                 )
@@ -115,7 +127,10 @@ class FinalGateJudge:
                         key=self._finding_key("coverage", "none", metadata.change_source_id),
                         kind=GateReasonKind.NO_REQUIRED_COVERAGE,
                         title="No required browser/product coverage",
-                        reason="This meaningful change has no required evaluable scenario coverage, so QGate cannot justify PASS.",
+                        reason=(
+                            "This meaningful change has no required evaluable scenario coverage, "
+                            "so QGate cannot justify PASS."
+                        ),
                         verdict_effect=VerdictEffect.MANUAL_REVIEW,
                     )
                 )
@@ -126,7 +141,10 @@ class FinalGateJudge:
                 trace.append(
                     DecisionTraceEntry(
                         rule_id="FG-MANUAL-REQUIRED-GAP",
-                        reason="No verified product blocker exists, but required evidence is incomplete, ambiguous, or manual-only.",
+                        reason=(
+                            "No trusted verified product blocker exists, but required evidence is "
+                            "incomplete, conflicting, ambiguous, or manual-only."
+                        ),
                         scenario_key=manual[0].scenario_key,
                         finding_key=manual[0].key,
                     )
@@ -135,7 +153,8 @@ class FinalGateJudge:
                 verdict = GateVerdict.PASS
                 confidence = GateConfidence.HIGH
                 headline = (
-                    f"PASS — all {summary.required_total} required scenarios verified with no blocking product failures"
+                    f"PASS — all {summary.required_total} required scenarios verified with no "
+                    "blocking product failures"
                 )
                 informational.append(
                     GateFinding(
@@ -150,7 +169,10 @@ class FinalGateJudge:
                 trace.append(
                     DecisionTraceEntry(
                         rule_id="FG-PASS-ALL-REQUIRED",
-                        reason="All required scenarios are verified PASS, strong historical regression obligations are covered, and no material gap remains.",
+                        reason=(
+                            "All required scenarios are verified PASS, strong historical regression "
+                            "obligations are covered, and no material gap remains."
+                        ),
                     )
                 )
 
@@ -169,10 +191,17 @@ class FinalGateJudge:
             decision_trace=trace,
         )
 
-    def _blocking_findings(self, bundle: GateInputBundle, coverage: list[CoverageItem]) -> list[GateFinding]:
+    def _blocking_findings(
+        self,
+        bundle: GateInputBundle,
+        coverage: list[CoverageItem],
+        conflicting_scenarios: set[str],
+    ) -> list[GateFinding]:
         executions = {item.scenario_key: item for item in bundle.execution.scenarios}
         findings: list[GateFinding] = []
         for item in coverage:
+            if item.scenario_key in conflicting_scenarios:
+                continue
             if item.coverage_outcome != CoverageOutcome.VERIFIED_FAIL:
                 continue
             execution = executions.get(item.scenario_key)
@@ -189,7 +218,9 @@ class FinalGateJudge:
                 and step.failure_category == FailureCategory.ASSERTION_FAILURE
             ]
             reason = execution.detail or (
-                failing_steps[0].detail if failing_steps and failing_steps[0].detail else "Verified product assertion failed"
+                failing_steps[0].detail
+                if failing_steps and failing_steps[0].detail
+                else "Verified product assertion failed"
             )
             findings.append(
                 GateFinding(
@@ -218,14 +249,15 @@ class FinalGateJudge:
         self,
         bundle: GateInputBundle,
         coverage: list[CoverageItem],
-        risks: list[HistoricalRisk],
     ) -> list[GateFinding]:
-        del risks
         findings: list[GateFinding] = []
         for item in coverage:
             if not item.required or item.coverage_outcome == CoverageOutcome.VERIFIED_PASS:
                 continue
-            if item.coverage_outcome == CoverageOutcome.VERIFIED_FAIL and item.failure_category == FailureCategory.ASSERTION_FAILURE:
+            if (
+                item.coverage_outcome == CoverageOutcome.VERIFIED_FAIL
+                and item.failure_category == FailureCategory.ASSERTION_FAILURE
+            ):
                 continue
             kind = self._manual_kind(item)
             reason = self._manual_reason(item)
@@ -254,14 +286,17 @@ class FinalGateJudge:
             key for item in coverage if item.required for key in item.source_impact_keys
         }
         for gap in bundle.scenario_plan.coverage_gaps:
-            affects_required = gap.source_impact_key is None or gap.source_impact_key in required_source_keys
+            truncated = "trunc" in gap.reason.casefold() or "budget" in gap.reason.casefold()
+            affects_required = gap.source_impact_key in required_source_keys if gap.source_impact_key else truncated
             if affects_required:
                 findings.append(
                     GateFinding(
                         key=self._finding_key("scenario-gap", gap.reason, gap.detail or ""),
-                        kind=GateReasonKind.COVERAGE_TRUNCATED
-                        if "trunc" in gap.reason.casefold() or "budget" in gap.reason.casefold()
-                        else GateReasonKind.REQUIRED_SCENARIO_UNVERIFIED,
+                        kind=(
+                            GateReasonKind.COVERAGE_TRUNCATED
+                            if truncated
+                            else GateReasonKind.REQUIRED_SCENARIO_UNVERIFIED
+                        ),
                         title="Scenario planning coverage gap",
                         reason=gap.reason + (f" — {gap.detail}" if gap.detail else ""),
                         verdict_effect=VerdictEffect.MANUAL_REVIEW,
@@ -272,7 +307,11 @@ class FinalGateJudge:
             if gap.scenario_key is None or gap.scenario_key in required_keys:
                 findings.append(
                     GateFinding(
-                        key=self._finding_key("execution-gap", gap.scenario_key or "run", gap.reason),
+                        key=self._finding_key(
+                            "execution-gap",
+                            gap.scenario_key or "run",
+                            gap.reason,
+                        ),
                         kind=GateReasonKind.REQUIRED_SCENARIO_UNVERIFIED,
                         title="Browser execution coverage gap",
                         reason=gap.reason + (f" — {gap.detail}" if gap.detail else ""),
@@ -282,30 +321,82 @@ class FinalGateJudge:
                 )
         return findings
 
+    def _conflicting_required_scenarios(
+        self,
+        bundle: GateInputBundle,
+        coverage: list[CoverageItem],
+    ) -> set[str]:
+        required = {item.scenario_key for item in coverage if item.required}
+        statuses: dict[str, set[ExecutionStatus]] = {}
+        for execution in bundle.execution.scenarios:
+            if execution.scenario_key not in required or not execution.verified:
+                continue
+            statuses.setdefault(execution.scenario_key, set()).add(execution.status)
+        return {
+            key
+            for key, values in statuses.items()
+            if ExecutionStatus.PASSED in values and ExecutionStatus.FAILED in values
+        }
+
+    def _conflict_findings(self, scenario_keys: set[str]) -> list[GateFinding]:
+        return [
+            GateFinding(
+                key=self._finding_key("conflict", scenario_key),
+                kind=GateReasonKind.CONFLICTING_EVIDENCE,
+                title="Conflicting verified execution evidence",
+                reason=(
+                    f"Required scenario {scenario_key} has both verified PASS and verified FAIL "
+                    "evidence for the same gate input chain."
+                ),
+                verdict_effect=VerdictEffect.MANUAL_REVIEW,
+                scenario_key=scenario_key,
+                verified=True,
+            )
+            for scenario_key in sorted(scenario_keys)
+        ]
+
     @staticmethod
     def _manual_kind(item: CoverageItem) -> GateReasonKind:
-        if item.readiness == AutomationReadiness.MANUAL_ONLY or item.coverage_outcome == CoverageOutcome.MANUAL:
+        if (
+            item.readiness == AutomationReadiness.MANUAL_ONLY
+            or item.coverage_outcome == CoverageOutcome.MANUAL
+        ):
             return GateReasonKind.REQUIRED_SCENARIO_MANUAL_ONLY
-        if item.readiness == AutomationReadiness.BLOCKED_BY_GAP or item.coverage_outcome == CoverageOutcome.BLOCKED:
+        if (
+            item.readiness == AutomationReadiness.BLOCKED_BY_GAP
+            or item.coverage_outcome == CoverageOutcome.BLOCKED
+        ):
             return GateReasonKind.REQUIRED_SCENARIO_BLOCKED
         if item.failure_category is not None:
-            return _MANUAL_FAILURE_KINDS.get(item.failure_category, GateReasonKind.REQUIRED_SCENARIO_UNVERIFIED)
+            return _MANUAL_FAILURE_KINDS.get(
+                item.failure_category,
+                GateReasonKind.REQUIRED_SCENARIO_UNVERIFIED,
+            )
         return GateReasonKind.REQUIRED_SCENARIO_UNVERIFIED
 
     @staticmethod
     def _manual_reason(item: CoverageItem) -> str:
         if item.failure_category is not None:
-            return f"Required scenario {item.scenario_key} was not safely verified because {item.failure_category.value}."
+            return (
+                f"Required scenario {item.scenario_key} was not safely verified because "
+                f"{item.failure_category.value}."
+            )
         if item.readiness == AutomationReadiness.MANUAL_ONLY:
             return f"Required scenario {item.scenario_key} is manual-only."
         if item.readiness == AutomationReadiness.BLOCKED_BY_GAP:
-            return f"Required scenario {item.scenario_key} is blocked by an unresolved planning/runtime gap."
+            return (
+                f"Required scenario {item.scenario_key} is blocked by an unresolved "
+                "planning/runtime gap."
+            )
         return f"Required scenario {item.scenario_key} has not been verified."
 
     def _historical_manual_finding(self, risk: HistoricalRisk) -> GateFinding:
         reason = "Strongly related confirmed historical regression was not re-verified for this change."
         if not risk.related_scenario_keys:
-            reason = "Strongly related confirmed historical regression has no matching planned scenario for this change."
+            reason = (
+                "Strongly related confirmed historical regression has no matching planned scenario "
+                "for this change."
+            )
         return GateFinding(
             key=self._finding_key("history", risk.rule_key or risk.memory_key, reason),
             kind=GateReasonKind.HISTORICAL_REGRESSION_UNVERIFIED,
@@ -321,8 +412,15 @@ class FinalGateJudge:
 
     @staticmethod
     def _manual_confidence(findings: list[GateFinding]) -> GateConfidence:
-        low_certainty = {GateReasonKind.TIMEOUT_UNRESOLVED, GateReasonKind.CONFLICTING_EVIDENCE}
-        return GateConfidence.MEDIUM if any(item.kind in low_certainty for item in findings) else GateConfidence.HIGH
+        low_certainty = {
+            GateReasonKind.TIMEOUT_UNRESOLVED,
+            GateReasonKind.CONFLICTING_EVIDENCE,
+        }
+        return (
+            GateConfidence.MEDIUM
+            if any(item.kind in low_certainty for item in findings)
+            else GateConfidence.HIGH
+        )
 
     @staticmethod
     def _block_headline(finding: GateFinding) -> str:
