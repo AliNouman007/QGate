@@ -85,15 +85,14 @@ def main() -> None:
 
     if args.command == "list":
         if args.kind == "candidates":
-            items = store.list_candidates()
+            records = store.list_candidates()
         elif args.kind == "memories":
-            items = store.list_memories()
+            records = store.list_memories()
         else:
-            items = store.list_rules()
+            records = store.list_rules()
         if args.json:
-            print(json.dumps([item.model_dump(mode="json") for item in items], indent=2))
+            print(json.dumps([item.model_dump(mode="json") for item in records], indent=2))
         else:
-            for item in items:
                 title = getattr(item, "title", item.key)
                 status = getattr(item, "status", "active")
                 print(f"{item.key}\t{status}\t{title}")

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from qgate_impact_analysis.models import ImpactLevel, ImpactReport, ImpactTargetType
-from qgate_project_intelligence.models import ProjectKnowledge
 
 from .models import (
     ConfirmedMemory,
@@ -15,6 +15,9 @@ from .models import (
     RecalledRuleMatch,
     RegressionRule,
 )
+
+if TYPE_CHECKING:
+    from qgate_project_intelligence.models import ProjectKnowledge
 
 
 class MemoryRecallInputMismatchError(ValueError):
@@ -184,7 +187,7 @@ class MemoryRecallEngine:
         )
 
     @staticmethod
-    def _strongest_level_for(memory: ConfirmedMemory, impacted: list) -> ImpactLevel | None:
+    def _strongest_level_for(memory: ConfirmedMemory, impacted: list[Any]) -> ImpactLevel | None:
         targets = set(memory.symbols + memory.components + memory.routes + memory.states + memory.targets)
         levels = [item.level for item in impacted if item.target in targets]
         for level in (ImpactLevel.DIRECT, ImpactLevel.INDIRECT, ImpactLevel.POSSIBLE, ImpactLevel.UNKNOWN):

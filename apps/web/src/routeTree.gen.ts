@@ -17,6 +17,7 @@ import { Route as AppTraceRouteImport } from './routes/_app/trace'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppScenariosRouteImport } from './routes/_app/scenarios'
 import { Route as AppRunsRouteImport } from './routes/_app/runs'
+import { Route as AppQaMemoryRouteImport } from './routes/_app/qa-memory'
 import { Route as AppProjectMapRouteImport } from './routes/_app/project-map'
 import { Route as AppIntegrationsRouteImport } from './routes/_app/integrations'
 import { Route as AppInboxRouteImport } from './routes/_app/inbox'
@@ -69,6 +70,11 @@ const AppScenariosRoute = AppScenariosRouteImport.update({
 const AppRunsRoute = AppRunsRouteImport.update({
   id: '/runs',
   path: '/runs',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppQaMemoryRoute = AppQaMemoryRouteImport.update({
+  id: '/qa-memory',
+  path: '/qa-memory',
   getParentRoute: () => AppRoute,
 } as any)
 const AppProjectMapRoute = AppProjectMapRouteImport.update({
@@ -158,6 +164,7 @@ export interface FileRoutesByFullPath {
   '/inbox': typeof AppInboxRoute
   '/integrations': typeof AppIntegrationsRoute
   '/project-map': typeof AppProjectMapRoute
+  '/qa-memory': typeof AppQaMemoryRoute
   '/runs': typeof AppRunsRoute
   '/scenarios': typeof AppScenariosRoute
   '/settings': typeof AppSettingsRoute
@@ -181,6 +188,7 @@ export interface FileRoutesByTo {
   '/inbox': typeof AppInboxRoute
   '/integrations': typeof AppIntegrationsRoute
   '/project-map': typeof AppProjectMapRoute
+  '/qa-memory': typeof AppQaMemoryRoute
   '/runs': typeof AppRunsRoute
   '/scenarios': typeof AppScenariosRoute
   '/settings': typeof AppSettingsRoute
@@ -206,6 +214,7 @@ export interface FileRoutesById {
   '/_app/inbox': typeof AppInboxRoute
   '/_app/integrations': typeof AppIntegrationsRoute
   '/_app/project-map': typeof AppProjectMapRoute
+  '/_app/qa-memory': typeof AppQaMemoryRoute
   '/_app/runs': typeof AppRunsRoute
   '/_app/scenarios': typeof AppScenariosRoute
   '/_app/settings': typeof AppSettingsRoute
@@ -231,6 +240,7 @@ export interface FileRouteTypes {
     | '/inbox'
     | '/integrations'
     | '/project-map'
+    | '/qa-memory'
     | '/runs'
     | '/scenarios'
     | '/settings'
@@ -254,6 +264,7 @@ export interface FileRouteTypes {
     | '/inbox'
     | '/integrations'
     | '/project-map'
+    | '/qa-memory'
     | '/runs'
     | '/scenarios'
     | '/settings'
@@ -278,6 +289,7 @@ export interface FileRouteTypes {
     | '/_app/inbox'
     | '/_app/integrations'
     | '/_app/project-map'
+    | '/_app/qa-memory'
     | '/_app/runs'
     | '/_app/scenarios'
     | '/_app/settings'
@@ -349,6 +361,13 @@ declare module '@tanstack/react-router' {
       path: '/runs'
       fullPath: '/runs'
       preLoaderRoute: typeof AppRunsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/qa-memory': {
+      id: '/_app/qa-memory'
+      path: '/qa-memory'
+      fullPath: '/qa-memory'
+      preLoaderRoute: typeof AppQaMemoryRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/project-map': {
@@ -477,6 +496,7 @@ interface AppRouteChildren {
   AppInboxRoute: typeof AppInboxRoute
   AppIntegrationsRoute: typeof AppIntegrationsRoute
   AppProjectMapRoute: typeof AppProjectMapRoute
+  AppQaMemoryRoute: typeof AppQaMemoryRoute
   AppRunsRoute: typeof AppRunsRoute
   AppScenariosRoute: typeof AppScenariosRoute
   AppSettingsRoute: typeof AppSettingsRoute
@@ -497,6 +517,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppInboxRoute: AppInboxRoute,
   AppIntegrationsRoute: AppIntegrationsRoute,
   AppProjectMapRoute: AppProjectMapRoute,
+  AppQaMemoryRoute: AppQaMemoryRoute,
   AppRunsRoute: AppRunsRoute,
   AppScenariosRoute: AppScenariosRoute,
   AppSettingsRoute: AppSettingsRoute,

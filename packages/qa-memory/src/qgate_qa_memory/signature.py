@@ -6,6 +6,7 @@ import re
 from .models import MemoryCandidate
 
 
+
 def _norm(value: str) -> str:
     return re.sub(r"\s+", " ", value.strip().lower())
 

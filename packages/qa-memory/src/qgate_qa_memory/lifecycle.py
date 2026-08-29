@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from .models import (
     AuditAction,
@@ -13,7 +14,9 @@ from .models import (
     RegressionRule,
 )
 from .signature import semantic_signature
-from .store import JsonQAMemoryStore
+
+if TYPE_CHECKING:
+    from .store import JsonQAMemoryStore
 
 
 class InvalidMemoryTransitionError(ValueError):

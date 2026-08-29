@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .models import MemoryRecallResult
+from typing import TYPE_CHECKING
 
 
 def render_recall(result: MemoryRecallResult) -> str:
@@ -11,8 +11,6 @@ def render_recall(result: MemoryRecallResult) -> str:
     ]
     for match in result.matched_memories:
         lines.append(f"- memory {match.memory_key} score={match.score}: {', '.join(match.reasons)}")
-    for match in result.matched_rules:
-        lines.append(f"- rule {match.rule_key} score={match.score}: {', '.join(match.reasons)}")
     for gap in result.coverage_gaps:
         lines.append(f"GAP {gap.reason}: {gap.detail or ''}".rstrip())
     return "\n".join(lines)
