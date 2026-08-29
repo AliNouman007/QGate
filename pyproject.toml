@@ -18,6 +18,7 @@ members = [
   "packages/impact-analysis",
   "packages/scenario-intelligence",
   "packages/browser-execution",
+  "packages/qa-memory",
 ]
 
 [tool.uv]
@@ -67,6 +68,7 @@ qgate-project-intelligence = { workspace = true }
 qgate-impact-analysis = { workspace = true }
 qgate-scenario-intelligence = { workspace = true }
 qgate-browser-execution = { workspace = true }
+qgate-qa-memory = { workspace = true }
 
 [tool.ruff]
 line-length = 100
@@ -132,7 +134,7 @@ warn_unused_ignores = true
 warn_return_any = true
 check_untyped_defs = true
 plugins = ["pydantic.mypy"]
-mypy_path = ["apps/api/src", "apps/runner/src", "packages/agent/src", "packages/core/src", "packages/db/src", "packages/lifecycle/src", "packages/mcp/src", "packages/shared/src", "packages/project-intelligence/src", "packages/impact-analysis/src", "packages/scenario-intelligence/src", "packages/browser-execution/src", "packages/db/tests", "packages/mcp/tests", "packages/agent/tests", "apps/api/tests"]
+mypy_path = ["apps/api/src", "apps/runner/src", "packages/agent/src", "packages/core/src", "packages/db/src", "packages/lifecycle/src", "packages/mcp/src", "packages/shared/src", "packages/project-intelligence/src", "packages/impact-analysis/src", "packages/scenario-intelligence/src", "packages/browser-execution/src", "packages/qa-memory/src", "packages/db/tests", "packages/mcp/tests", "packages/agent/tests", "apps/api/tests"]
 explicit_package_bases = true
 namespace_packages = true
 # ``tests`` dirs are excluded from the strict static gate: each package test
@@ -174,7 +176,7 @@ asyncio_mode = "strict"
 # ``.github/workflows/m1c-e2e.yml``). The ``e2e`` marker below is the deselect
 # hook used by every other suite — ``pytest -m \"not e2e\"`` skips it even if a
 # future invocation widens ``testpaths``.
-testpaths = ["apps/api/tests", "apps/runner/tests", "packages/core/tests", "packages/db/tests", "packages/mcp/tests", "packages/shared/tests", "packages/agent/tests", "packages/project-intelligence/tests", "packages/impact-analysis/tests", "packages/scenario-intelligence/tests", "packages/browser-execution/tests"]
+testpaths = ["apps/api/tests", "apps/runner/tests", "packages/core/tests", "packages/db/tests", "packages/mcp/tests", "packages/shared/tests", "packages/agent/tests", "packages/project-intelligence/tests", "packages/impact-analysis/tests", "packages/scenario-intelligence/tests", "packages/browser-execution/tests", "packages/qa-memory/tests"]
 addopts = "-ra -q --strict-markers --import-mode=importlib"  # NEW: --import-mode=importlib resolves test file name collisions across packages
 markers = [
     "e2e: end-to-end smoke / integration test. Two flavours: (a) live docker-compose stack (M1c DoD, ``tests/e2e/``) — opt-in via the M1c E2E workflow; (b) testcontainer-driven in-process E2E (M1d-29, ``apps/api/tests/e2e/``) — runs in the default ``pytest`` invocation because it self-provisions Postgres via testcontainers and mocks every external network call. Use ``pytest -m 'not e2e'`` to deselect both.",
