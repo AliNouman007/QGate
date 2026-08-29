@@ -13,23 +13,52 @@ def render_project_map(knowledge: ProjectKnowledge) -> str:
         f"Fingerprint: {knowledge.metadata.source_fingerprint[:12]}",
         f"Files: {summary.total_files} | Bytes: {summary.total_source_bytes}",
         f"Languages: {_format_counts(summary.languages)}",
+        f"Frameworks: {_format_counts(summary.frameworks)}",
         f"Roles: {_format_counts(summary.roles)}",
+        (
+            f"Routes: {summary.route_count} | Components: {summary.component_count} "
+            f"| Hooks: {summary.hook_count}"
+        ),
     ]
 
-    routes = [file.record.path for file in knowledge.files if file.record.role == FileRole.ROUTE]
+    route_facts = [route for file in knowledge.files for route in file.routes]
+    if route_facts:
+        lines.append("Framework routes/pages:")
+        for route in route_facts[:30]:
+            dynamic = " dynamic" if route.dynamic else ""
+            lines.append(
+                f"  - [{route.router}/{route.kind}{dynamic}] {route.route} "
+                f"<- {route.evidence.path}"
+            )
+    else:
+        routes = [file.record.path for file in knowledge.files if file.record.role == FileRole.ROUTE]
+        lines.append(f"Routes/pages: {len(routes)}")
+        lines.extend(f"  - {path}" for path in routes[:20])
+
     components = [
-        file.record.path for file in knowledge.files if file.record.role == FileRole.COMPONENT
+        symbol
+        for file in knowledge.files
+        for symbol in file.symbols
+        if symbol.kind.value == "component"
     ]
-    lines.append(f"Routes/pages: {len(routes)}")
-    lines.extend(f"  - {path}" for path in routes[:20])
-    lines.append(f"Components: {len(components)}")
-    lines.extend(f"  - {path}" for path in components[:20])
+    if components:
+        lines.append("Detected components:")
+        for symbol in components[:30]:
+            lines.append(f"  - {symbol.name} <- {symbol.evidence.path}:{symbol.evidence.line}")
 
     lines.append(f"Behavioral states/signals: {_format_counts(summary.behavioral_categories)}")
     if summary.reused_modules:
         lines.append("Shared/reused modules:")
         for path, count in list(summary.reused_modules.items())[:20]:
             lines.append(f"  - {path}: {count} importers")
+
+    if knowledge.semantic_states:
+        lines.append("Semantic states:")
+        for state in knowledge.semantic_states[:30]:
+            runtime = " [runtime verification]" if state.needs_runtime_verification else ""
+            lines.append(
+                f"  - [{state.kind.value}/{state.confidence.value}] {state.label}{runtime}"
+            )
 
     meaningful = [
         behavior for file in knowledge.files for behavior in file.behaviors if behavior.meaningful
