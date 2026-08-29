@@ -39,6 +39,7 @@ const knowledge: ProjectKnowledge = {
     total_source_bytes: 2048,
     languages: { typescript: 7 },
     frameworks: { nextjs: 2, react: 4, typescript: 7 },
+    declared_frameworks: ["nextjs", "react", "typescript"],
     roles: { component: 2, route: 2 },
     reused_modules: { "src/components/Card.tsx": 3 },
     behavioral_categories: { auth: 1, loading: 1 },
