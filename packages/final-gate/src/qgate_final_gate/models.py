@@ -4,10 +4,10 @@ from datetime import UTC, datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
-from qgate_browser_execution.models import FailureCategory
+from qgate_browser_execution.models import ExecutionReport, FailureCategory
 from qgate_impact_analysis.models import ImpactReport
 from qgate_project_intelligence.models import Evidence, ProjectKnowledge
-from qgate_qa_memory.models import MemoryRecallResult
+from qgate_qa_memory.models import MemoryRecallResult, RegressionScenarioHint
 from qgate_scenario_intelligence.models import AutomationReadiness, ScenarioPlan, ScenarioPriority
 
 SCHEMA_VERSION = "1.0"
@@ -126,6 +126,11 @@ class HistoricalRisk(BaseModel):
     score: int
     reasons: list[str] = Field(default_factory=list)
     strong_match: bool = False
+    objective: str | None = None
+    expected_invariant: str | None = None
+    routes: list[str] = Field(default_factory=list)
+    components: list[str] = Field(default_factory=list)
+    states: list[str] = Field(default_factory=list)
     related_scenario_keys: list[str] = Field(default_factory=list)
     covered: bool = False
     evidence: list[Evidence] = Field(default_factory=list)
@@ -186,8 +191,6 @@ class GateInputBundle(BaseModel):
     impact: ImpactReport
     scenario_plan: ScenarioPlan
     scenario_plan_key: str
-    execution: "ExecutionReport"
+    execution: ExecutionReport
     memory_recall: MemoryRecallResult | None = None
-
-
-from qgate_browser_execution.models import ExecutionReport  # noqa: E402
+    regression_hints: list[RegressionScenarioHint] = Field(default_factory=list)
