@@ -10,6 +10,10 @@ Current V1 flow:
 
 `local folder / ZIP -> bounded inventory -> static facts -> React/Next/TypeScript facts -> dependency graph -> bounded semantic states -> ProjectKnowledge -> JSON store -> API -> Project Map`
 
+Optional AI enrichment flow:
+
+`bounded EvidencePack -> existing LLMProvider -> validated semantic response -> evidence/confidence guardrails -> SemanticState`
+
 GitHub remains a source-adapter extension point. A GitHub connector can materialize/checkout a repository and feed the same `ProjectSource` contract rather than coupling GitHub transport logic into the analyzer.
 
 ## Code ownership
@@ -29,6 +33,10 @@ Main modules:
 - `store.py` — JSON persistence, stable project keys, project listing, and latest-analysis selection.
 - `report.py` — human-readable Project Map for CLI output.
 - `cli.py` — local analysis entrypoint.
+
+Optional AI semantic enrichment lives in the existing agent layer:
+
+- `packages/agent/src/suitest_agent/project_intelligence_semantic.py` — provider-backed bounded semantic enrichment using the existing `LLMProvider` contract.
 
 Dashboard/API integration lives in:
 
@@ -78,6 +86,8 @@ Reuse counts identify modules/components imported by multiple callers. This beco
 ## Frontend framework intelligence
 
 The core stays general-purpose, but V1 now has a frontend specialization for the frameworks currently most important to QGate: React, Next.js, and TypeScript. This specialization is domain-agnostic; it does not encode marketplace assumptions.
+
+Framework inference uses project/package evidence rather than folder names alone. In particular, a generic project merely containing a `pages/` directory is not promoted to Next.js unless package/direct-import evidence supports it.
 
 ### React
 
@@ -129,7 +139,7 @@ Static facts do not prove runtime reachability. Scenario Intelligence and browse
 
 ## Semantic classification and AI boundary
 
-Project Intelligence now produces richer `SemanticState` objects from bounded evidence packs. A semantic state contains:
+Project Intelligence produces richer `SemanticState` objects from bounded evidence packs. A semantic state contains:
 
 - human-friendly label;
 - state kind (`user_state`, `access_state`, `feature_state`, `data_state`, `viewport_state`, `runtime_state`, etc.);
@@ -138,18 +148,26 @@ Project Intelligence now produces richer `SemanticState` objects from bounded ev
 - supporting evidence;
 - `needs_runtime_verification` when static evidence is not enough.
 
-`EvidencePack` includes deterministic behavioral facts plus bounded framework context from the same file. The `SemanticClassifier` protocol is the mandatory extension point for a real AI-backed classifier.
+`EvidencePack` includes deterministic behavioral facts plus bounded framework context from the same file. The core `SemanticClassifier` protocol keeps semantic reasoning behind a controlled contract.
 
-The current built-in `HeuristicSemanticClassifier` remains deterministic so V1 works in ZERO/no-LLM mode. It is intentionally conservative and never overrides source facts. A future/provider-backed classifier may plug into the same contract through the existing agent/provider layer, but it must:
+### ZERO/no-LLM mode
 
-- receive bounded packs, never an unrestricted whole-repository dump;
-- return structured data only;
-- preserve code evidence;
-- not silently raise confidence beyond supporting evidence;
-- mark uncertain/runtime-dependent conclusions for verification;
-- never invent project facts.
+`HeuristicSemanticClassifier` is the default. It is deterministic, conservative, and keeps Project Intelligence useful without an AI provider.
 
-This separation is deliberate: the deterministic layer establishes truth; AI may improve meaning and grouping.
+### Provider-backed AI enrichment
+
+`packages/agent/src/suitest_agent/project_intelligence_semantic.py` provides optional AI enrichment through the existing provider-independent `LLMProvider` contract. It sends one already-bounded EvidencePack per call and validates a small structured JSON result.
+
+Guardrails are enforced in code:
+
+- the provider receives a bounded pack, never the whole repository;
+- model output cannot provide or replace source evidence — QGate reattaches deterministic evidence itself;
+- model-reported confidence is clamped so it cannot exceed supporting deterministic confidence;
+- runtime-verification requirements from the deterministic fallback cannot be silently removed;
+- invalid provider output or a provider error falls back to the deterministic heuristic state;
+- AI never becomes the source of truth for project facts.
+
+The synchronous analyzer does not automatically invoke an LLM. Provider-backed enrichment is an optional agent-layer step so ZERO mode stays reliable and the deterministic scanner remains independent of provider/network concerns.
 
 ## Structured ProjectKnowledge
 
@@ -157,7 +175,7 @@ This separation is deliberate: the deterministic layer establishes truth; AI may
 
 - analysis/schema versions and timestamp;
 - stable source identity and fingerprint;
-- project summary;
+- project summary, including declared frontend framework context;
 - per-file imports, behaviors, framework facts, routes, and symbols;
 - dependency graph;
 - semantic states;
@@ -168,6 +186,8 @@ This structured model, not the prose report, is the contract future Impact Analy
 ## Incremental analysis
 
 When previous knowledge from the same analyzer version exists, unchanged files are reused by path/content hash. Changed/new files are re-read; removed files disappear; project-level graph, summaries, semantic states, and fingerprint are rebuilt from current knowledge.
+
+Framework declarations from package manifests are part of the analysis context. If that context changes (for example Next.js is added/removed), unchanged frontend files are re-analyzed instead of reusing stale framework interpretation.
 
 The CLI automatically looks up previous knowledge for the same source identity in its configured store unless `--previous` explicitly supplies another knowledge file.
 
@@ -238,7 +258,9 @@ Budgets are configurable with `--max-files`, `--max-file-bytes`, `--max-total-by
 
 Core tests cover bounded scanning, structural/behavioral maps, incremental reuse, ZIP ingestion, persistence, and reporting.
 
-Frontend-intelligence tests cover React components/hooks/context, Next App/Pages routes and dynamic segments, Next runtime APIs/client boundaries, TypeScript declarations, semantic evidence/context, and store list/latest/key behavior.
+Frontend-intelligence tests cover React components/hooks/context, Next App/Pages routes and dynamic segments, Next runtime APIs/client boundaries, TypeScript declarations, false-positive framework avoidance, framework-manifest invalidation, semantic evidence/context, and store list/latest/key behavior.
+
+Agent tests cover provider-backed semantic enrichment, evidence preservation, confidence clamping, and invalid-model-output fallback.
 
 API tests cover authenticated local Project Map list/latest behavior, empty-store handling, and hiding the read model in server mode.
 
@@ -252,7 +274,7 @@ V1 deliberately remains conservative:
 - React/Next/TypeScript extraction is static/regex-based, not a full AST/compiler/Next manifest parser;
 - TypeScript path aliases such as `@/` are not yet resolved by the dependency graph;
 - complex dynamic imports, generated routes, metaprogramming, and compiler-only relationships can be missed;
-- a real LLM provider is not automatically invoked by Project Intelligence yet; the bounded `SemanticClassifier` contract is ready for provider-backed enrichment while the deterministic fallback remains the default;
+- provider-backed AI semantic enrichment exists but is optional and is not automatically invoked by the synchronous analyzer;
 - static conditions do not prove runtime reachability.
 
 These limitations must be surfaced rather than compensated for with guesses.
