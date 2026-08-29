@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import re
+from typing import TYPE_CHECKING
 
-from .models import MemoryCandidate
+if TYPE_CHECKING:
+    from .models import MemoryCandidate
 
 
 

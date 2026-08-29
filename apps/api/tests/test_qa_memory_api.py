@@ -50,9 +50,6 @@ async def test_qa_memory_read_and_confirm_are_local_authenticated(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("SUITEST_MODE", "local")
-    root = tmp_path / "memory"
-    monkeypatch.setenv("SUITEST_QA_MEMORY_DIR", str(root))
     user = await local_api_db.seed_user(email="memory@example.test")
     workspace = await local_api_db.member_workspace(user, slug="memory")
     root = tmp_path / "memory"
@@ -86,9 +83,6 @@ async def test_rejected_candidate_cannot_be_confirmed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("SUITEST_MODE", "local")
-    root = tmp_path / "memory"
-    monkeypatch.setenv("SUITEST_QA_MEMORY_DIR", str(root))
     user = await local_api_db.seed_user(email="reject@example.test")
     workspace = await local_api_db.member_workspace(user, slug="reject")
     root = tmp_path / "memory"
@@ -119,8 +113,6 @@ async def test_qa_memory_hidden_in_server_mode(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("SUITEST_MODE", "server")
-    monkeypatch.setenv("SUITEST_QA_MEMORY_DIR", str(tmp_path / "memory"))
     user = await local_api_db.seed_user(email="server-memory@example.test")
     workspace = await local_api_db.member_workspace(user, slug="server-memory")
     monkeypatch.setenv("SUITEST_MODE", "server")

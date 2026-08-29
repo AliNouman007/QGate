@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Any
 
 from qgate_browser_execution.models import ExecutionReport
 from qgate_impact_analysis.models import ImpactReport
@@ -84,6 +85,7 @@ def main() -> None:
         return
 
     if args.command == "list":
+        records: list[Any]
         if args.kind == "candidates":
             records = store.list_candidates()
         elif args.kind == "memories":
@@ -93,6 +95,7 @@ def main() -> None:
         if args.json:
             print(json.dumps([item.model_dump(mode="json") for item in records], indent=2))
         else:
+            for item in records:
                 title = getattr(item, "title", item.key)
                 status = getattr(item, "status", "active")
                 print(f"{item.key}\t{status}\t{title}")

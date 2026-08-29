@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from .models import MemoryRecallResult
+
 
 def render_recall(result: MemoryRecallResult) -> str:
     lines = [

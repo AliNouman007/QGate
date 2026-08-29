@@ -1286,6 +1286,26 @@ Local-mode read-only endpoints for the Browser Execution dashboard. Disabled (40
 | `GET /api/v1/browser-execution/latest` | Retrieve latest full `ExecutionReport`. |
 | `GET /api/v1/browser-execution/reports/{key}` | Retrieve one persisted `ExecutionReport` by stable 24-character hashed key. |
 
+---
+
+## 15. QA Memory (Local API)
+
+Local-mode endpoints for the QA Memory dashboard and lifecycle management. Disabled (404) when `SUITEST_MODE=server`. Workspace authentication applies.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/v1/qa-memory/candidates` | List persisted memory candidates. |
+| `GET /api/v1/qa-memory/candidates/{key}` | Retrieve candidate detail by key. |
+| `GET /api/v1/qa-memory/memories` | List active, superseded, or inactive confirmed memories. |
+| `GET /api/v1/qa-memory/memories/{key}` | Retrieve confirmed memory detail by key. |
+| `GET /api/v1/qa-memory/rules` | List structured regression rules. |
+| `POST /api/v1/qa-memory/candidates/{key}/confirm` | Confirm candidate into active memory + rule using caller user_id as actor. |
+| `POST /api/v1/qa-memory/candidates/{key}/reject` | Reject candidate using caller user_id as actor. |
+| `POST /api/v1/qa-memory/memories/{key}/supersede` | Replaces memory with another confirmed memory. |
+| `POST /api/v1/qa-memory/memories/{key}/deactivate` | Deactivates active confirmed memory. |
+| `POST /api/v1/qa-memory/candidates/{key}/reactivate` | Reactivates inactive confirmed memory. |
+
+
 
 
 
