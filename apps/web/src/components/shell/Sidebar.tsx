@@ -134,6 +134,7 @@ export function Sidebar({
         { label: "Project Map", icon: Map, to: "/project-map" },
         { label: "Impact Analysis", icon: GitPullRequest, to: "/impact" },
         { label: "Scenarios", icon: ListChecks, to: "/scenarios" },
+        { label: "Browser Execution", icon: Play, to: "/execution" },
         { label: "Analytics", icon: BarChart3, to: "/analytics" },
         { label: "Traceability", icon: Network, to: "/trace" },
         { label: "Eval", icon: FlaskConical, to: "/eval" },

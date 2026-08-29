@@ -1274,5 +1274,18 @@ Local-mode read-only endpoints for the Scenarios dashboard. Disabled (404) when 
 | `GET /api/v1/scenario-intelligence/latest` | Retrieve latest full `ScenarioPlan`. |
 | `GET /api/v1/scenario-intelligence/plans/{key}` | Retrieve one persisted `ScenarioPlan` by stable 24-character hashed key. |
 
+---
+
+## 14. Browser Execution & Evidence (Local Read-Only API)
+
+Local-mode read-only endpoints for the Browser Execution dashboard. Disabled (404) when `SUITEST_MODE=server`. Workspace authentication applies.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/v1/browser-execution/reports` | List persisted execution report summaries. |
+| `GET /api/v1/browser-execution/latest` | Retrieve latest full `ExecutionReport`. |
+| `GET /api/v1/browser-execution/reports/{key}` | Retrieve one persisted `ExecutionReport` by stable 24-character hashed key. |
+
+
 
 

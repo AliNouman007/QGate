@@ -27,7 +27,8 @@ class ExecutionReportListItem(BaseModel):
 
 def _store(request: Request) -> JsonExecutionReportStore:
     settings = request.app.state.settings
-    if settings.mode != "local":
+    mode = os.environ.get("SUITEST_MODE", settings.mode)
+    if mode != "local":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
     root = os.environ.get("SUITEST_BROWSER_EXECUTION_DIR", "~/.qgate/browser-execution")
     return JsonExecutionReportStore(root)
