@@ -5,6 +5,7 @@ from collections import Counter
 from typing import TYPE_CHECKING
 
 from .extractors import analyze_text_file
+from .frameworks import extract_framework_knowledge
 from .graph import build_dependency_graph, reuse_counts
 from .models import (
     ANALYZER_VERSION,
@@ -16,8 +17,10 @@ from .models import (
     FileAnalysis,
     ProjectKnowledge,
     ProjectSummary,
+    SymbolKind,
 )
 from .scanner import ProjectScanner
+from .semantic import build_evidence_packs, classify_evidence_packs
 
 if TYPE_CHECKING:
     from .source import ProjectSource
@@ -53,7 +56,13 @@ class ProjectIntelligenceAnalyzer:
             if text is None:
                 analyses.append(FileAnalysis(record=record))
                 continue
-            analyses.append(analyze_text_file(record, text))
+            analysis = analyze_text_file(record, text)
+            frameworks, routes, symbols = extract_framework_knowledge(record, text)
+            analyses.append(
+                analysis.model_copy(
+                    update={"frameworks": frameworks, "routes": routes, "symbols": symbols}
+                )
+            )
             analyzed += 1
 
         dependencies = build_dependency_graph(analyses)
@@ -64,11 +73,13 @@ class ProjectIntelligenceAnalyzer:
             reused_files=reused,
             analyzed_files=analyzed,
         )
+        semantic_states = classify_evidence_packs(build_evidence_packs(analyses))
         return ProjectKnowledge(
             metadata=metadata,
             summary=summary,
             files=analyses,
             dependencies=dependencies,
+            semantic_states=semantic_states,
             coverage_gaps=self._dedupe_gaps(gaps),
         )
 
@@ -91,6 +102,12 @@ class ProjectIntelligenceAnalyzer:
     @staticmethod
     def _summary(files: list[FileAnalysis], dependencies: list[DependencyEdge]) -> ProjectSummary:
         languages = Counter(file.record.language for file in files if file.record.language)
+        frameworks = Counter(
+            fact.framework.value
+            for file in files
+            for fact in file.frameworks
+            if fact.feature in {"react_module", "next_module", "typed_module"}
+        )
         roles = Counter(file.record.role.value for file in files)
         categories = Counter(
             behavior.category.value
@@ -103,9 +120,20 @@ class ProjectIntelligenceAnalyzer:
             analyzed_files=len(files),
             total_source_bytes=sum(file.record.size_bytes for file in files),
             languages=dict(sorted(languages.items())),
+            frameworks=dict(sorted(frameworks.items())),
             roles=dict(sorted(roles.items())),
             reused_modules=reuse_counts(dependencies),
             behavioral_categories=dict(sorted(categories.items())),
+            route_count=sum(len(file.routes) for file in files),
+            component_count=sum(
+                1
+                for file in files
+                for symbol in file.symbols
+                if symbol.kind == SymbolKind.COMPONENT
+            ),
+            hook_count=sum(
+                1 for file in files for symbol in file.symbols if symbol.kind == SymbolKind.HOOK
+            ),
         )
 
     @staticmethod
