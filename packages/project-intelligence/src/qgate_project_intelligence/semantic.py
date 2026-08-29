@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections import Counter
 from typing import TYPE_CHECKING, Protocol
 
@@ -18,6 +19,18 @@ from .models import (
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+
+_LITERAL_COMPARISON = re.compile(
+    r"(?P<left>[A-Za-z_$][\w.$]*)\s*(?:===|==|!==|!=)\s*"
+    r"(?P<quote>['\"])(?P<value>[^'\"]{1,64})(?P=quote)"
+)
+_REVERSE_LITERAL_COMPARISON = re.compile(
+    r"(?P<quote>['\"])(?P<value>[^'\"]{1,64})(?P=quote)\s*"
+    r"(?:===|==|!==|!=)\s*(?P<left>[A-Za-z_$][\w.$]*)"
+)
+_USER_HINTS = ("user", "customer", "account", "login", "logged", "auth", "member")
+_ACCESS_HINTS = ("role", "permission", "access", "owner", "admin")
+_FEATURE_HINTS = ("variant", "experiment", "feature", "flag", "abtest")
 
 
 class EvidencePack(BaseModel):
@@ -89,6 +102,61 @@ def classify_evidence_packs(
     return [active.classify(pack).to_state() for pack in packs]
 
 
+def derive_concrete_branch_states(
+    files: Iterable[FileAnalysis], *, max_states: int = 200
+) -> list[SemanticState]:
+    """Derive explicit branch variants from comparisons like ``userMode === 'wallet'``.
+
+    Generic behavior packs remain useful for broad project understanding, but equality
+    branches carry stronger state identity. These states retain source evidence and are
+    bounded so arbitrary string-heavy files cannot explode scenario generation.
+    """
+    if max_states < 1:
+        raise ValueError("max_states must be positive")
+    states: list[SemanticState] = []
+    seen: set[tuple[str, str, int]] = set()
+    for file in files:
+        for fact in file.behaviors:
+            if not fact.meaningful:
+                continue
+            match = _LITERAL_COMPARISON.search(fact.expression) or _REVERSE_LITERAL_COMPARISON.search(
+                fact.expression
+            )
+            if match is None:
+                continue
+            variable = match.group("left")
+            value = match.group("value").strip()
+            if not value or _looks_non_state_literal(value):
+                continue
+            dedupe_key = (file.record.path, variable, fact.evidence.line)
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            label = _humanize_state_value(value)
+            kind = _kind_for_branch_variable(variable, fact.category)
+            states.append(
+                SemanticState(
+                    key=f"{file.record.path}:{variable}:{value}",
+                    label=label,
+                    kind=kind,
+                    explanation=(
+                        f"Source branch compares {variable} with literal state {value!r}; "
+                        "runtime setup still requires evidence for how that state is activated."
+                    ),
+                    confidence=(
+                        Confidence.HIGH
+                        if fact.confidence == Confidence.HIGH
+                        else Confidence.MEDIUM
+                    ),
+                    evidence=[fact.evidence],
+                    needs_runtime_verification=False,
+                )
+            )
+            if len(states) >= max_states:
+                return states
+    return states
+
+
 def build_evidence_packs(
     files: Iterable[FileAnalysis],
     *,
@@ -124,6 +192,38 @@ def _bounded_confidence(facts: list[BehaviorFact]) -> Confidence:
     if any(fact.confidence == Confidence.LOW for fact in facts):
         return Confidence.LOW
     return Confidence.MEDIUM
+
+
+def _kind_for_branch_variable(variable: str, category: BehaviorCategory) -> SemanticStateKind:
+    normalized = variable.lower()
+    if any(token in normalized for token in _USER_HINTS):
+        return SemanticStateKind.USER_STATE
+    if any(token in normalized for token in _ACCESS_HINTS):
+        return SemanticStateKind.ACCESS_STATE
+    if any(token in normalized for token in _FEATURE_HINTS):
+        return SemanticStateKind.FEATURE_STATE
+    if category == BehaviorCategory.AUTH:
+        return SemanticStateKind.USER_STATE
+    if category == BehaviorCategory.PERMISSION:
+        return SemanticStateKind.ACCESS_STATE
+    if category == BehaviorCategory.FEATURE_FLAG:
+        return SemanticStateKind.FEATURE_STATE
+    return SemanticStateKind.GENERAL
+
+
+def _humanize_state_value(value: str) -> str:
+    normalized = re.sub(r"[_-]+", " ", value).strip()
+    return " ".join(part.capitalize() for part in normalized.split()) or value
+
+
+def _looks_non_state_literal(value: str) -> bool:
+    lowered = value.lower()
+    return (
+        len(value) > 64
+        or lowered.startswith(("http://", "https://", "/"))
+        or "@" in value
+        or "\n" in value
+    )
 
 
 def _state_kind(category: BehaviorCategory) -> SemanticStateKind:
