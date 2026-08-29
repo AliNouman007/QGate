@@ -158,11 +158,13 @@ export function Sidebar({
       <aside
         className={cn(
           "flex h-full w-[224px] shrink-0 flex-col border-r border-border-subtle bg-bg-elev-1",
+          // < md: overlay drawer, slides in from the left.
           "max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-50 max-md:transition-transform max-md:duration-200",
           mobileOpen ? "max-md:translate-x-0" : "max-md:-translate-x-full",
         )}
         data-testid="sidebar"
       >
+        {/* Section 1 — Brand */}
         <div className="flex h-[47px] shrink-0 items-center justify-between border-b border-border-subtle px-4">
           <span className="flex select-none items-center gap-2">
             <img src="/logo.svg" alt="" aria-hidden="true" className="h-6 w-6 rounded-md" />
@@ -187,6 +189,7 @@ export function Sidebar({
           </button>
         </div>
 
+        {/* Section 2 — Workspace picker */}
         <div className="shrink-0 border-b border-border-subtle px-3 py-3">
           <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
             <PopoverTrigger asChild>
@@ -195,17 +198,28 @@ export function Sidebar({
                 className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-bg-elev-2"
                 data-testid="workspace-picker"
               >
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-bg-elev-3 font-mono text-[11px] font-semibold text-fg-1" aria-hidden="true">
+                <span
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-bg-elev-3 font-mono text-[11px] font-semibold text-fg-1"
+                  aria-hidden="true"
+                >
                   {workspaceName.slice(0, 2).toUpperCase()}
                 </span>
-                <span className="flex-1 truncate text-[12.5px] font-medium text-fg-1">{workspaceName}</span>
+                <span className="flex-1 truncate text-[12.5px] font-medium text-fg-1">
+                  {workspaceName}
+                </span>
                 <ChevronDown className="h-3.5 w-3.5 shrink-0 text-fg-4" aria-hidden="true" />
               </button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="w-[220px] border-border bg-bg-elev-1 p-1 text-fg-1">
+            <PopoverContent
+              align="start"
+              className="w-[220px] border-border bg-bg-elev-1 p-1 text-fg-1"
+            >
               <ul className="space-y-0.5" data-testid="workspace-picker-list">
                 {workspaces.map((ws) => {
-                  const isActive = activeWorkspaceId !== undefined ? ws.id === activeWorkspaceId : ws.name === workspaceName;
+                  const isActive =
+                    activeWorkspaceId !== undefined
+                      ? ws.id === activeWorkspaceId
+                      : ws.name === workspaceName;
                   return (
                     <li key={ws.id}>
                       <button
@@ -222,7 +236,9 @@ export function Sidebar({
                         )}
                       >
                         <span className="flex-1 truncate">{ws.name}</span>
-                        {isActive ? <Check className="h-3.5 w-3.5 shrink-0 text-accent" aria-hidden="true" /> : null}
+                        {isActive ? (
+                          <Check className="h-3.5 w-3.5 shrink-0 text-accent" aria-hidden="true" />
+                        ) : null}
                       </button>
                     </li>
                   );
@@ -246,16 +262,25 @@ export function Sidebar({
           </Popover>
         </div>
 
+        {/* Section 2b — Project picker (Test Cases / Runs are project-scoped) */}
         <ProjectPicker />
 
+        {/* Section 3 — Nav. min-h-0 is load-bearing: a flex child keeps
+            min-height:auto, so flex-1 alone let the nav grow to its content
+            height and push the rows below it out of the rail instead of
+            scrolling. Visible as soon as the page is zoomed in. */}
         <ScrollArea className="min-h-0 flex-1">
           <nav className="px-2 py-3" aria-label="Primary">
             {groups.map((group) => (
               <div key={group.eyebrow} className="mb-4 last:mb-0">
-                <div className="mb-1.5 px-2 text-[11px] font-medium uppercase tracking-[0.07em] text-fg-5">{group.eyebrow}</div>
+                <div className="mb-1.5 px-2 text-[11px] font-medium uppercase tracking-[0.07em] text-fg-5">
+                  {group.eyebrow}
+                </div>
                 <ul className="space-y-0.5">
                   {group.items.map((item) => (
-                    <li key={item.label}><SidebarItem item={item} onNavigate={onMobileClose} /></li>
+                    <li key={item.label}>
+                      <SidebarItem item={item} onNavigate={onMobileClose} />
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -263,15 +288,29 @@ export function Sidebar({
           </nav>
         </ScrollArea>
 
+        {/* Section 4 — User footer */}
         <div className="flex shrink-0 items-center gap-2 border-t border-border-subtle px-3 py-3">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-bg-elev-3 font-mono text-[11px] font-semibold text-fg-1" aria-hidden="true">
+          <span
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-bg-elev-3 font-mono text-[11px] font-semibold text-fg-1"
+            aria-hidden="true"
+          >
             {userName.slice(0, 2).toUpperCase()}
           </span>
           <div className="flex-1 overflow-hidden">
             <div className="truncate text-[12.5px] font-medium text-fg-1">{userName}</div>
-            <div className="mt-0.5 inline-flex h-[15px] items-center rounded-sm bg-bg-elev-3 px-1.5 text-[10px] font-medium uppercase tracking-wide text-fg-3" data-testid="user-role-pill">{userRole}</div>
+            <div
+              className="mt-0.5 inline-flex h-[15px] items-center rounded-sm bg-bg-elev-3 px-1.5 text-[10px] font-medium uppercase tracking-wide text-fg-3"
+              data-testid="user-role-pill"
+            >
+              {userRole}
+            </div>
           </div>
-          <Link to="/settings" aria-label="Settings" className="flex h-7 w-7 items-center justify-center rounded-md text-fg-3 hover:bg-bg-elev-2 hover:text-fg-1" data-testid="user-settings-link">
+          <Link
+            to="/settings"
+            aria-label="Settings"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-fg-3 hover:bg-bg-elev-2 hover:text-fg-1"
+            data-testid="user-settings-link"
+          >
             <Settings className="h-4 w-4" aria-hidden="true" />
           </Link>
           <button
@@ -281,6 +320,7 @@ export function Sidebar({
             data-testid="user-logout-button"
             className="flex h-7 w-7 items-center justify-center rounded-md text-fg-3 hover:bg-bg-elev-2 hover:text-red"
             onClick={() => {
+              // fastapi-users cookie backend: POST clears the session cookie.
               void api.post("/auth/cookie/logout").finally(() => {
                 window.location.assign("/login");
               });
@@ -289,15 +329,26 @@ export function Sidebar({
             <LogOut className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
-        <div className="shrink-0 border-t border-border-subtle px-4 py-2 text-center text-[10px] text-fg-5">© 2026 Suitest contributors · Apache-2.0</div>
+        <div className="shrink-0 border-t border-border-subtle px-4 py-2 text-center text-[10px] text-fg-5">
+          © 2026 Suitest contributors · Apache-2.0
+        </div>
       </aside>
     </>
   );
 }
 
-function SidebarItem({ item, onNavigate }: { item: NavItem; onNavigate?: (() => void) | undefined }): React.ReactElement {
+function SidebarItem({
+  item,
+  onNavigate,
+}: {
+  item: NavItem;
+  /** Called after navigating — closes the mobile drawer. */
+  onNavigate?: (() => void) | undefined;
+}): React.ReactElement {
   const Icon = item.icon;
-  const baseCls = "group flex items-center gap-2 rounded-md px-2 py-1.5 text-[12.5px] text-fg-3 transition-colors hover:bg-bg-elev-2 hover:text-fg-1";
+  const baseCls =
+    "group flex items-center gap-2 rounded-md px-2 py-1.5 text-[12.5px] text-fg-3 transition-colors hover:bg-bg-elev-2 hover:text-fg-1";
+
   if (item.disabled) {
     return (
       <div
@@ -311,20 +362,34 @@ function SidebarItem({ item, onNavigate }: { item: NavItem; onNavigate?: (() => 
       </div>
     );
   }
+
   return (
     <Link
       to={item.to}
       className={baseCls}
-      activeProps={{ className: cn(baseCls, "bg-bg-elev-2 text-fg-1 [&_svg]:text-accent") }}
+      activeProps={{
+        className: cn(baseCls, "bg-bg-elev-2 text-fg-1 [&_svg]:text-accent"),
+      }}
       onClick={onNavigate}
       data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
     >
       <Icon className="h-3.5 w-3.5 shrink-0 text-fg-4" aria-hidden="true" />
       <span className="flex-1 truncate">{item.label}</span>
       {item.badgeCount !== undefined && item.badgeCount > 0 ? (
-        <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-bg-elev-3 px-1 font-mono text-[10px] font-semibold text-fg-3" data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}-badge`}>{item.badgeCount}</span>
+        <span
+          className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-bg-elev-3 px-1 font-mono text-[10px] font-semibold text-fg-3"
+          data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}-badge`}
+        >
+          {item.badgeCount}
+        </span>
       ) : null}
-      {item.liveDot ? <span className="h-1.5 w-1.5 rounded-full bg-accent suitest-pulse" data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}-live-dot`} aria-label="active runs" /> : null}
+      {item.liveDot ? (
+        <span
+          className="h-1.5 w-1.5 rounded-full bg-accent suitest-pulse"
+          data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}-live-dot`}
+          aria-label="active runs"
+        />
+      ) : null}
     </Link>
   );
 }
