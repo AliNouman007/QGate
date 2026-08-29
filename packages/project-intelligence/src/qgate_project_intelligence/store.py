@@ -1,18 +1,24 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 
 from .models import ProjectKnowledge
+
+_KEY_RE = re.compile(r"^[0-9a-f]{24}$")
 
 
 class JsonKnowledgeStore:
     def __init__(self, root: str | Path) -> None:
         self.root = Path(root).expanduser().resolve()
 
+    @staticmethod
+    def key_for(source_id: str) -> str:
+        return hashlib.sha256(source_id.encode()).hexdigest()[:24]
+
     def path_for(self, source_id: str) -> Path:
-        key = hashlib.sha256(source_id.encode()).hexdigest()[:24]
-        return self.root / f"{key}.json"
+        return self.root / f"{self.key_for(source_id)}.json"
 
     def save(self, knowledge: ProjectKnowledge) -> Path:
         self.root.mkdir(parents=True, exist_ok=True)
@@ -24,7 +30,15 @@ class JsonKnowledgeStore:
         path = self.path_for(source_id)
         if not path.exists():
             return None
-        return ProjectKnowledge.model_validate_json(path.read_text(encoding="utf-8"))
+        return self.load_path(path)
+
+    def load_key(self, key: str) -> ProjectKnowledge | None:
+        if not _KEY_RE.fullmatch(key):
+            return None
+        path = self.root / f"{key}.json"
+        if not path.exists():
+            return None
+        return self.load_path(path)
 
     def list_projects(self) -> list[ProjectKnowledge]:
         if not self.root.exists():
