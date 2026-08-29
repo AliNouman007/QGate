@@ -16,6 +16,8 @@ from .models import (
     CoverageGap,
     DependencyEdge,
     FileAnalysis,
+    FileRecord,
+    FrameworkKind,
     ProjectKnowledge,
     ProjectSummary,
     SymbolKind,
@@ -25,6 +27,8 @@ from .semantic import build_evidence_packs, classify_evidence_packs
 
 if TYPE_CHECKING:
     from .source import ProjectSource
+
+_FRONTEND_LANGUAGES = {"javascript", "typescript", "vue", "svelte"}
 
 
 class ProjectIntelligenceAnalyzer:
@@ -40,13 +44,17 @@ class ProjectIntelligenceAnalyzer:
         records, gaps = self.scanner.scan_inventory(source)
         declared_frameworks = self._declared_frameworks(source, records, gaps)
         previous_by_path = self._reusable_previous(previous)
+        previous_declared = set(previous.summary.declared_frameworks) if previous is not None else set()
+        current_declared = {framework.value for framework in declared_frameworks}
+        frontend_context_changed = previous is not None and previous_declared != current_declared
         analyses: list[FileAnalysis] = []
         reused = 0
         analyzed = 0
 
         for record in records:
             old = previous_by_path.get(record.path)
-            if old is not None and old.record.content_hash == record.content_hash:
+            can_reuse = not (frontend_context_changed and record.language in _FRONTEND_LANGUAGES)
+            if old is not None and old.record.content_hash == record.content_hash and can_reuse:
                 analyses.append(old)
                 reused += 1
                 continue
@@ -72,7 +80,7 @@ class ProjectIntelligenceAnalyzer:
             analyzed += 1
 
         dependencies = build_dependency_graph(analyses)
-        summary = self._summary(analyses, dependencies)
+        summary = self._summary(analyses, dependencies, declared_frameworks)
         metadata = AnalysisMetadata(
             source_id=source.source_id,
             source_fingerprint=self._fingerprint(analyses),
@@ -92,9 +100,9 @@ class ProjectIntelligenceAnalyzer:
     def _declared_frameworks(
         self,
         source: ProjectSource,
-        records: list,
+        records: list[FileRecord],
         gaps: list[CoverageGap],
-    ) -> set:
+    ) -> set[FrameworkKind]:
         manifest_texts: list[str] = []
         for record in records:
             if PurePosixPath(record.path).name != "package.json":
@@ -124,7 +132,11 @@ class ProjectIntelligenceAnalyzer:
         return digest.hexdigest()
 
     @staticmethod
-    def _summary(files: list[FileAnalysis], dependencies: list[DependencyEdge]) -> ProjectSummary:
+    def _summary(
+        files: list[FileAnalysis],
+        dependencies: list[DependencyEdge],
+        declared_frameworks: set[FrameworkKind],
+    ) -> ProjectSummary:
         languages = Counter(file.record.language for file in files if file.record.language)
         frameworks = Counter(
             fact.framework.value
@@ -145,6 +157,7 @@ class ProjectIntelligenceAnalyzer:
             total_source_bytes=sum(file.record.size_bytes for file in files),
             languages=dict(sorted(languages.items())),
             frameworks=dict(sorted(frameworks.items())),
+            declared_frameworks=sorted(framework.value for framework in declared_frameworks),
             roles=dict(sorted(roles.items())),
             reused_modules=reuse_counts(dependencies),
             behavioral_categories=dict(sorted(categories.items())),
