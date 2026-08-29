@@ -152,6 +152,7 @@ class ProjectSummary(BaseModel):
     total_source_bytes: int = 0
     languages: dict[str, int] = Field(default_factory=dict)
     frameworks: dict[str, int] = Field(default_factory=dict)
+    declared_frameworks: list[str] = Field(default_factory=list)
     roles: dict[str, int] = Field(default_factory=dict)
     reused_modules: dict[str, int] = Field(default_factory=dict)
     behavioral_categories: dict[str, int] = Field(default_factory=dict)
