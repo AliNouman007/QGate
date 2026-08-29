@@ -21,6 +21,7 @@ import { Route as AppProjectMapRouteImport } from './routes/_app/project-map'
 import { Route as AppIntegrationsRouteImport } from './routes/_app/integrations'
 import { Route as AppInboxRouteImport } from './routes/_app/inbox'
 import { Route as AppImpactRouteImport } from './routes/_app/impact'
+import { Route as AppExecutionRouteImport } from './routes/_app/execution'
 import { Route as AppEvalRouteImport } from './routes/_app/eval'
 import { Route as AppDocsRouteImport } from './routes/_app/docs'
 import { Route as AppDefectsRouteImport } from './routes/_app/defects'
@@ -90,6 +91,11 @@ const AppImpactRoute = AppImpactRouteImport.update({
   path: '/impact',
   getParentRoute: () => AppRoute,
 } as any)
+const AppExecutionRoute = AppExecutionRouteImport.update({
+  id: '/execution',
+  path: '/execution',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppEvalRoute = AppEvalRouteImport.update({
   id: '/eval',
   path: '/eval',
@@ -147,6 +153,7 @@ export interface FileRoutesByFullPath {
   '/defects': typeof AppDefectsRoute
   '/docs': typeof AppDocsRoute
   '/eval': typeof AppEvalRoute
+  '/execution': typeof AppExecutionRoute
   '/impact': typeof AppImpactRoute
   '/inbox': typeof AppInboxRoute
   '/integrations': typeof AppIntegrationsRoute
@@ -169,6 +176,7 @@ export interface FileRoutesByTo {
   '/defects': typeof AppDefectsRoute
   '/docs': typeof AppDocsRoute
   '/eval': typeof AppEvalRoute
+  '/execution': typeof AppExecutionRoute
   '/impact': typeof AppImpactRoute
   '/inbox': typeof AppInboxRoute
   '/integrations': typeof AppIntegrationsRoute
@@ -193,6 +201,7 @@ export interface FileRoutesById {
   '/_app/defects': typeof AppDefectsRoute
   '/_app/docs': typeof AppDocsRoute
   '/_app/eval': typeof AppEvalRoute
+  '/_app/execution': typeof AppExecutionRoute
   '/_app/impact': typeof AppImpactRoute
   '/_app/inbox': typeof AppInboxRoute
   '/_app/integrations': typeof AppIntegrationsRoute
@@ -217,6 +226,7 @@ export interface FileRouteTypes {
     | '/defects'
     | '/docs'
     | '/eval'
+    | '/execution'
     | '/impact'
     | '/inbox'
     | '/integrations'
@@ -239,6 +249,7 @@ export interface FileRouteTypes {
     | '/defects'
     | '/docs'
     | '/eval'
+    | '/execution'
     | '/impact'
     | '/inbox'
     | '/integrations'
@@ -262,6 +273,7 @@ export interface FileRouteTypes {
     | '/_app/defects'
     | '/_app/docs'
     | '/_app/eval'
+    | '/_app/execution'
     | '/_app/impact'
     | '/_app/inbox'
     | '/_app/integrations'
@@ -367,6 +379,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppImpactRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/execution': {
+      id: '/_app/execution'
+      path: '/execution'
+      fullPath: '/execution'
+      preLoaderRoute: typeof AppExecutionRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/eval': {
       id: '/_app/eval'
       path: '/eval'
@@ -453,6 +472,7 @@ interface AppRouteChildren {
   AppDefectsRoute: typeof AppDefectsRoute
   AppDocsRoute: typeof AppDocsRoute
   AppEvalRoute: typeof AppEvalRoute
+  AppExecutionRoute: typeof AppExecutionRoute
   AppImpactRoute: typeof AppImpactRoute
   AppInboxRoute: typeof AppInboxRoute
   AppIntegrationsRoute: typeof AppIntegrationsRoute
@@ -472,6 +492,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppDefectsRoute: AppDefectsRoute,
   AppDocsRoute: AppDocsRoute,
   AppEvalRoute: AppEvalRoute,
+  AppExecutionRoute: AppExecutionRoute,
   AppImpactRoute: AppImpactRoute,
   AppInboxRoute: AppInboxRoute,
   AppIntegrationsRoute: AppIntegrationsRoute,
