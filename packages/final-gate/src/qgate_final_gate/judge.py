@@ -303,25 +303,20 @@ class FinalGateJudge:
                     )
                 )
         required_keys = {item.scenario_key for item in coverage if item.required}
-        for gap in bundle.execution.coverage_gaps:
-            if gap.scenario_key is None or gap.scenario_key in required_keys:
         for exec_gap in bundle.execution.coverage_gaps:
             if exec_gap.scenario_key is None or exec_gap.scenario_key in required_keys:
                 findings.append(
                     GateFinding(
                         key=self._finding_key(
                             "execution-gap",
-                            gap.scenario_key or "run",
-                            gap.reason,
                             exec_gap.scenario_key or "run",
                             exec_gap.reason,
                         ),
                         kind=GateReasonKind.REQUIRED_SCENARIO_UNVERIFIED,
                         title="Browser execution coverage gap",
-                        reason=gap.reason + (f" — {gap.detail}" if gap.detail else ""),
-                        reason=exec_gap.reason + (f" — {exec_gap.detail}" if exec_gap.detail else ""),
+                        reason=exec_gap.reason
+                        + (f" — {exec_gap.detail}" if exec_gap.detail else ""),
                         verdict_effect=VerdictEffect.MANUAL_REVIEW,
-                        scenario_key=gap.scenario_key,
                         scenario_key=exec_gap.scenario_key,
                     )
                 )

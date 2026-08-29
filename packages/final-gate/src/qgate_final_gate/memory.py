@@ -36,17 +36,14 @@ def _related_scenarios(hint: RegressionScenarioHint, plan: ScenarioPlan) -> list
     hint_components = set(hint.components)
     hint_states = set(hint.states)
     for scenario in plan.scenarios:
-        route_match = bool(hint_routes & set(scenario.routes)) if hint_routes else False
-        target_match = bool(hint_components & set(scenario.targets)) if hint_components else False
-        state_match = bool(hint_states & set(scenario.states)) if hint_states else not hint_states
-        invariant_match = any(
-            hint.expected_invariant.casefold() in step.expected.casefold()
-            or step.expected.casefold() in hint.expected_invariant.casefold()
-            for step in scenario.steps
-            if step.expected.strip()
         route_match = bool(hint_routes & set(scenario.routes)) if hint_routes else True
-        target_match = bool(hint_components & set(scenario.targets)) if hint_components else True
+        target_match = (
+            bool(hint_components & set(scenario.targets))
+            if hint_components
+            else True
+        )
         state_match = bool(hint_states & set(scenario.states)) if hint_states else True
+
         if not (route_match and target_match and state_match):
             continue
 
@@ -60,7 +57,7 @@ def _related_scenarios(hint: RegressionScenarioHint, plan: ScenarioPlan) -> list
             if hint.expected_invariant
             else True
         )
-        if (route_match or target_match or invariant_match) and state_match:
+
         if invariant_match:
             related.append(scenario.key)
     return related
