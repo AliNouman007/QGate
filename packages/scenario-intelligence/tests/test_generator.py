@@ -1,0 +1,158 @@
+from __future__ import annotations
+
+import pytest
+from qgate_impact_analysis.models import (
+    ChangeCategory,
+    ChangeSet,
+    ChangeSourceKind,
+    ImpactItem,
+    ImpactLevel,
+    ImpactMetadata,
+    ImpactReport,
+    ImpactSummary,
+    ImpactTargetType,
+    SharedImpactGroup,
+)
+from qgate_project_intelligence.models import (
+    AnalysisMetadata,
+    Confidence,
+    Evidence,
+    ProjectKnowledge,
+    ProjectSummary,
+    SemanticState,
+    SemanticStateKind,
+)
+
+from qgate_scenario_intelligence.generator import ScenarioGenerator, ScenarioInputMismatchError
+from qgate_scenario_intelligence.models import AutomationReadiness, GenerationBudget, ScenarioKind
+
+
+def _e(path: str, line: int, excerpt: str) -> Evidence:
+    return Evidence(path=path, line=line, excerpt=excerpt, kind="test")
+
+
+def _knowledge() -> ProjectKnowledge:
+    return ProjectKnowledge(
+        metadata=AnalysisMetadata(source_id="local:/demo", source_fingerprint="fp1"),
+        summary=ProjectSummary(total_files=3),
+        files=[],
+        semantic_states=[
+            SemanticState(
+                key="rating:present",
+                label="Rating present",
+                kind=SemanticStateKind.DATA_STATE,
+                explanation="A rating value is present.",
+                confidence=Confidence.HIGH,
+                evidence=[_e("src/Card.tsx", 5, "rating")],
+            ),
+            SemanticState(
+                key="rating:absent",
+                label="Rating absent",
+                kind=SemanticStateKind.DATA_STATE,
+                explanation="A rating value is absent.",
+                confidence=Confidence.HIGH,
+                evidence=[_e("src/Card.tsx", 6, "!rating")],
+            ),
+        ],
+    )
+
+
+def _impact() -> ImpactReport:
+    direct = ImpactItem(
+        key="file:src/Card.tsx",
+        target_type=ImpactTargetType.COMPONENT,
+        target="Card",
+        level=ImpactLevel.DIRECT,
+        reason="Card changed",
+        confidence=Confidence.HIGH,
+        evidence=[_e("src/Card.tsx", 5, "className")],
+        categories=[ChangeCategory.UI, ChangeCategory.STATE, ChangeCategory.SHARED],
+    )
+    route = ImpactItem(
+        key="route:/search",
+        target_type=ImpactTargetType.ROUTE,
+        target="/search",
+        level=ImpactLevel.INDIRECT,
+        reason="Search depends on Card",
+        confidence=Confidence.HIGH,
+        evidence=[_e("src/app/search/page.tsx", 1, "Card")],
+        categories=[ChangeCategory.UI, ChangeCategory.SHARED],
+    )
+    states = [
+        ImpactItem(
+            key="state:rating:present",
+            target_type=ImpactTargetType.STATE,
+            target="Rating present",
+            level=ImpactLevel.DIRECT,
+            reason="Changed rating branch",
+            confidence=Confidence.HIGH,
+            evidence=[_e("src/Card.tsx", 5, "rating")],
+            categories=[ChangeCategory.STATE],
+        ),
+        ImpactItem(
+            key="state:rating:absent",
+            target_type=ImpactTargetType.STATE,
+            target="Rating absent",
+            level=ImpactLevel.DIRECT,
+            reason="Changed no-rating branch",
+            confidence=Confidence.HIGH,
+            evidence=[_e("src/Card.tsx", 6, "!rating")],
+            categories=[ChangeCategory.STATE],
+        ),
+    ]
+    return ImpactReport(
+        metadata=ImpactMetadata(
+            project_source_id="local:/demo",
+            project_fingerprint="fp1",
+            change_source_id="git:main...feature",
+        ),
+        change_set=ChangeSet(source_kind=ChangeSourceKind.LOCAL_GIT, source_id="git:main...feature"),
+        summary=ImpactSummary(),
+        direct_impacts=[direct],
+        affected_routes=[route],
+        affected_states=states,
+        shared_groups=[SharedImpactGroup(changed_target="src/Card.tsx", reuse_count=3, affected_routes=["/search"])],
+    )
+
+
+def test_generates_prioritized_state_and_cross_state_scenarios() -> None:
+    plan = ScenarioGenerator().generate(_knowledge(), _impact())
+    assert plan.summary.total >= 3
+    assert any(item.kind == ScenarioKind.ROUTE_REGRESSION and "/search" in item.routes for item in plan.scenarios)
+    assert {"rating:present", "rating:absent"}.issubset({state for item in plan.scenarios for state in item.states})
+    assert any(item.kind == ScenarioKind.CROSS_STATE_COMPARISON for item in plan.scenarios)
+    assert all(item.reason and item.evidence for item in plan.scenarios)
+
+
+def test_mismatched_fingerprint_fails_closed() -> None:
+    knowledge = _knowledge()
+    impact = _impact()
+    impact.metadata.project_fingerprint = "different"
+    with pytest.raises(ScenarioInputMismatchError):
+        ScenarioGenerator().generate(knowledge, impact)
+
+
+def test_unknown_impact_becomes_runtime_discovery_not_ready() -> None:
+    impact = _impact()
+    impact.unknown_impacts.append(
+        ImpactItem(
+            key="unknown:dynamic",
+            target_type=ImpactTargetType.STATE,
+            target="Dynamic state",
+            level=ImpactLevel.UNKNOWN,
+            reason="Dynamic state cannot be resolved statically",
+            confidence=Confidence.LOW,
+            evidence=[_e("src/Card.tsx", 9, "dynamic")],
+            needs_runtime_verification=True,
+        )
+    )
+    plan = ScenarioGenerator().generate(_knowledge(), impact)
+    scenario = next(item for item in plan.scenarios if "Dynamic state" in item.title)
+    assert scenario.readiness == AutomationReadiness.RUNTIME_DISCOVERY_REQUIRED
+    assert scenario.needs_runtime_discovery
+
+
+def test_generation_budget_limits_scenarios_and_records_gap() -> None:
+    plan = ScenarioGenerator(GenerationBudget(max_scenarios=2)).generate(_knowledge(), _impact())
+    assert len(plan.scenarios) == 2
+    assert any(gap.reason == "scenario_budget_reached" for gap in plan.coverage_gaps)
