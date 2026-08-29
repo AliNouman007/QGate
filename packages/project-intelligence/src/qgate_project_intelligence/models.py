@@ -5,8 +5,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-SCHEMA_VERSION = "1.0"
-ANALYZER_VERSION = "0.1.0"
+SCHEMA_VERSION = "1.1"
+ANALYZER_VERSION = "0.2.0"
 
 
 class Confidence(StrEnum):
@@ -26,6 +26,22 @@ class FileRole(StrEnum):
     OTHER = "other"
 
 
+class FrameworkKind(StrEnum):
+    REACT = "react"
+    NEXTJS = "nextjs"
+    TYPESCRIPT = "typescript"
+
+
+class SymbolKind(StrEnum):
+    COMPONENT = "component"
+    HOOK = "hook"
+    CONTEXT = "context"
+    PROVIDER = "provider"
+    INTERFACE = "interface"
+    TYPE_ALIAS = "type_alias"
+    ENUM = "enum"
+
+
 class BehaviorCategory(StrEnum):
     AUTH = "auth"
     PERMISSION = "permission"
@@ -37,6 +53,17 @@ class BehaviorCategory(StrEnum):
     RESPONSIVE = "responsive"
     GENERAL = "general"
     TECHNICAL_GUARD = "technical_guard"
+
+
+class SemanticStateKind(StrEnum):
+    USER_STATE = "user_state"
+    ACCESS_STATE = "access_state"
+    FEATURE_STATE = "feature_state"
+    DATA_STATE = "data_state"
+    VIEWPORT_STATE = "viewport_state"
+    RUNTIME_STATE = "runtime_state"
+    TECHNICAL = "technical"
+    GENERAL = "general"
 
 
 class AnalysisBudget(BaseModel):
@@ -66,6 +93,29 @@ class BehaviorFact(BaseModel):
     meaningful: bool
 
 
+class FrameworkFact(BaseModel):
+    framework: FrameworkKind
+    feature: str
+    value: str | None = None
+    confidence: Confidence = Confidence.HIGH
+    evidence: Evidence
+
+
+class RouteFact(BaseModel):
+    route: str
+    router: str
+    kind: str
+    dynamic: bool = False
+    evidence: Evidence
+
+
+class SymbolFact(BaseModel):
+    name: str
+    kind: SymbolKind
+    exported: bool = False
+    evidence: Evidence
+
+
 class FileRecord(BaseModel):
     path: str
     size_bytes: int = Field(ge=0)
@@ -78,6 +128,9 @@ class FileAnalysis(BaseModel):
     record: FileRecord
     imports: list[ImportFact] = Field(default_factory=list)
     behaviors: list[BehaviorFact] = Field(default_factory=list)
+    frameworks: list[FrameworkFact] = Field(default_factory=list)
+    routes: list[RouteFact] = Field(default_factory=list)
+    symbols: list[SymbolFact] = Field(default_factory=list)
 
 
 class DependencyEdge(BaseModel):
@@ -98,9 +151,13 @@ class ProjectSummary(BaseModel):
     analyzed_files: int = 0
     total_source_bytes: int = 0
     languages: dict[str, int] = Field(default_factory=dict)
+    frameworks: dict[str, int] = Field(default_factory=dict)
     roles: dict[str, int] = Field(default_factory=dict)
     reused_modules: dict[str, int] = Field(default_factory=dict)
     behavioral_categories: dict[str, int] = Field(default_factory=dict)
+    route_count: int = 0
+    component_count: int = 0
+    hook_count: int = 0
 
 
 class AnalysisMetadata(BaseModel):
@@ -113,9 +170,20 @@ class AnalysisMetadata(BaseModel):
     analyzed_files: int = 0
 
 
+class SemanticState(BaseModel):
+    key: str
+    label: str
+    kind: SemanticStateKind
+    explanation: str
+    confidence: Confidence
+    evidence: list[Evidence] = Field(default_factory=list)
+    needs_runtime_verification: bool = False
+
+
 class ProjectKnowledge(BaseModel):
     metadata: AnalysisMetadata
     summary: ProjectSummary
     files: list[FileAnalysis]
     dependencies: list[DependencyEdge] = Field(default_factory=list)
+    semantic_states: list[SemanticState] = Field(default_factory=list)
     coverage_gaps: list[CoverageGap] = Field(default_factory=list)
