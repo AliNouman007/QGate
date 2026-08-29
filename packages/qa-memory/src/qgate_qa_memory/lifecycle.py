@@ -87,8 +87,8 @@ class QAMemoryService:
                 confirmed_by=reviewer,
                 semantic_signature=signature,
             )
-        elif candidate.key not in memory.originating_candidate_keys:
-            memory.originating_candidate_keys.append(candidate.key)
+        else:
+            self._merge_candidate_provenance(memory, candidate)
         self.store.save_memory(memory)
 
         rule = None
@@ -120,12 +120,16 @@ class QAMemoryService:
     def supersede_memory(
         self, key: str, *, replacement_key: str, reviewer: str, note: str | None = None
     ) -> ConfirmedMemory:
+        if key == replacement_key:
+            raise InvalidMemoryTransitionError("memory cannot supersede itself")
         memory = self._required_memory(key)
         replacement = self._required_memory(replacement_key)
         if memory.project_source_id != replacement.project_source_id:
             raise InvalidMemoryTransitionError("replacement memory must belong to same project")
         if memory.status != MemoryStatus.ACTIVE:
             raise InvalidMemoryTransitionError("only active memories can be superseded")
+        if replacement.status != MemoryStatus.ACTIVE:
+            raise InvalidMemoryTransitionError("replacement memory must be active")
         memory.status = MemoryStatus.SUPERSEDED
         memory.superseded_by = replacement.key
         self.store.save_memory(memory)
@@ -187,6 +191,25 @@ class QAMemoryService:
         if memory is None:
             raise KeyError(f"memory not found: {key}")
         return memory
+
+    @staticmethod
+    def _append_unique(values: list[str], value: str | None) -> None:
+        if value and value not in values:
+            values.append(value)
+
+    def _merge_candidate_provenance(
+        self, memory: ConfirmedMemory, candidate: MemoryCandidate
+    ) -> None:
+        self._append_unique(memory.originating_candidate_keys, candidate.key)
+        self._append_unique(memory.source_defect_ids, candidate.source_defect_id)
+        self._append_unique(memory.source_execution_run_ids, candidate.source_execution_run_id)
+        self._append_unique(memory.source_scenario_keys, candidate.source_scenario_key)
+        known_evidence = {(item.path, item.line, item.kind, item.excerpt) for item in memory.evidence}
+        for evidence in candidate.evidence:
+            identity = (evidence.path, evidence.line, evidence.kind, evidence.excerpt)
+            if identity not in known_evidence:
+                memory.evidence.append(evidence)
+                known_evidence.add(identity)
 
     def _set_rules_active(self, memory_key: str, active: bool) -> None:
         for rule in self.store.list_rules():
