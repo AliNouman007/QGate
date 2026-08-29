@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 
 from qgate_project_intelligence.analyzer import ProjectIntelligenceAnalyzer
@@ -111,7 +112,7 @@ def test_store_lists_latest_and_loads_stable_key(tmp_path: Path) -> None:
     analyzer = ProjectIntelligenceAnalyzer()
     first = analyzer.analyze(LocalPathSource(first_root))
     second = analyzer.analyze(LocalPathSource(second_root))
-    second.metadata.analyzed_at = first.metadata.analyzed_at.replace(microsecond=first.metadata.analyzed_at.microsecond + 1)
+    second.metadata.analyzed_at = first.metadata.analyzed_at + timedelta(microseconds=1)
 
     store = JsonKnowledgeStore(tmp_path / "knowledge")
     store.save(first)
