@@ -1,0 +1,27 @@
+{
+  "mode": "frontend",
+  "projectName": "QA Test Frontend",
+  "baseUrl": "http://127.0.0.1:3000",
+  "server": {
+    "autostart": false
+  },
+  "auth": {
+    "type": "bearer",
+    "username": "dev@suitest.local",
+    "password": "AdminPassword123!"
+  },
+  "ui": {
+    "targetUrl": "http://127.0.0.1:3000",
+    "auth": {
+      "username": "dev@suitest.local",
+      "password": "AdminPassword123!"
+    }
+  },
+  "publish": {
+    "enabled": true,
+    "apiUrl": "http://127.0.0.1:4000",
+    "token": "sk_suitest_4ZBlLPcFaGdmoihBKOWA3R3ecEkBH6DJ7pI4WeCf54w",
+    "projectId": "r37knkk7s7xlebxpchho20ht"
+  }
+}
+
