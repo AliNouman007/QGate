@@ -1237,3 +1237,16 @@ Draft creation and approval work in ZERO. Enrichment requires LOCAL or CLOUD.
 
 See [TESTING_APPROACHES.md](./TESTING_APPROACHES.md) for selection and output
 rules.
+
+---
+
+## 11. Project Intelligence (Local Read-Only API)
+
+Local-mode read-only endpoints for the Project Map UI. Disabled (404) when `SUITEST_MODE=server`. Workspace authentication applies.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/v1/project-intelligence/projects` | List persisted project summaries. |
+| `GET /api/v1/project-intelligence/latest` | Retrieve latest full `ProjectKnowledge`. |
+| `GET /api/v1/project-intelligence/projects/{key}` | Retrieve one persisted `ProjectKnowledge` by stable 24-character hashed key. |
+

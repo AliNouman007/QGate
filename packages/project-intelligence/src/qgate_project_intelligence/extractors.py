@@ -223,8 +223,11 @@ def import_candidates(source_path: str, module: str, language: str | None) -> li
 
     if language in {"javascript", "typescript", "vue", "svelte"} and module.startswith("."):
         prefix = (source.parent / module).as_posix()
+        prefix_path = source.parent / module
         suffixes = [".ts", ".tsx", ".js", ".jsx", ".vue", ".svelte"]
         candidates = [f"{prefix}{suffix}" for suffix in suffixes]
         candidates.extend(f"{prefix}/index{suffix}" for suffix in suffixes[:4])
+        candidates = [f"{prefix_path}{suffix}" for suffix in suffixes]
+        candidates.extend(f"{prefix_path}/index{suffix}" for suffix in suffixes[:4])
         return candidates
     return []

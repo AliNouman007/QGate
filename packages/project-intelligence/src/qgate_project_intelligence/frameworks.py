@@ -23,7 +23,9 @@ _COMPONENT_PATTERNS = (
     re.compile(r"\bconst\s+([A-Z][A-Za-z0-9_]*)\s*="),
 )
 _HOOK_PATTERN = re.compile(r"\b(use[A-Z][A-Za-z0-9_]*)\s*\(")
-_CONTEXT_PATTERN = re.compile(r"\b(?:export\s+)?const\s+([A-Za-z0-9_]*Context)\s*=\s*createContext\s*\(")
+_CONTEXT_PATTERN = re.compile(
+    r"\b(?:export\s+)?const\s+([A-Za-z0-9_]*Context)\s*=\s*createContext(?:\s*<[^>]+>)?\s*\("
+)
 _PROVIDER_PATTERN = re.compile(r"<([A-Za-z0-9_]+)\.Provider\b")
 _TS_INTERFACE = re.compile(r"\b(export\s+)?interface\s+([A-Za-z_][A-Za-z0-9_]*)")
 _TS_TYPE = re.compile(r"\b(export\s+)?type\s+([A-Za-z_][A-Za-z0-9_]*)\s*=")
