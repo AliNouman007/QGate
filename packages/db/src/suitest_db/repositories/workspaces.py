@@ -3,18 +3,23 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import case, exists, select
 from sqlalchemy.orm import selectinload
+from suitest_db.models.project import Project
 from suitest_db.models.tenancy import Membership
+from suitest_db.models.user import User
 from suitest_db.models.workspace import Workspace
 from suitest_db.repositories.base import AsyncRepository
+from suitest_shared.domain.enums import Role
 
 if TYPE_CHECKING:
     import uuid
     from collections.abc import Sequence
+
+    from sqlalchemy.sql.elements import ColumnElement
 
 
 class WorkspaceCreate(BaseModel):
@@ -92,3 +97,40 @@ class WorkspaceRepo(AsyncRepository[Workspace, WorkspaceCreate, WorkspaceUpdate]
             .order_by(Membership.created_at.asc(), Membership.id.asc())
         )
         return (await self.session.scalars(stmt)).all()
+
+    async def get_local_admin_membership(self) -> Membership | None:
+        """Return the deterministic local OWNER/ADMIN membership for dev sessions.
+
+        The full local seed creates Maya as an OWNER of Nusantara Retail. A
+        different local seed remains supported: OWNER wins over ADMIN, then a
+        workspace with a project wins over an empty workspace. Users without an
+        active workspace membership are never eligible.
+        """
+        role_priority = case((Membership.role == Role.OWNER, 0), else_=1)
+        project_priority = case(
+            (
+                exists(select(Project.id).where(Project.workspace_id == Membership.workspace_id)),
+                0,
+            ),
+            else_=1,
+        )
+        stmt = (
+            select(Membership)
+            .join(User, Membership.user_id == User.id)
+            .join(Workspace, Workspace.id == Membership.workspace_id)
+            .where(
+                cast("ColumnElement[bool]", User.is_active).is_(True),
+                User.must_change_password.is_(False),
+                Workspace.deleted_at.is_(None),
+                Membership.role.in_((Role.OWNER, Role.ADMIN)),
+            )
+            .options(selectinload(Membership.user))
+            .order_by(
+                role_priority.asc(),
+                project_priority.asc(),
+                Membership.created_at.asc(),
+                Membership.id.asc(),
+            )
+            .limit(1)
+        )
+        return cast("Membership | None", await self.session.scalar(stmt))

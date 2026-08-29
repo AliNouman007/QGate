@@ -1,8 +1,8 @@
 """Process-level settings sourced from environment."""
 
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from suitest_core.chatgpt_oauth import DEFAULT_CLIENT_ID
 from suitest_core.google_oauth import DEFAULT_CLIENT_ID as GOOGLE_DEFAULT_CLIENT_ID
@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     # SQLite + disk + in-process supervisor (no Redis). env: SUITEST_MODE
     mode: Literal["server", "local"] = Field(default="server")
     log_level: str = Field(default="INFO")
+
+    # Development-only convenience. This flag is rejected outside local mode,
+    # so an accidental production setting fails closed instead of weakening auth.
+    local_auth_bypass: bool = Field(default=False)
 
     # Auth / OAuth — required for FastAPI-Users + Google OAuth
     auth_secret: str = Field(default="dev-secret-change-me")
@@ -81,6 +85,15 @@ class Settings(BaseSettings):
     # Must point at the same folder the runner writes to
     # (``SUITEST_ARTIFACTS_DIR``). env: SUITEST_ARTIFACTS_DIR
     artifacts_dir: str = Field(default=".suitest/artifacts")
+
+    @model_validator(mode="after")
+    def validate_local_auth_bypass(self) -> Self:
+        """Keep the login bypass impossible in server/production mode."""
+        if self.local_auth_bypass and self.mode != "local":
+            raise ValueError(
+                "SUITEST_LOCAL_AUTH_BYPASS may only be enabled when SUITEST_MODE=local"
+            )
+        return self
 
 
 def get_settings() -> Settings:

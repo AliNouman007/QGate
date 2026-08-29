@@ -86,6 +86,58 @@ describe("<_app> route guard", () => {
     expect(await screen.findByTestId("create-workspace-dialog")).toBeInTheDocument();
   });
 
+  it("establishes a local session before loading a protected route", async () => {
+    let sessionEstablished = false;
+    let projectsWorkspace: string | null = null;
+    server.use(
+      http.post("*/api/v1/auth/local-session", () => {
+        sessionEstablished = true;
+        return new HttpResponse(null, {
+          status: 204,
+          headers: { "X-Suitest-Workspace-Id": "ws_local" },
+        });
+      }),
+      http.get("*/api/v1/auth/me", () =>
+        sessionEstablished
+          ? HttpResponse.json({
+              id: "u_local",
+              email: "owner-local@example.test",
+              name: "Local Owner",
+              avatar_url: null,
+              must_change_password: false,
+              is_superuser: false,
+              memberships: [
+                {
+                  workspace_id: "ws_empty",
+                  role: "OWNER",
+                  workspace: { id: "ws_empty", slug: "empty", name: "Empty Workspace" },
+                },
+                {
+                  workspace_id: "ws_local",
+                  role: "OWNER",
+                  workspace: { id: "ws_local", slug: "local", name: "Local Workspace" },
+                },
+              ],
+            })
+          : HttpResponse.json({ code: "UNAUTHORIZED" }, { status: 401 }),
+      ),
+      http.get("*/api/v1/projects", ({ request }) => {
+        projectsWorkspace = request.headers.get("X-Workspace-Id");
+        return HttpResponse.json({ items: [{ id: "prj_local", name: "Local Project" }] });
+      }),
+    );
+
+    const { router } = renderAt("/dashboard");
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/dashboard");
+    });
+    expect(sessionEstablished).toBe(true);
+    expect(useActiveWorkspace.getState().workspaceId).toBe("ws_local");
+    expect(projectsWorkspace).toBe("ws_local");
+    expect(await screen.findByTestId("app-shell")).toBeInTheDocument();
+  });
+
   it("redirects on network failure (no response)", async () => {
     server.use(http.get("*/api/v1/auth/me", () => HttpResponse.error()));
 

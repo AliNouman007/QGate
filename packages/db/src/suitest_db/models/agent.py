@@ -23,13 +23,12 @@ from typing import Any
 
 from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, Numeric, String, Text, func
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from suitest_shared.domain.enums import AgentSessionKind, MessageRole
 
 from suitest_db.base import Base, TimestampMixin
 from suitest_db.ids import new_id
-from suitest_db.types import PortableJSON
+from suitest_db.types import PortableJSON, UserGUID
 
 
 class AgentSession(Base, TimestampMixin):
@@ -39,7 +38,7 @@ class AgentSession(Base, TimestampMixin):
     workspace_id: Mapped[str] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
     )
-    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    user_id: Mapped[uuid.UUID | None] = mapped_column(UserGUID, ForeignKey("users.id"))
     kind: Mapped[AgentSessionKind] = mapped_column(
         SAEnum(AgentSessionKind, name="agent_session_kind"), nullable=False
     )

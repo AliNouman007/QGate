@@ -6,12 +6,11 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from suitest_db.base import Base
 from suitest_db.ids import new_id
-from suitest_db.types import PortableJSON
+from suitest_db.types import PortableJSON, UserGUID
 
 
 class GeneratorRun(Base):
@@ -33,9 +32,7 @@ class GeneratorRun(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id")
-    )
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(UserGUID, ForeignKey("users.id"))
 
     __table_args__ = (
         Index("ix_generator_runs_workspace_source", "workspace_id", "source"),

@@ -97,6 +97,20 @@ describe("<LoginRoute>", () => {
     expect(screen.getByRole("button", { name: /^sign in$/i })).toBeInTheDocument();
   });
 
+  it("redirects without rendering credentials when local session bootstrap succeeds", async () => {
+    server.use(
+      http.post("*/api/v1/auth/local-session", () => new HttpResponse(null, { status: 204 })),
+    );
+
+    renderLogin("/login?next=%2Fcases");
+
+    await waitFor(() => {
+      expect(window.location.assign).toHaveBeenCalledWith("/cases");
+    });
+    expect(screen.queryByRole("textbox", { name: /email/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();
+  });
+
   it("renders the Google button only when OAuth is configured", async () => {
     mockOAuth(true);
     renderLogin();

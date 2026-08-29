@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { type FormEvent, useEffect, useState } from "react";
 
+import { establishLocalSession } from "@/lib/local-auth";
 import { useCapabilities } from "@/stores/use-capabilities";
 
 interface LoginSearch {
@@ -29,17 +30,38 @@ function Login(): React.ReactElement {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [checkingLocalSession, setCheckingLocalSession] = useState(true);
 
   // Login is a public route (outside the `_app` guard) so capabilities aren't
   // necessarily loaded yet. Fetch them once so the Google button's visibility
   // reflects the real server config instead of being hardcoded.
   const capabilities = useCapabilities((s) => s.capabilities);
   useEffect(() => {
+    let active = true;
     if (useCapabilities.getState().capabilities === null) {
       void useCapabilities.getState().fetch();
     }
-  }, []);
+    void establishLocalSession().then((established) => {
+      if (!active) return;
+      if (established) {
+        window.location.assign(nextPath);
+        return;
+      }
+      setCheckingLocalSession(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [nextPath]);
   const googleEnabled = capabilities?.auth?.google_oauth_enabled === true;
+
+  if (checkingLocalSession) {
+    return (
+      <section className="mx-auto max-w-md pt-16 text-center" aria-label="Checking local session">
+        <p className="text-[13px] text-fg-3">Opening Suitest…</p>
+      </section>
+    );
+  }
 
   const onPasswordLogin = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();

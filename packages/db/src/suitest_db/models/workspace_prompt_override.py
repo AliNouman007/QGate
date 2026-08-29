@@ -24,11 +24,11 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from suitest_db.base import Base
 from suitest_db.ids import new_id
+from suitest_db.types import UserGUID
 
 
 class WorkspacePromptOverride(Base):
@@ -49,7 +49,7 @@ class WorkspacePromptOverride(Base):
     hash: Mapped[str] = mapped_column(String(64), nullable=False)  # sha256(content)
     label: Mapped[str | None] = mapped_column(String(120))
     is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    created_by: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UserGUID)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -25,6 +25,10 @@ import traceability from "./fixtures/traceability.json";
 const BASE = "*/api/v1";
 
 export const handlers: HttpHandler[] = [
+  // Local auth bypass is disabled by default. Tests that exercise local mode
+  // override this handler and issue a normal cookie-backed session.
+  http.post(`${BASE}/auth/local-session`, () => new HttpResponse(null, { status: 404 })),
+
   // Capabilities (mounted at root, not /api/v1)
   http.get("*/capabilities", () => HttpResponse.json(capabilitiesZero)),
   http.get(`${BASE}/capabilities`, () => HttpResponse.json(capabilitiesZero)),

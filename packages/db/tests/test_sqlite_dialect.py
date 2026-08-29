@@ -62,6 +62,51 @@ async def test_create_local_schema_builds_full_schema(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_user_membership_foreign_key_roundtrips_on_sqlite(tmp_path: Path) -> None:
+    """Local auth depends on user FKs using the same GUID encoding as users.id."""
+    import uuid
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+    from suitest_db.bootstrap import create_local_schema
+    from suitest_db.engine import make_engine
+    from suitest_db.models.tenancy import Membership
+    from suitest_db.models.user import User
+    from suitest_db.models.workspace import Workspace
+    from suitest_db.repositories.workspaces import WorkspaceRepo
+    from suitest_db.settings import DbSettings
+    from suitest_shared.domain.enums import Role
+
+    settings = DbSettings(database_url=f"sqlite+aiosqlite:///{tmp_path / 'user-fk.db'}")
+    engine = make_engine(settings)
+    await create_local_schema(engine)
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+
+    async with maker() as session:
+        user = User(
+            id=uuid.UUID("11111111-2222-4333-8444-555555555555"),
+            email="local-owner@example.test",
+            hashed_password="not-a-real-credential",
+            is_active=True,
+            is_superuser=False,
+            is_verified=True,
+            name="Local Owner",
+        )
+        workspace = Workspace(slug="local-owner", name="Local Owner")
+        session.add_all([user, workspace])
+        await session.flush()
+        session.add(Membership(workspace_id=workspace.id, user_id=user.id, role=Role.OWNER))
+        await session.commit()
+
+        memberships = await WorkspaceRepo(session).list_memberships_for_user(user.id)
+        local_admin = await WorkspaceRepo(session).get_local_admin_membership()
+
+    await engine.dispose()
+    assert len(memberships) == 1
+    assert local_admin is not None
+    assert local_admin.user_id == user.id
+
+
+@pytest.mark.asyncio
 async def test_heatmap_cells_on_sqlite(tmp_path: Path) -> None:
     """Local mode: ``heatmap_cells`` must bucket by (day, hour) without PG-only SQL.
 

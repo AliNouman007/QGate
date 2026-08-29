@@ -10,7 +10,6 @@ import uuid
 
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy import ForeignKey, Index, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from suitest_shared.domain.enums import Role
 
@@ -18,6 +17,7 @@ from suitest_db.base import Base, TimestampMixin
 from suitest_db.ids import new_id
 from suitest_db.models.user import User
 from suitest_db.models.workspace import Workspace
+from suitest_db.types import UserGUID
 
 
 class Membership(Base, TimestampMixin):
@@ -28,7 +28,7 @@ class Membership(Base, TimestampMixin):
         ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        UserGUID, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     role: Mapped[Role] = mapped_column(SAEnum(Role, name="role"), default=Role.QA, nullable=False)
 

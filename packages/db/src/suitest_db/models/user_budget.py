@@ -12,11 +12,11 @@ import uuid
 from decimal import Decimal
 
 from sqlalchemy import ForeignKey, Index, Numeric, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from suitest_db.base import Base, TimestampMixin
 from suitest_db.ids import new_id
+from suitest_db.types import UserGUID
 
 
 class UserBudget(Base, TimestampMixin):
@@ -29,7 +29,7 @@ class UserBudget(Base, TimestampMixin):
         ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        UserGUID, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     # 0 = unlimited
     daily_cap_usd: Mapped[Decimal] = mapped_column(

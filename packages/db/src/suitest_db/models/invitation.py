@@ -7,7 +7,6 @@ from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Index, String
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from suitest_shared.domain.enums import Role
 
@@ -15,6 +14,7 @@ from suitest_db.base import Base, TimestampMixin
 from suitest_db.ids import new_id
 from suitest_db.models.user import User
 from suitest_db.models.workspace import Workspace
+from suitest_db.types import UserGUID
 
 
 class Invitation(Base, TimestampMixin):
@@ -36,7 +36,7 @@ class Invitation(Base, TimestampMixin):
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+        UserGUID, ForeignKey("users.id", ondelete="SET NULL")
     )
 
     workspace: Mapped[Workspace] = relationship()
