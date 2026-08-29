@@ -15,6 +15,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppTraceRouteImport } from './routes/_app/trace'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppScenariosRouteImport } from './routes/_app/scenarios'
 import { Route as AppRunsRouteImport } from './routes/_app/runs'
 import { Route as AppProjectMapRouteImport } from './routes/_app/project-map'
 import { Route as AppIntegrationsRouteImport } from './routes/_app/integrations'
@@ -57,6 +58,11 @@ const AppTraceRoute = AppTraceRouteImport.update({
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppScenariosRoute = AppScenariosRouteImport.update({
+  id: '/scenarios',
+  path: '/scenarios',
   getParentRoute: () => AppRoute,
 } as any)
 const AppRunsRoute = AppRunsRouteImport.update({
@@ -146,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/integrations': typeof AppIntegrationsRoute
   '/project-map': typeof AppProjectMapRoute
   '/runs': typeof AppRunsRoute
+  '/scenarios': typeof AppScenariosRoute
   '/settings': typeof AppSettingsRoute
   '/trace': typeof AppTraceRoute
   '/runs/$runId': typeof AppRunsRunIdRouteWithChildren
@@ -167,6 +174,7 @@ export interface FileRoutesByTo {
   '/integrations': typeof AppIntegrationsRoute
   '/project-map': typeof AppProjectMapRoute
   '/runs': typeof AppRunsRoute
+  '/scenarios': typeof AppScenariosRoute
   '/settings': typeof AppSettingsRoute
   '/trace': typeof AppTraceRoute
   '/runs/$runId': typeof AppRunsRunIdRouteWithChildren
@@ -190,6 +198,7 @@ export interface FileRoutesById {
   '/_app/integrations': typeof AppIntegrationsRoute
   '/_app/project-map': typeof AppProjectMapRoute
   '/_app/runs': typeof AppRunsRoute
+  '/_app/scenarios': typeof AppScenariosRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/trace': typeof AppTraceRoute
   '/_app/runs_/$runId': typeof AppRunsRunIdRouteWithChildren
@@ -213,6 +222,7 @@ export interface FileRouteTypes {
     | '/integrations'
     | '/project-map'
     | '/runs'
+    | '/scenarios'
     | '/settings'
     | '/trace'
     | '/runs/$runId'
@@ -234,6 +244,7 @@ export interface FileRouteTypes {
     | '/integrations'
     | '/project-map'
     | '/runs'
+    | '/scenarios'
     | '/settings'
     | '/trace'
     | '/runs/$runId'
@@ -256,6 +267,7 @@ export interface FileRouteTypes {
     | '/_app/integrations'
     | '/_app/project-map'
     | '/_app/runs'
+    | '/_app/scenarios'
     | '/_app/settings'
     | '/_app/trace'
     | '/_app/runs_/$runId'
@@ -311,6 +323,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/scenarios': {
+      id: '/_app/scenarios'
+      path: '/scenarios'
+      fullPath: '/scenarios'
+      preLoaderRoute: typeof AppScenariosRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/runs': {
@@ -439,6 +458,7 @@ interface AppRouteChildren {
   AppIntegrationsRoute: typeof AppIntegrationsRoute
   AppProjectMapRoute: typeof AppProjectMapRoute
   AppRunsRoute: typeof AppRunsRoute
+  AppScenariosRoute: typeof AppScenariosRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppTraceRoute: typeof AppTraceRoute
   AppRunsRunIdRoute: typeof AppRunsRunIdRouteWithChildren
@@ -457,6 +477,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppIntegrationsRoute: AppIntegrationsRoute,
   AppProjectMapRoute: AppProjectMapRoute,
   AppRunsRoute: AppRunsRoute,
+  AppScenariosRoute: AppScenariosRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppTraceRoute: AppTraceRoute,
   AppRunsRunIdRoute: AppRunsRunIdRouteWithChildren,

@@ -1262,4 +1262,17 @@ Local-mode read-only endpoints for the Impact dashboard. Disabled (404) when `SU
 | `GET /api/v1/impact-analysis/latest` | Retrieve latest full `ImpactReport`. |
 | `GET /api/v1/impact-analysis/reports/{key}` | Retrieve one persisted `ImpactReport` by stable 24-character hashed key. |
 
+---
+
+## 13. Scenario Intelligence (Local Read-Only API)
+
+Local-mode read-only endpoints for the Scenarios dashboard. Disabled (404) when `SUITEST_MODE=server`. Workspace authentication applies.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/v1/scenario-intelligence/plans` | List persisted scenario plan summaries. |
+| `GET /api/v1/scenario-intelligence/latest` | Retrieve latest full `ScenarioPlan`. |
+| `GET /api/v1/scenario-intelligence/plans/{key}` | Retrieve one persisted `ScenarioPlan` by stable 24-character hashed key. |
+
+
 

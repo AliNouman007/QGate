@@ -11,6 +11,7 @@ import {
   GitPullRequest,
   Inbox,
   LayoutDashboard,
+  ListChecks,
   Map,
   Network,
   Play,
@@ -132,6 +133,7 @@ export function Sidebar({
       items: [
         { label: "Project Map", icon: Map, to: "/project-map" },
         { label: "Impact Analysis", icon: GitPullRequest, to: "/impact" },
+        { label: "Scenarios", icon: ListChecks, to: "/scenarios" },
         { label: "Analytics", icon: BarChart3, to: "/analytics" },
         { label: "Traceability", icon: Network, to: "/trace" },
         { label: "Eval", icon: FlaskConical, to: "/eval" },
