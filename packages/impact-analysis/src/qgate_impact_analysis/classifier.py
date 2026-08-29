@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import PurePosixPath
 
-from qgate_project_intelligence.models import BehaviorCategory, FileAnalysis, FileRole
+from qgate_project_intelligence.models import BehaviorCategory, FileAnalysis, FileRole, SymbolKind
 
 from .models import ChangeCategory, ChangedFile
 
@@ -20,7 +20,9 @@ def classify_changed_file(change: ChangedFile, analysis: FileAnalysis | None) ->
             categories.add(ChangeCategory.CONFIG)
         if analysis.record.role == FileRole.ROUTE or analysis.routes:
             categories.add(ChangeCategory.ROUTING)
-        if analysis.record.role == FileRole.COMPONENT or analysis.symbols:
+        if analysis.record.role == FileRole.COMPONENT or any(
+            symbol.kind == SymbolKind.COMPONENT for symbol in analysis.symbols
+        ):
             categories.add(ChangeCategory.UI)
         if analysis.behaviors:
             categories.add(ChangeCategory.STATE)
