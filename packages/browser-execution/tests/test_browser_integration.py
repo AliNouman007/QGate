@@ -32,7 +32,7 @@ def _plan(expected_text: str) -> ScenarioPlan:
         confidence=Confidence.HIGH,
         routes=["/index.html"],
         targets=["checkout"],
-        states=["guest"],
+        states=[],
         steps=[
             ScenarioStep(
                 action=f'Assert text "{expected_text}"',
