@@ -45,9 +45,8 @@ class ScenarioCompiler:
                 preclassified.append(result)
             else:
                 compiled.append(result)
-        plan_key = self.plan_key(plan)
         return ExecutionRequest(
-            scenario_plan_key=plan_key,
+            scenario_plan_key=self.plan_key(plan),
             project_source_id=plan.metadata.project_source_id,
             project_fingerprint=plan.metadata.project_fingerprint,
             impact_change_source_id=plan.metadata.impact_change_source_id,
@@ -66,6 +65,16 @@ class ScenarioCompiler:
         return hashlib.sha256(identity.encode()).hexdigest()[:24]
 
     def _compile_scenario(self, scenario: Scenario) -> CompiledScenario | PreclassifiedScenario:
+        if scenario.preconditions:
+            return PreclassifiedScenario(
+                scenario_key=scenario.key,
+                title=scenario.title,
+                status=ExecutionStatus.UNVERIFIED,
+                reason=(
+                    "Scenario requires runtime preconditions that Browser Execution V1 cannot "
+                    "establish safely without an explicit setup profile."
+                ),
+            )
         route = scenario.routes[0] if scenario.routes else None
         steps: list[CompiledStep] = []
         if route:
@@ -82,6 +91,18 @@ class ScenarioCompiler:
         for source_step in scenario.steps:
             parsed = self._compile_step(source_step, len(steps), route)
             if parsed is None:
+                return PreclassifiedScenario(
+                    scenario_key=scenario.key,
+                    title=scenario.title,
+                    status=ExecutionStatus.UNVERIFIED,
+                    reason=f"Unsupported deterministic browser step: {source_step.action}",
+                )
+            if (
+                parsed.operation == OperationKind.NAVIGATE
+                and steps
+                and steps[-1].operation == OperationKind.NAVIGATE
+                and steps[-1].route == parsed.route
+            ):
                 continue
             steps.append(parsed)
         if not steps:
