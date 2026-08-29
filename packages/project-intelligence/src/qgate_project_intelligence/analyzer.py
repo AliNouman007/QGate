@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import hashlib
 from collections import Counter
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
 from .extractors import analyze_text_file
-from .frameworks import extract_framework_knowledge
+from .frameworks import detect_declared_frontend_frameworks, extract_framework_knowledge
 from .graph import build_dependency_graph, reuse_counts
 from .models import (
     ANALYZER_VERSION,
@@ -37,6 +38,7 @@ class ProjectIntelligenceAnalyzer:
         previous: ProjectKnowledge | None = None,
     ) -> ProjectKnowledge:
         records, gaps = self.scanner.scan_inventory(source)
+        declared_frameworks = self._declared_frameworks(source, records, gaps)
         previous_by_path = self._reusable_previous(previous)
         analyses: list[FileAnalysis] = []
         reused = 0
@@ -57,7 +59,11 @@ class ProjectIntelligenceAnalyzer:
                 analyses.append(FileAnalysis(record=record))
                 continue
             analysis = analyze_text_file(record, text)
-            frameworks, routes, symbols = extract_framework_knowledge(record, text)
+            frameworks, routes, symbols = extract_framework_knowledge(
+                record,
+                text,
+                declared_frameworks,
+            )
             analyses.append(
                 analysis.model_copy(
                     update={"frameworks": frameworks, "routes": routes, "symbols": symbols}
@@ -82,6 +88,24 @@ class ProjectIntelligenceAnalyzer:
             semantic_states=semantic_states,
             coverage_gaps=self._dedupe_gaps(gaps),
         )
+
+    def _declared_frameworks(
+        self,
+        source: ProjectSource,
+        records: list,
+        gaps: list[CoverageGap],
+    ) -> set:
+        manifest_texts: list[str] = []
+        for record in records:
+            if PurePosixPath(record.path).name != "package.json":
+                continue
+            text, gap = self.scanner.read_text(source, record)
+            if gap is not None:
+                gaps.append(gap)
+                continue
+            if text is not None:
+                manifest_texts.append(text)
+        return detect_declared_frontend_frameworks(manifest_texts)
 
     @staticmethod
     def _reusable_previous(previous: ProjectKnowledge | None) -> dict[str, FileAnalysis]:
