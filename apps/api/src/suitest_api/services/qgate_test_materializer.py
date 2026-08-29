@@ -17,6 +17,7 @@ from qgate_scenario_intelligence.models import (
     ScenarioPlan,
     StateSetupMechanism,
 )
+from suitest_db.models.case import TestCase
 from suitest_db.repositories.projects import ProjectRepo
 from suitest_db.repositories.suites import SuiteRepo
 from suitest_db.repositories.test_cases import TestCaseRepo
@@ -79,7 +80,10 @@ class QGateTestMaterializer:
                     MaterializedCase(
                         scenario_key=scenario.key,
                         status="skipped",
-                        reason="Scenario is unresolved or cannot be represented as a safe executable Suitest case.",
+                        reason=(
+                            "Scenario is unresolved or cannot be represented as a safe "
+                            "executable Suitest case."
+                        ),
                     )
                 )
                 continue
@@ -89,15 +93,15 @@ class QGateTestMaterializer:
             if existing is None:
                 created = await self._service.create(
                     TestCaseCreate(
-                        suiteId=suite_id,
+                        suite_id=suite_id,
                         name=scenario.title[:255],
                         description=scenario.reason,
                         preconditions="\n".join(scenario.preconditions) or None,
                         priority=Priority(scenario.priority.value),
                         status=CaseStatus.ACTIVE,
                         source=CaseSource.AI,
-                        testingApproach=TestingApproach.GRAY_BOX,
-                        testLevel=TestLevel.E2E,
+                        testing_approach=TestingApproach.GRAY_BOX,
+                        test_level=TestLevel.E2E,
                         framework="qgate",
                         steps=steps,
                         tags=tags,
@@ -124,8 +128,8 @@ class QGateTestMaterializer:
                     preconditions="\n".join(scenario.preconditions) or None,
                     priority=Priority(scenario.priority.value),
                     status=CaseStatus.ACTIVE,
-                    testingApproach=TestingApproach.GRAY_BOX,
-                    testLevel=TestLevel.E2E,
+                    testing_approach=TestingApproach.GRAY_BOX,
+                    test_level=TestLevel.E2E,
                     framework="qgate",
                     tags=tags,
                 ),
@@ -149,7 +153,7 @@ class QGateTestMaterializer:
             )
         return result
 
-    async def _find_exact_existing(self, suite_id: str, tags: list[str]):
+    async def _find_exact_existing(self, suite_id: str, tags: list[str]) -> TestCase | None:
         scenario_tag = next(tag for tag in tags if tag.startswith("qgate-scenario:"))
         rows, _ = await self._repo.list_by_suite_filtered(suite_id, tag=scenario_tag, limit=100)
         required = set(tags)
@@ -192,8 +196,8 @@ class QGateTestMaterializer:
                 StepCreate(
                     action=f"Navigate to {route}",
                     expected="The route loads successfully.",
-                    mcpProvider=_PLAYWRIGHT_MCP,
-                    targetKind=TargetKind.FE_WEB,
+                    mcp_provider=_PLAYWRIGHT_MCP,
+                    target_kind=TargetKind.FE_WEB,
                 )
             )
 
@@ -202,18 +206,27 @@ class QGateTestMaterializer:
                 return None
             steps.append(
                 StepCreate(
-                    action=f'Click the accessible control named "{hint.target_label}" to activate state "{hint.state_label}".',
+                    action=(
+                        f'Click the accessible control named "{hint.target_label}" to activate '
+                        f'state "{hint.state_label}".'
+                    ),
                     expected=f'The "{hint.state_label}" state is selected successfully.',
-                    mcpProvider=_PLAYWRIGHT_MCP,
-                    targetKind=TargetKind.FE_WEB,
+                    mcp_provider=_PLAYWRIGHT_MCP,
+                    target_kind=TargetKind.FE_WEB,
                 )
             )
             steps.append(
                 StepCreate(
-                    action=f'Verify the control named "{hint.target_label}" remains visible after activation.',
-                    expected=f'The page remains in the "{hint.state_label}" state and the selected control remains available.',
-                    mcpProvider=_PLAYWRIGHT_MCP,
-                    targetKind=TargetKind.FE_WEB,
+                    action=(
+                        f'Verify the control named "{hint.target_label}" remains visible after '
+                        "activation."
+                    ),
+                    expected=(
+                        f'The page remains in the "{hint.state_label}" state and the selected '
+                        "control remains available."
+                    ),
+                    mcp_provider=_PLAYWRIGHT_MCP,
+                    target_kind=TargetKind.FE_WEB,
                 )
             )
 
@@ -226,8 +239,8 @@ class QGateTestMaterializer:
                     action=source_step.action,
                     expected=source_step.expected,
                     data={"dataHint": source_step.data_hint} if source_step.data_hint else None,
-                    mcpProvider=_PLAYWRIGHT_MCP,
-                    targetKind=TargetKind.FE_WEB,
+                    mcp_provider=_PLAYWRIGHT_MCP,
+                    target_kind=TargetKind.FE_WEB,
                 )
             )
 
