@@ -18,7 +18,12 @@ from .models import (
 )
 
 if TYPE_CHECKING:
-    from qgate_scenario_intelligence.models import Scenario, ScenarioPlan, ScenarioStep, StateSetupHint
+    from qgate_scenario_intelligence.models import (
+        Scenario,
+        ScenarioPlan,
+        ScenarioStep,
+        StateSetupHint,
+    )
 
 
 class ScenarioCompiler:
@@ -65,19 +70,29 @@ class ScenarioCompiler:
         return hashlib.sha256(identity.encode()).hexdigest()[:24]
 
     def _compile_scenario(self, scenario: Scenario) -> CompiledScenario | PreclassifiedScenario:
-        if scenario.states and not scenario.state_setup_hints:
+        # A state label alone is not proof that runtime setup is required. Legacy
+        # route scenarios may carry descriptive state metadata. Explicit
+        # preconditions are the contract that says the browser must establish a
+        # state before the scenario can be considered verified.
+        if scenario.states and scenario.preconditions and not scenario.state_setup_hints:
             return PreclassifiedScenario(
                 scenario_key=scenario.key,
                 title=scenario.title,
                 status=ExecutionStatus.UNVERIFIED,
-                reason="Scenario requires semantic state setup but no deterministic setup hint is available.",
+                reason=(
+                    "Scenario requires semantic state setup but no deterministic setup hint "
+                    "is available."
+                ),
             )
         if len(scenario.state_setup_hints) > 1:
             return PreclassifiedScenario(
                 scenario_key=scenario.key,
                 title=scenario.title,
                 status=ExecutionStatus.UNVERIFIED,
-                reason="Multi-state comparison requires separate state passes; Browser Execution V1.1 will not fake verification by applying both states in one pass.",
+                reason=(
+                    "Multi-state comparison requires separate state passes; Browser Execution "
+                    "V1.1 will not fake verification by applying both states in one pass."
+                ),
             )
         if scenario.preconditions and not scenario.state_setup_hints:
             return PreclassifiedScenario(
@@ -171,13 +186,20 @@ class ScenarioCompiler:
     ) -> list[CompiledStep] | None:
         if hint.mechanism != StateSetupMechanism.UI_CONTROL:
             return None
-        target = TargetHint(name=hint.target_label, text=hint.target_label, label=hint.target_label)
+        target = TargetHint(
+            name=hint.target_label,
+            text=hint.target_label,
+            label=hint.target_label,
+        )
         return [
             CompiledStep(
                 index=index,
                 operation=OperationKind.CLICK,
                 source_action=f'Activate state "{hint.state_label}"',
-                source_expected=f'State "{hint.state_label}" can be selected through the evidence-backed UI control.',
+                source_expected=(
+                    f'State "{hint.state_label}" can be selected through the evidence-backed '
+                    "UI control."
+                ),
                 route=route,
                 target=target,
                 state_setup=True,
@@ -185,8 +207,12 @@ class ScenarioCompiler:
             CompiledStep(
                 index=index + 1,
                 operation=OperationKind.ASSERT_VISIBLE,
-                source_action=f'Verify state control "{hint.state_label}" remains available after activation',
-                source_expected=f'State "{hint.state_label}" is established without losing the selected control.',
+                source_action=(
+                    f'Verify state control "{hint.state_label}" remains available after activation'
+                ),
+                source_expected=(
+                    f'State "{hint.state_label}" is established without losing the selected control.'
+                ),
                 route=route,
                 target=target,
                 state_setup=True,
