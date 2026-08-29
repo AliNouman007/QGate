@@ -9,6 +9,7 @@ from qgate_project_intelligence.models import (
     BehaviorCategory,
     FileRole,
     ProjectKnowledge,
+    SemanticStateKind,
 )
 from qgate_project_intelligence.report import render_project_map
 from qgate_project_intelligence.semantic import HeuristicSemanticClassifier, build_evidence_packs
@@ -70,6 +71,33 @@ def test_analysis_builds_bounded_structural_and_behavioral_map(tmp_path: Path) -
     dependency_pairs = {(edge.source, edge.target) for edge in knowledge.dependencies}
     assert ("src/pages/home.tsx", "src/components/Card.tsx") in dependency_pairs
     assert ("src/components/Card.tsx", "src/lib/auth.ts") in dependency_pairs
+
+
+def test_literal_user_mode_branches_become_concrete_semantic_states(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/shop-context.js").write_text(
+        "export function payable(userMode, total) {\n"
+        "  if (userMode === 'guest') return total;\n"
+        "  if (userMode === 'logged_in') return total - 5;\n"
+        "  if (userMode === 'wallet') return total - 15;\n"
+        "  return total;\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    knowledge = ProjectIntelligenceAnalyzer().analyze(LocalPathSource(tmp_path))
+    concrete = {
+        state.label: state
+        for state in knowledge.semantic_states
+        if state.evidence and state.evidence[0].path == "src/shop-context.js"
+    }
+
+    assert "Guest" in concrete
+    assert "Logged In" in concrete
+    assert "Wallet" in concrete
+    assert concrete["Wallet"].kind == SemanticStateKind.USER_STATE
+    assert concrete["Wallet"].confidence.value in {"medium", "high"}
+    assert concrete["Wallet"].evidence[0].line == 4
 
 
 def test_budget_records_coverage_gap_instead_of_unbounded_scan(tmp_path: Path) -> None:
