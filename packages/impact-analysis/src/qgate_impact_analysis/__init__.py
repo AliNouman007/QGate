@@ -2,6 +2,13 @@
 
 from .engine import ImpactAnalyzer
 from .models import ChangeSet, ImpactReport
-from .source import LocalGitSource, UnifiedDiffSource
+from .source import GitHubPatchSource, LocalGitSource, UnifiedDiffSource
 
-__all__ = ["ChangeSet", "ImpactAnalyzer", "ImpactReport", "LocalGitSource", "UnifiedDiffSource"]
+__all__ = [
+    "ChangeSet",
+    "GitHubPatchSource",
+    "ImpactAnalyzer",
+    "ImpactReport",
+    "LocalGitSource",
+    "UnifiedDiffSource",
+]
