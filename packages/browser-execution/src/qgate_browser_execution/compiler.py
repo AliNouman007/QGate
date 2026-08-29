@@ -134,9 +134,6 @@ class ScenarioCompiler:
             if parsed.operation == OperationKind.NAVIGATE and any(
                 item.state_setup for item in steps
             ):
-                # A semantic source step such as "Open /checkout with the required state
-                # established" describes the already-compiled setup; navigating again would
-                # reset UI-controlled state in many applications.
                 continue
             steps.append(parsed)
 
@@ -154,16 +151,6 @@ class ScenarioCompiler:
                     operation=OperationKind.CAPTURE,
                     source_action="Capture deterministic browser evidence",
                     source_expected="Relevant page evidence is captured.",
-                    route=route,
-                )
-            )
-        elif steps[-1].operation != OperationKind.CAPTURE:
-            steps.append(
-                CompiledStep(
-                    index=len(steps),
-                    operation=OperationKind.CAPTURE,
-                    source_action="Capture final scenario evidence",
-                    source_expected="Evidence reflects the established state and completed scenario actions.",
                     route=route,
                 )
             )
