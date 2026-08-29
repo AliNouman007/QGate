@@ -1305,6 +1305,19 @@ Local-mode endpoints for the QA Memory dashboard and lifecycle management. Disab
 | `POST /api/v1/qa-memory/memories/{key}/deactivate` | Deactivates active confirmed memory. |
 | `POST /api/v1/qa-memory/memories/{key}/reactivate` | Reactivates inactive confirmed memory. |
 
+---
+
+## 16. Final Gate (Local Read-Only API)
+
+Local-mode read-only endpoints for the Final Gate dashboard. Disabled (404) when `SUITEST_MODE=server`. Workspace authentication applies.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/v1/final-gate/reports` | List persisted gate report summaries. |
+| `GET /api/v1/final-gate/latest` | Retrieve latest full `GateReport`. |
+| `GET /api/v1/final-gate/reports/{key}` | Retrieve one persisted `GateReport` by stable 24-character hashed key. |
+
+
 
 
 

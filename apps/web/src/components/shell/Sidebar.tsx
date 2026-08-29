@@ -21,6 +21,7 @@ import {
   LogOut,
   Settings,
   Shield,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -137,6 +138,7 @@ export function Sidebar({
         { label: "Scenarios", icon: ListChecks, to: "/scenarios" },
         { label: "Browser Execution", icon: Play, to: "/execution" },
         { label: "QA Memory", icon: Brain, to: "/qa-memory" },
+        { label: "Final Gate", icon: ShieldCheck, to: "/gate" },
         { label: "Analytics", icon: BarChart3, to: "/analytics" },
         { label: "Traceability", icon: Network, to: "/trace" },
         { label: "Eval", icon: FlaskConical, to: "/eval" },

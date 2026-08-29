@@ -29,6 +29,7 @@ dependencies = [
   "qgate-scenario-intelligence",
   "qgate-browser-execution",
   "qgate-qa-memory",
+  "qgate-final-gate",
   "slowapi>=0.1.9",
   "arq>=0.26",
   "aioboto3>=12.4",
