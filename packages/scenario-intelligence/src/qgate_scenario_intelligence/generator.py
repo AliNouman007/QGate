@@ -3,7 +3,12 @@ from __future__ import annotations
 import hashlib
 
 from qgate_impact_analysis.models import ChangeCategory, ImpactItem, ImpactLevel, ImpactReport
-from qgate_project_intelligence.models import Confidence, ProjectKnowledge, SemanticState
+from qgate_project_intelligence.models import (
+    Confidence,
+    ProjectKnowledge,
+    SemanticState,
+    SemanticStateKind,
+)
 
 from .models import (
     AutomationReadiness,
@@ -17,6 +22,8 @@ from .models import (
     ScenarioPriority,
     ScenarioStep,
     ScenarioSummary,
+    StateSetupHint,
+    StateSetupMechanism,
 )
 from .prioritization import priority_for_impact, priority_sort_key, readiness_for_impact
 from .signature import merge_scenarios, scenario_signature
@@ -51,7 +58,13 @@ class ScenarioGenerator:
         for item in impact.affected_states:
             state = state_lookup.get(item.target) or state_by_label.get(item.target)
             route = self._best_route_for_state(state, route_items, impact)
-            candidates.append(self._state_scenario(item, state, route or (default_routes[0] if len(default_routes) == 1 else None)))
+            candidates.append(
+                self._state_scenario(
+                    item,
+                    state,
+                    route or (default_routes[0] if len(default_routes) == 1 else None),
+                )
+            )
 
         for item in [*impact.possible_impacts, *impact.unknown_impacts]:
             if item.target_type.value in {"route", "state"}:
@@ -145,6 +158,7 @@ class ScenarioGenerator:
             routes=[item.target],
             targets=[item.target],
             states=[],
+            state_setup_hints=[],
             preconditions=[],
             steps=[
                 ScenarioStep(
@@ -161,7 +175,13 @@ class ScenarioGenerator:
         )
 
     def _state_scenario(self, item: ImpactItem, state: SemanticState | None, route: str | None) -> Scenario:
-        runtime = item.needs_runtime_verification or state is None or route is None
+        setup_hints = self._state_setup_hints(state)
+        runtime = (
+            item.needs_runtime_verification
+            or state is None
+            or route is None
+            or not setup_hints
+        )
         readiness = (
             AutomationReadiness.RUNTIME_DISCOVERY_REQUIRED if runtime else AutomationReadiness.READY
         )
@@ -177,6 +197,7 @@ class ScenarioGenerator:
             routes=[route] if route else [],
             targets=[item.target],
             states=[state.key if state is not None else item.target],
+            state_setup_hints=setup_hints,
             preconditions=preconditions,
             steps=[
                 ScenarioStep(
@@ -191,7 +212,11 @@ class ScenarioGenerator:
             evidence=evidence,
             readiness=readiness,
             needs_runtime_discovery=runtime,
-            manual_reason=("Static evidence does not prove how to establish/reach this state." if runtime else None),
+            manual_reason=(
+                "Static evidence does not prove a deterministic way to establish/reach this state."
+                if runtime
+                else None
+            ),
         )
 
     def _discovery_scenario(self, item: ImpactItem) -> Scenario:
@@ -203,8 +228,14 @@ class ScenarioGenerator:
             routes=[item.target] if item.target_type.value == "route" else [],
             targets=[item.target],
             states=[item.target] if item.target_type.value == "state" else [],
+            state_setup_hints=[],
             preconditions=[],
-            steps=[ScenarioStep(action="Discover a reachable runtime setup for this possible/unknown impact.", expected="A concrete route, state setup and assertion can be established before execution is allowed.")],
+            steps=[
+                ScenarioStep(
+                    action="Discover a reachable runtime setup for this possible/unknown impact.",
+                    expected="A concrete route, state setup and assertion can be established before execution is allowed.",
+                )
+            ],
             reason=item.reason,
             source_impact_keys=[item.key],
             evidence=item.evidence,
@@ -230,6 +261,8 @@ class ScenarioGenerator:
         )
         evidence = self._dedupe_evidence([*left.evidence, *right.evidence])
         confidence = self._lower_confidence(left.confidence, right.confidence)
+        setup_hints = [*self._state_setup_hints(left), *self._state_setup_hints(right)]
+        ready = len(setup_hints) == 2
         return Scenario(
             key=key,
             title=f"Compare {left.label} vs {right.label} on {route}",
@@ -239,6 +272,7 @@ class ScenarioGenerator:
             routes=[route],
             targets=[route],
             states=[left.key, right.key],
+            state_setup_hints=setup_hints,
             preconditions=[f"State A: {left.label}", f"State B: {right.label}"],
             steps=[
                 ScenarioStep(
@@ -250,9 +284,38 @@ class ScenarioGenerator:
             reason="The same impacted UI/state-sensitive surface has two related evidence-backed states, so comparison can reveal regressions that independent smoke checks miss.",
             source_impact_keys=impact_keys,
             evidence=evidence,
-            readiness=AutomationReadiness.READY,
+            readiness=(AutomationReadiness.READY if ready else AutomationReadiness.RUNTIME_DISCOVERY_REQUIRED),
+            needs_runtime_discovery=not ready,
+            manual_reason=(None if ready else "Static evidence does not prove deterministic setup controls for both compared states."),
             cross_state_group=f"cross:{route}:{left.kind.value}",
         )
+
+    @staticmethod
+    def _state_setup_hints(state: SemanticState | None) -> list[StateSetupHint]:
+        if state is None or state.confidence == Confidence.LOW or not state.evidence:
+            return []
+        if state.needs_runtime_verification:
+            return []
+        if state.kind not in {
+            SemanticStateKind.USER_STATE,
+            SemanticStateKind.ACCESS_STATE,
+            SemanticStateKind.FEATURE_STATE,
+        }:
+            return []
+        label = state.label.strip()
+        if not label:
+            return []
+        return [
+            StateSetupHint(
+                state_key=state.key,
+                state_label=label,
+                mechanism=StateSetupMechanism.UI_CONTROL,
+                target_label=label,
+                verification_text=label,
+                confidence=state.confidence,
+                evidence=state.evidence,
+            )
+        ]
 
     @staticmethod
     def _state_kind(state: SemanticState | None) -> ScenarioKind:
@@ -310,7 +373,10 @@ class ScenarioGenerator:
             ChangeCategory.RESPONSIVE,
             ChangeCategory.SHARED,
         }
-        return any(interesting & set(item.categories) for item in [*impact.direct_impacts, *impact.indirect_impacts])
+        return any(
+            interesting & set(item.categories)
+            for item in [*impact.direct_impacts, *impact.indirect_impacts]
+        )
 
     @staticmethod
     def _state_item_matches(item: ImpactItem, state: SemanticState) -> bool:
@@ -346,7 +412,10 @@ class ScenarioGenerator:
         return ScenarioSummary(
             total=len(scenarios),
             ready=sum(item.readiness == AutomationReadiness.READY for item in scenarios),
-            runtime_discovery=sum(item.readiness == AutomationReadiness.RUNTIME_DISCOVERY_REQUIRED for item in scenarios),
+            runtime_discovery=sum(
+                item.readiness == AutomationReadiness.RUNTIME_DISCOVERY_REQUIRED
+                for item in scenarios
+            ),
             manual_only=sum(item.readiness == AutomationReadiness.MANUAL_ONLY for item in scenarios),
             blocked=sum(item.readiness == AutomationReadiness.BLOCKED_BY_GAP for item in scenarios),
             p0=sum(item.priority == ScenarioPriority.P0 for item in scenarios),
@@ -360,7 +429,12 @@ class ScenarioGenerator:
         seen: set[tuple[object, ...]] = set()
         result: list[object] = []
         for item in items:
-            key = (getattr(item, "path", None), getattr(item, "line", None), getattr(item, "kind", None), getattr(item, "excerpt", None))
+            key = (
+                getattr(item, "path", None),
+                getattr(item, "line", None),
+                getattr(item, "kind", None),
+                getattr(item, "excerpt", None),
+            )
             if key not in seen:
                 seen.add(key)
                 result.append(item)
