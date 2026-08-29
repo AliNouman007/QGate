@@ -211,28 +211,53 @@ These do **not** block Project Intelligence V1 completion, but should be improve
 - [ ] Large real-world repository benchmark and performance tuning beyond bounded fixture/local validation.
 - [ ] Richer dashboard drill-down/graph visualization if Impact Analysis needs it.
 
-## Phase 2 — Impact Analysis
+## Phase 2 — Impact Analysis ✅ V1 COMPLETE
 
 ### Goal
 
 Given a code change or PR diff, determine realistic blast radius and relevant states by reusing the merged `ProjectKnowledge` produced by Project Intelligence.
 
-### Planned capabilities
+### Status
 
-- [ ] Define a structured ChangeSet / Impact Report contract.
-- [ ] Read changed files and changed lines from a local Git diff or supplied PR/diff source.
-- [ ] Map changed files/symbols into existing ProjectKnowledge.
-- [ ] Classify change type: UI, CSS, state, API, auth, pricing/business logic, routing, shared component, etc.
-- [ ] Trace direct dependencies.
-- [ ] Trace reverse dependencies and shared-component blast radius.
-- [ ] Identify affected routes/flows.
-- [ ] Identify relevant behavioral/semantic states.
-- [ ] Distinguish direct evidence from inferred impact.
-- [ ] Attach evidence/reason/confidence for every claimed impact.
-- [ ] Mark unresolved impact as unknown rather than guessing.
-- [ ] Produce a structured Impact Report that Scenario Intelligence can consume.
-- [ ] Add a concise developer-facing Impact view/report.
-- [ ] Add unit/integration tests and maintain `docs/IMPACT_ANALYSIS.md` as implementation begins.
+**Impact Analysis V1 was merged to `main` through PR #2.**
+
+Merge commit:
+
+`d9830ca22b7b96365b9b55a62ef05aab42be07c6`
+
+The final feature branch was locally verified before merge with:
+
+- Impact Analysis core unit tests: PASS (8 passed)
+- AI Impact semantic tests: PASS (2 passed)
+- local Impact Analysis API tests: PASS (3 passed)
+- Web Impact dashboard tests: PASS (2 passed)
+- Ruff: PASS
+- mypy: PASS
+- web typecheck/build: PASS
+- root/affected tests: PASS (397 web passed, 13 python passed)
+- local Git ref comparison smoke test: PASS
+- patch/diff parsing smoke test: PASS
+- false positive exclusion: PASS
+- traversal bounds & cycle safety: PASS
+- AI evidence-pack guardrails & fallback: PASS
+- Impact dashboard visual smoke: PASS
+
+### V1 implemented capabilities
+
+- [x] Define a structured ChangeSet / Impact Report contract.
+- [x] Read changed files and changed lines from a local Git diff or supplied PR/diff source.
+- [x] Map changed files/symbols into existing ProjectKnowledge.
+- [x] Classify change type: UI, CSS, state, API, auth, pricing/business logic, routing, shared component, etc.
+- [x] Trace direct dependencies.
+- [x] Trace reverse dependencies and shared-component blast radius.
+- [x] Identify affected routes/flows.
+- [x] Identify relevant behavioral/semantic states.
+- [x] Distinguish direct evidence from inferred impact.
+- [x] Attach evidence/reason/confidence for every claimed impact.
+- [x] Mark unresolved impact as unknown rather than guessing.
+- [x] Produce a structured Impact Report that Scenario Intelligence can consume.
+- [x] Add a concise developer-facing Impact view/report.
+- [x] Add unit/integration tests and maintain `docs/IMPACT_ANALYSIS.md` as implementation begins.
 
 ## Phase 3 — Scenario Intelligence
 
@@ -332,15 +357,9 @@ Documentation is a product requirement, not cleanup work.
 
 ## Current Next Step
 
-**Design Impact Analysis V1, then implement it on a dedicated feature branch.**
+**Design Scenario Intelligence V1, then implement it on a dedicated feature branch.**
 
-Impact Analysis must consume the existing merged `ProjectKnowledge` rather than building a second code-understanding engine.
-
-The first vertical slice should be small and evidence-backed:
-
-`code diff -> changed files/symbols -> ProjectKnowledge lookup -> dependency/reuse/state tracing -> structured Impact Report`
-
-Do not start Scenario Intelligence deeply until Impact Analysis can reliably explain what a change may affect and why.
+Scenario Intelligence will consume the existing merged `ProjectKnowledge` and `ImpactReport` models to generate, prioritize, and reach high-value QA test scenarios for Playwright execution.
 
 ## Definition of QGate V1 Success
 
