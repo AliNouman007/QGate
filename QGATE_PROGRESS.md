@@ -24,7 +24,9 @@ Project source
 → Scenario Intelligence ✅
 → Browser Execution & Evidence ✅
 → QA Memory ✅
-→ Final Gate ← NEXT
+→ Final Gate ✅
+
+QGate V1 Core Pipeline: COMPLETE
 
 Supported source adapters should eventually include:
 
@@ -414,23 +416,62 @@ The final feature branch was locally verified before merge with:
 - [x] Local authenticated QA Memory API endpoints (`/api/v1/qa-memory/*`).
 - [x] Dashboard `/qa-memory` view with candidate review actions, active memories, rules, and inactive history.
 
-## Phase 6 — Final Gate
+## Phase 6 — Final Gate ✅ V1 COMPLETE
 
-Goal: produce a strict final QA decision from evidence.
+### Goal
 
-Final outputs only:
+Produce a strict, evidence-backed decision (PASS, BLOCK, or MANUAL REVIEW REQUIRED) by synthesizing Project Intelligence, Impact Analysis, Scenario Intelligence, Browser Execution, and QA Memory artifacts.
 
-- [ ] PASS
-- [ ] BLOCK
-- [ ] MANUAL REVIEW REQUIRED
+### Status
 
-Rules:
+**Final Gate V1 was merged to `main` through PR #6.**
 
-- [ ] Product bug evidence → BLOCK.
-- [ ] Critical relevant scenario unverified → MANUAL REVIEW REQUIRED or BLOCK based on policy.
-- [ ] Environment/test setup failure must not be misreported as a product bug.
-- [ ] Test failure classification should distinguish product bug, test/config issue, environment failure, flake, and unreachable state.
-- [ ] PASS requires sufficient evidence for all important planned scenarios.
+Merge commit:
+
+`5761688cd399f45106ec2ddfbc00b88c3457c7d5`
+
+The final feature branch was locally verified before merge with:
+
+- Final Gate core unit + judge + integration tests: PASS (9 passed)
+- Local Final Gate API tests: PASS (3 passed)
+- Web Final Gate dashboard tests: PASS (4 passed)
+- Ruff: PASS
+- mypy: PASS
+- web typecheck/build: PASS
+- python compileall: PASS
+- root/affected tests: PASS (15 web passed, 66 python passed)
+- strict verdict generation (PASS | BLOCK | MANUAL REVIEW REQUIRED): PASS
+- input integrity / fingerprint fail-closed checks: PASS
+- importance-aware required coverage policy (P0/P1/P2/P3): PASS
+- verified product assertion failure → BLOCK: PASS
+- environment/setup/browser/test gaps → MANUAL REVIEW REQUIRED: PASS
+- conflicting evidence handling → MANUAL REVIEW REQUIRED: PASS
+- zero required coverage fail-closed handling → MANUAL REVIEW REQUIRED: PASS
+- confirmed historical regression obligations: PASS
+- QA Memory non-blocker rule (memory alone does not create a current product block): PASS
+- deterministic verdict authority & non-authoritative bounded AI explanation: PASS
+- GateReport persistence outside target repository (`SUITEST_FINAL_GATE_DIR`): PASS
+- CLI smoke (`evaluate`, `show`, `list`): PASS
+- authenticated local API endpoints (`/api/v1/final-gate/*`): PASS
+- Final Gate web dashboard `/gate` view: PASS
+
+### V1 implemented capabilities
+
+- [x] Deterministic-first decision engine returning `PASS`, `BLOCK`, or `MANUAL_REVIEW_REQUIRED`.
+- [x] Input integrity verification across ProjectKnowledge, ImpactReport, ScenarioPlan, ExecutionReport, and MemoryRecallResult.
+- [x] Fail-closed behavior on stale, mismatched, or corrupted input chains.
+- [x] Importance-aware coverage policy promoting P0/P1 and impacted/recalled P2 scenarios to required status.
+- [x] Fail-closed handling for zero required evaluable coverage.
+- [x] Classification of verified product assertion failures as `BLOCK`.
+- [x] Classification of environment, setup, browser, timeout, and infrastructure gaps as `MANUAL_REVIEW_REQUIRED`.
+- [x] Conflict detection for required scenarios with simultaneous verified PASS and FAIL evidence.
+- [x] Historical regression obligation tracking from QA Memory hints without reimplementing memory relevance.
+- [x] Enforcement that historical memory alone never creates a current product block without current verified product evidence.
+- [x] Bounded, optional AI explanation provider (`GateEvidencePack`) that cannot alter deterministic verdict, findings, or confidence.
+- [x] GateReport persistence outside target repository (`SUITEST_FINAL_GATE_DIR`).
+- [x] Human-readable CLI `qgate-final-gate` evaluation and inspection commands with `--json` support.
+- [x] Local authenticated Final Gate API endpoints (`/api/v1/final-gate/*`).
+- [x] Web dashboard `/gate` view showing verdict, blocking issues, required coverage, manual gaps, historical risks, and decision trace.
 
 ## Suitest Capabilities We Intend to Keep
 
@@ -485,22 +526,20 @@ Documentation is a product requirement, not cleanup work.
 
 ## Current Next Step
 
-**Design Final Gate V1, then implement it on a dedicated feature branch.**
-
-Final Gate will consume evidence from Project Intelligence, Impact Analysis, Scenario Intelligence, Browser Execution, and QA Memory to produce a strict QA decision: PASS, BLOCK, or MANUAL REVIEW REQUIRED.
+**Run a real-world end-to-end QGate V1 validation on an actual code change before starting V1 hardening or new major features.**
 
 ## Definition of QGate V1 Success
 
 QGate V1 is successful when, for a real code change, it can:
 
-1. Understand the affected code area.
-2. Identify realistic impacted states.
-3. Generate relevant test scenarios.
-4. Execute the automatable scenarios in a real browser.
-5. Collect evidence.
-6. Distinguish product bugs from test/environment failures.
-7. Use relevant historical QA knowledge.
-8. Return PASS, BLOCK, or MANUAL REVIEW REQUIRED with reasons/evidence.
+- [x] 1. Understand the affected code area.
+- [x] 2. Identify realistic impacted states.
+- [x] 3. Generate relevant test scenarios.
+- [x] 4. Execute the automatable scenarios in a real browser.
+- [x] 5. Collect evidence.
+- [x] 6. Distinguish product bugs from test/environment failures.
+- [x] 7. Use relevant historical QA knowledge.
+- [x] 8. Return PASS, BLOCK, or MANUAL REVIEW REQUIRED with reasons/evidence.
 
 ## Progress Update Rule
 
