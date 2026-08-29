@@ -13,7 +13,7 @@ _STRUCTURAL_REASONS = {
     "same symbol/component",
     "same route",
 }
-_CURRENT_IMACT_REASONS = {
+_CURRENT_IMPACT_REASONS = {
     "direct current impact",
     "indirect current impact",
 }
@@ -23,7 +23,7 @@ def _is_strong(reasons: list[str]) -> bool:
     reason_set = set(reasons)
     return bool(
         reason_set & _HIGH_SPECIFICITY_REASONS
-        or (reason_set & _STRUCTURAL_REASONS and reason_set & _CURRENT_IMACT_REASONS)
+        or (reason_set & _STRUCTURAL_REASONS and reason_set & _CURRENT_IMPACT_REASONS)
     )
 
 
