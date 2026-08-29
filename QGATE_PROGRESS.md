@@ -22,8 +22,8 @@ Project source
 → Project Intelligence ✅
 → Impact Analysis ✅
 → Scenario Intelligence ✅
-→ Browser Execution & Evidence ← NEXT
-→ QA Memory
+→ Browser Execution & Evidence ✅
+→ QA Memory ← NEXT
 → Final Gate
 
 Supported source adapters should eventually include:
@@ -309,17 +309,55 @@ The final feature branch was locally verified before merge with:
 - [x] Local read-only Scenario Intelligence API endpoints.
 - [x] Dashboard `/scenarios` view with priority, readiness, step previews, cross-state groups and coverage gaps.
 
-## Phase 4 — Browser Execution & Evidence
+## Phase 4 — Browser Execution & Evidence ✅ V1 COMPLETE
 
-Goal: execute READY scenarios in browser/Playwright and capture deterministic evidence.
+### Goal
 
-Planned capabilities:
+Execute READY scenarios in real browser (Chromium/Playwright), capture deterministic evidence, and classify runtime failures without misreporting environment or setup issues as product bugs.
 
-- [ ] Execute READY scenarios in real browser using Suitest/Playwright foundation.
-- [ ] Capture DOM snapshots, computed CSS, console logs, network activity, and visual evidence.
-- [ ] Attempt runtime discovery for `runtime_discovery_required` scenarios.
-- [ ] Classify execution failures (product bug vs test/config/environment issue).
-- [ ] Record structured run artifacts for QA Memory and Final Gate.
+### Status
+
+**Browser Execution & Evidence V1 was merged to `main` through PR #4.**
+
+Merge commit:
+
+`5db20774c927e6355570fb43eca23b8edbd8d79b`
+
+The final feature branch was locally verified before merge with:
+
+- Browser Execution core unit tests: PASS (12 passed)
+- Real Chromium integration tests: PASS
+- Local Browser Execution API tests: PASS (3 passed)
+- Web Execution dashboard tests: PASS (2 passed)
+- Ruff: PASS
+- mypy: PASS
+- web typecheck/build: PASS
+- root/affected tests: PASS (8 web passed, 39 python passed)
+- assertion regression classification: PASS
+- environment failure classification: PASS
+- fail-closed preconditions: PASS
+- unsupported step fail-closed: PASS
+- target resolution ambiguity handling: PASS
+- evidence capture (DOM, CSS, console, network, screenshots): PASS
+- header & secret redaction: PASS
+- bounded retry policy (0/1): PASS
+- CLI run & JSON mode smoke: PASS
+- Execution dashboard visual smoke: PASS
+
+### V1 implemented capabilities
+
+- [x] Define structured `ExecutionRequest`, `ExecutionReport`, and `StepExecution` contracts.
+- [x] Scenario compiler converting `ScenarioPlan` steps into executable `OperationKind` steps.
+- [x] Target resolution using semantic role/label/test_id/text/selector metadata with fail-closed ambiguity checks.
+- [x] Provision real Chromium browser via Suitest lifecycle (`ensure_browser`).
+- [x] Capture per-step evidence: DOM snapshots, computed CSS, bounding box, console logs, network events, screenshots.
+- [x] Redact sensitive credentials, auth headers, cookies, passwords, tokens, API keys, and card details before persistence.
+- [x] Classify failure categories: `assertion_failure`, `navigation_failure`, `target_resolution_failure`, `environment_failure`, etc.
+- [x] Enforce bounded retry policy (at most 1 retry for transient infra/browser errors; no retry on assertion failure).
+- [x] Save execution reports outside target repository (`SUITEST_BROWSER_EXECUTION_DIR`).
+- [x] CLI `qgate-browser-execution run` command with `--scenario-plan`, `--scenario`, `--priority`, and `--json`.
+- [x] Local read-only Browser Execution API endpoints (`/api/v1/browser-execution/*`).
+- [x] Web dashboard `/execution` view with step previews, failure categories, evidence artifacts, and coverage gaps.
 
 ## Phase 5 — QA Memory
 
@@ -405,9 +443,9 @@ Documentation is a product requirement, not cleanup work.
 
 ## Current Next Step
 
-**Design Browser Execution & Evidence V1, then implement it on a dedicated feature branch.**
+**Design QA Memory V1, then implement it on a dedicated feature branch.**
 
-Browser Execution & Evidence will consume READY scenarios from `ScenarioPlan`, run them in Playwright/browser, capture runtime DOM/network/console/visual evidence, and classify failures without misreporting environment issues as product bugs.
+QA Memory will accumulate confirmed human QA findings, store reusable regression rules, link rules to components/routes/states/symbols, and recall relevant historical findings when related code changes.
 
 ## Definition of QGate V1 Success
 
