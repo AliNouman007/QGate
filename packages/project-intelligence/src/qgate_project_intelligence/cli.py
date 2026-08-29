@@ -36,7 +36,7 @@ def main() -> int:
 
     project_path = Path(args.path).expanduser().resolve()
     store = JsonKnowledgeStore(args.store_dir)
-    previous = JsonKnowledgeStore.load_path(args.previous) if args.previous else store.load(str(project_path))
+    explicit_previous = JsonKnowledgeStore.load_path(args.previous) if args.previous else None
     budget = AnalysisBudget(
         max_files=args.max_files,
         max_file_bytes=args.max_file_bytes,
@@ -47,9 +47,11 @@ def main() -> int:
 
     if project_path.suffix.lower() == ".zip":
         with ZipProjectSource(project_path) as zip_source:
+            previous = explicit_previous or store.load(zip_source.source_id)
             knowledge = analyzer.analyze(zip_source, previous=previous)
     else:
         local_source = LocalPathSource(project_path)
+        previous = explicit_previous or store.load(local_source.source_id)
         knowledge = analyzer.analyze(local_source, previous=previous)
 
     stored_path = store.save(knowledge)
