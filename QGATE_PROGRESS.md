@@ -71,104 +71,168 @@ The core must remain general-purpose. Domain-specific knowledge may later be add
 - [x] Added `docs/README.md` as the documentation index and update policy.
 - [x] Made documentation maintenance mandatory for meaningful code changes.
 
-## Phase 1 — Project Intelligence
+## Phase 1 — Project Intelligence ✅ V1 COMPLETE
 
 ### Goal
 
 Build a reliable, scalable structural and behavioral map of any supplied codebase without overwhelming the system on large projects.
 
-Project Intelligence should convert source code into structured project knowledge rather than one large prose summary.
+Project Intelligence converts source code into structured, evidence-backed project knowledge rather than one large prose summary.
+
+### Status
+
+**Project Intelligence V1 was merged to `main` through PR #1.**
+
+Merge commit:
+
+`22f8dab8d35aaabda6996427fe4fee8cbd2039a7`
+
+The final feature branch was locally verified before merge with:
+
+- Project Intelligence tests: PASS
+- provider-backed semantic tests: PASS
+- local Project Intelligence API tests: PASS
+- Project Map web tests: PASS
+- Ruff: PASS
+- mypy: PASS
+- web typecheck/build: PASS
+- affected/root tests: PASS
+- Next/React/TypeScript smoke test: PASS
+- false Next.js positive test: PASS
+- incremental/manifest invalidation test: PASS
+- Project Map visual smoke: PASS
 
 ### Agreed architecture principles
 
 - [x] General-purpose core; no marketplace-specific assumptions.
 - [x] Hybrid analysis: deterministic/static analysis for facts, AI for semantic classification/grouping/prioritization.
-- [x] Hierarchical scanning: lightweight whole-project indexing before targeted deep analysis.
-- [x] Incremental re-analysis so large projects do not require a full deep scan after every change.
-- [x] Evidence and confidence attached to AI-derived/project-state claims where possible.
-- [x] Unknown/unresolved states must be represented instead of guessed.
-- [x] Do not treat every technical `if`/guard as a meaningful QA state.
-- [x] Persist project knowledge outside the target repository.
+- [x] Hierarchical/bounded scanning so large projects do not require unrestricted AI context.
+- [x] Incremental re-analysis so unchanged project files can be reused.
+- [x] Evidence and confidence attached to semantic/project-state claims.
+- [x] Unknown/unresolved states represented instead of guessed.
+- [x] Technical guards are separated from behaviorally meaningful conditions.
+- [x] Project knowledge persists outside the target repository.
+- [x] AI receives bounded evidence packs, never an unrestricted whole-repository dump.
+- [x] AI cannot replace deterministic evidence or raise confidence above supporting evidence.
+- [x] Safe deterministic fallback remains available when AI is absent or returns invalid output.
 
-### Planned V1 capabilities
+### V1 implemented capabilities
 
 #### Source ingestion
 
-- [ ] Define a source adapter contract.
-- [ ] Support analysis from a local/extracted project path first.
-- [ ] Keep adapters extensible for GitHub repositories and extracted ZIPs without coupling the analysis engine to one transport.
+- [x] Source adapter contract.
+- [x] Local project-folder analysis.
+- [x] ZIP project analysis with safe temporary extraction.
+- [x] Adapter design remains extensible for GitHub or other transports.
 
-#### Stage 1 — Fast project index
+#### Fast project index
 
-- [ ] Detect languages/frameworks/tooling.
-- [ ] Build file/folder inventory with sensible ignore rules.
-- [ ] Identify likely source roots, test roots, config files, routes, components/modules, services, and state-management areas.
-- [ ] Enforce file/size/depth budgets so large repositories remain bounded.
+- [x] Language/tooling detection.
+- [x] Bounded file/folder inventory with ignore rules.
+- [x] Likely routes, components/modules, tests, config, services, state and source roles.
+- [x] File/size/depth analysis budgets.
+- [x] Source fingerprints and per-file hashes.
 
-#### Stage 2 — Structural graph
+#### Structural graph
 
-- [ ] Scan routes/pages where supported.
-- [ ] Scan components/modules/symbols where supported.
-- [ ] Build import/dependency graph.
-- [ ] Detect shared/reused modules and components.
-- [ ] Record code evidence for discovered relationships.
+- [x] Common Python and JS/TS import extraction.
+- [x] Internal dependency graph.
+- [x] Shared/reused module detection.
+- [x] Evidence-backed relationships.
+- [x] React component/hook/context/provider signals.
+- [x] Next.js App Router route understanding.
+- [x] Next.js Pages Router route understanding.
+- [x] Dynamic Next.js route segments such as `[id]`, `[...slug]`, and `[[...slug]]`.
+- [x] TypeScript interface/type/enum symbol extraction.
+- [x] `use client` / `use server` boundary detection.
+- [x] Common Next.js runtime/navigation API signals.
+- [x] Package-manifest-backed framework detection to reduce false positives.
 
-#### Stage 3 — Behavioral extraction
+#### Behavioral extraction
 
-- [ ] Detect conditional rendering and meaningful state branches.
-- [ ] Detect auth/permission-related conditions.
-- [ ] Detect feature flags.
-- [ ] Detect loading/error/empty states where statically visible.
-- [ ] Detect important props/state/API dependencies.
-- [ ] Detect relevant cookies/localStorage/session usage.
-- [ ] Detect responsive/breakpoint logic where useful.
-- [ ] Separate technical guards from behaviorally meaningful states.
+- [x] Conditional/meaningful behavior signals.
+- [x] Auth/permission-related conditions.
+- [x] Feature-flag signals.
+- [x] Loading/error/empty states where statically visible.
+- [x] Browser storage/session/cookie-related signals where statically visible.
+- [x] Responsive/breakpoint-related signals where statically visible.
+- [x] Technical guard vs meaningful behavior classification.
+- [x] Evidence and confidence preserved for extracted behavior.
 
-#### Stage 4 — Semantic classification
+#### Semantic classification
 
-- [ ] Define a deterministic fact/evidence package for AI input.
-- [ ] Use AI only on bounded evidence packs, not whole-repo dumps.
-- [ ] Group low-level conditions into meaningful behavioral states when evidence supports it.
-- [ ] Record confidence and evidence references.
-- [ ] Mark uncertain results as UNKNOWN / NEEDS RUNTIME VERIFICATION.
+- [x] Deterministic bounded `EvidencePack` contract.
+- [x] Rich semantic state kinds, labels, explanations, confidence, and runtime-verification flags.
+- [x] Deterministic heuristic fallback for zero-LLM operation.
+- [x] Optional provider-backed semantic enrichment through the existing Suitest `LLMProvider` abstraction.
+- [x] Provider failures/malformed output safely fall back to deterministic classification.
+- [x] Runtime-dependent or uncertain conclusions remain marked for verification.
 
-#### Stage 5 — Project Knowledge Store
+#### Project Knowledge Store
 
-- [ ] Define structured Project Intelligence output schema.
-- [ ] Persist project summary, route/module graph, dependency graph, state catalog, evidence, confidence, and analysis metadata outside the target repo.
-- [ ] Track analysis version/source fingerprint.
-- [ ] Support incremental invalidation/re-analysis of changed files and affected graph regions.
+- [x] Structured `ProjectKnowledge` schema.
+- [x] Project summary, per-file facts, routes, symbols, dependency graph, semantic states, evidence, confidence and coverage gaps.
+- [x] Analyzer/schema version and source fingerprint tracking.
+- [x] JSON persistence in QGate-owned storage outside target repositories.
+- [x] Stable stored-project keys and latest/list/detail reads.
+- [x] Incremental unchanged-file reuse.
+- [x] Framework/package-manifest changes invalidate relevant stale frontend interpretation.
 
-#### Human-readable output
+#### Human-readable / dashboard Project Map
 
-- [ ] Produce a concise Project Map for developers.
-- [ ] Allow drill-down from area/module/state to supporting code evidence.
-- [ ] Report coverage gaps and unsupported constructs instead of silently omitting them.
+- [x] Human-readable CLI Project Map.
+- [x] Local read-only Project Intelligence API.
+- [x] Dashboard `/project-map` route.
+- [x] Project Map shows languages/frameworks, routes, components, semantic states, reused modules, runtime-verification warnings and coverage gaps.
+- [x] Sidebar navigation to Project Map.
+- [x] Local API preserves normal authentication and does not accept arbitrary browser-supplied filesystem paths.
+- [x] API behavior documented in `docs/API.md`.
+- [x] Project Intelligence architecture/business workflow documented in `docs/PROJECT_INTELLIGENCE.md`.
 
-### Project Intelligence V1 validation
+### V1 validation completed
 
-Validate first on small fixture projects, then on a larger real-world frontend repository.
+- [x] Fixture validation: routes/components/import graph.
+- [x] Fixture validation: meaningful condition vs technical guard.
+- [x] Fixture validation: reuse/dependency detection.
+- [x] React/Next.js/TypeScript fixture and CLI smoke validation.
+- [x] False Next.js positive regression validation.
+- [x] Incremental changed-file validation.
+- [x] Manifest/framework invalidation validation.
+- [x] API + dashboard Project Map local smoke validation.
 
-- [ ] Small fixture: routes/components/import graph.
-- [ ] Small fixture: meaningful condition vs technical guard.
-- [ ] Small fixture: reuse/dependency detection.
-- [ ] Large-project test: bounded analysis completes without loading the entire repo into an LLM context.
-- [ ] Incremental test: changing one file re-analyzes only the required project region.
+### Known limitations / later hardening
+
+These do **not** block Project Intelligence V1 completion, but should be improved when they become valuable to later QGate phases:
+
+- [ ] Native GitHub network/auth source adapter; for now a repository can be materialized locally and analyzed through the existing source contract.
+- [ ] Full AST/compiler-level frontend parsing where regex/static extraction becomes insufficient.
+- [ ] TypeScript path-alias resolution such as `@/` in the dependency graph.
+- [ ] More complete dynamic import/metaprogramming/generated-route understanding.
+- [ ] Large real-world repository benchmark and performance tuning beyond bounded fixture/local validation.
+- [ ] Richer dashboard drill-down/graph visualization if Impact Analysis needs it.
 
 ## Phase 2 — Impact Analysis
 
-Goal: given a code change or PR diff, determine realistic blast radius and relevant states using Project Intelligence knowledge.
+### Goal
 
-Planned capabilities:
+Given a code change or PR diff, determine realistic blast radius and relevant states by reusing the merged `ProjectKnowledge` produced by Project Intelligence.
 
-- [ ] Read changed files/lines.
+### Planned capabilities
+
+- [ ] Define a structured ChangeSet / Impact Report contract.
+- [ ] Read changed files and changed lines from a local Git diff or supplied PR/diff source.
+- [ ] Map changed files/symbols into existing ProjectKnowledge.
 - [ ] Classify change type: UI, CSS, state, API, auth, pricing/business logic, routing, shared component, etc.
 - [ ] Trace direct dependencies.
-- [ ] Trace indirect/reused component impact.
+- [ ] Trace reverse dependencies and shared-component blast radius.
 - [ ] Identify affected routes/flows.
-- [ ] Identify affected state combinations.
-- [ ] Attach evidence/reason for each claimed impact.
-- [ ] Produce structured Impact Report.
+- [ ] Identify relevant behavioral/semantic states.
+- [ ] Distinguish direct evidence from inferred impact.
+- [ ] Attach evidence/reason/confidence for every claimed impact.
+- [ ] Mark unresolved impact as unknown rather than guessing.
+- [ ] Produce a structured Impact Report that Scenario Intelligence can consume.
+- [ ] Add a concise developer-facing Impact view/report.
+- [ ] Add unit/integration tests and maintain `docs/IMPACT_ANALYSIS.md` as implementation begins.
 
 ## Phase 3 — Scenario Intelligence
 
@@ -260,18 +324,23 @@ Documentation is a product requirement, not cleanup work.
 
 - `AGENTS.md` = mandatory engineering and AI-agent rules.
 - `docs/README.md` = documentation index and maintenance policy.
-- Each major QGate subsystem receives a dedicated maintained document when implementation begins.
+- `docs/PROJECT_INTELLIGENCE.md` = maintained Project Intelligence technical/business documentation.
+- Each next major QGate subsystem receives a dedicated maintained document when implementation begins.
 - Documentation must explain technical architecture and user/business workflow.
 - Relevant documentation must be updated in the same feature branch whenever code behavior/contracts change.
 - `QGATE_PROGRESS.md` must be updated after every meaningful merged feature.
 
 ## Current Next Step
 
-**Design and implement Project Intelligence V1 on a dedicated feature branch.**
+**Design Impact Analysis V1, then implement it on a dedicated feature branch.**
 
-The first implementation should establish the source adapter + bounded project index + structured output foundation before attempting broad AI semantic analysis.
+Impact Analysis must consume the existing merged `ProjectKnowledge` rather than building a second code-understanding engine.
 
-Do not start Impact Analysis, Scenario Intelligence, QA Memory, or Final Gate implementation deeply until Project Intelligence produces a useful, tested, scalable project map.
+The first vertical slice should be small and evidence-backed:
+
+`code diff -> changed files/symbols -> ProjectKnowledge lookup -> dependency/reuse/state tracing -> structured Impact Report`
+
+Do not start Scenario Intelligence deeply until Impact Analysis can reliably explain what a change may affect and why.
 
 ## Definition of QGate V1 Success
 
