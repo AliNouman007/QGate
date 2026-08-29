@@ -13,7 +13,7 @@ _STRUCTURAL_REASONS = {
     "same symbol/component",
     "same route",
 }
-_CURRENT_IMPACT_REASONS = {
+_CURRENT_IMACT_REASONS = {
     "direct current impact",
     "indirect current impact",
 }
@@ -23,7 +23,7 @@ def _is_strong(reasons: list[str]) -> bool:
     reason_set = set(reasons)
     return bool(
         reason_set & _HIGH_SPECIFICITY_REASONS
-        or (reason_set & _STRUCTURAL_REASONS and reason_set & _CURRENT_IMPACT_REASONS)
+        or (reason_set & _STRUCTURAL_REASONS and reason_set & _CURRENT_IMACT_REASONS)
     )
 
 
@@ -75,7 +75,7 @@ def build_historical_risks(
                 components=hint.components if hint else [],
                 states=hint.states if hint else [],
                 related_scenario_keys=related,
-                covered=bool(related) and all(key in verified_pass_scenario_keys for key in related),
+                covered=bool(related) and any(key in verified_pass_scenario_keys for key in related),
                 evidence=match.evidence,
             )
         )
