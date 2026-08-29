@@ -115,7 +115,10 @@ def test_runtime_discovery_is_not_promoted_to_ready() -> None:
 
 def test_stateful_scenario_without_setup_hint_fails_closed() -> None:
     request = ScenarioCompiler().compile_plan(
-        _plan(states=["user:wallet"]),
+        _plan(
+            states=["user:wallet"],
+            preconditions=["Establish Logged In + Wallet"],
+        ),
         ExecutionConfig(base_url="http://127.0.0.1:4173"),
     )
     assert request.scenarios == []
