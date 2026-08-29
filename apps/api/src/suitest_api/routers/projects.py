@@ -25,6 +25,7 @@ from suitest_api.deps.role import require_role
 from suitest_api.deps.scope import TenantContext, require_workspace_membership
 from suitest_api.routers._pagination import decode_cursor_or_400, encode_next
 from suitest_api.routers.browser_execution import router as browser_execution_router
+from suitest_api.routers.final_gate import router as final_gate_router
 from suitest_api.routers.impact_analysis import router as impact_analysis_router
 from suitest_api.routers.project_intelligence import router as project_intelligence_router
 from suitest_api.routers.qa_memory import router as qa_memory_router
@@ -49,6 +50,7 @@ router.include_router(impact_analysis_router)
 router.include_router(scenario_intelligence_router)
 router.include_router(browser_execution_router)
 router.include_router(qa_memory_router)
+router.include_router(final_gate_router)
 
 # Role gate shared by every mutating endpoint per docs/API.md §3.2 — project
 # CRUD is ADMIN/OWNER only (QA can author cases but not own projects).

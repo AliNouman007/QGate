@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from qgate_qa_memory.models import MemoryRecallResult, RegressionScenarioHint
-from qgate_scenario_intelligence.models import ScenarioPlan
+from typing import TYPE_CHECKING
 
 from .models import HistoricalRisk
+
+if TYPE_CHECKING:
+    from qgate_qa_memory.models import MemoryRecallResult, RegressionScenarioHint
+    from qgate_scenario_intelligence.models import ScenarioPlan
 
 _HIGH_SPECIFICITY_REASONS = {
     "same symbol/component + state",
@@ -41,8 +44,24 @@ def _related_scenarios(hint: RegressionScenarioHint, plan: ScenarioPlan) -> list
             or step.expected.casefold() in hint.expected_invariant.casefold()
             for step in scenario.steps
             if step.expected.strip()
+        route_match = bool(hint_routes & set(scenario.routes)) if hint_routes else True
+        target_match = bool(hint_components & set(scenario.targets)) if hint_components else True
+        state_match = bool(hint_states & set(scenario.states)) if hint_states else True
+        if not (route_match and target_match and state_match):
+            continue
+
+        invariant_match = (
+            any(
+                hint.expected_invariant.casefold() in step.expected.casefold()
+                or step.expected.casefold() in hint.expected_invariant.casefold()
+                for step in scenario.steps
+                if step.expected.strip()
+            )
+            if hint.expected_invariant
+            else True
         )
         if (route_match or target_match or invariant_match) and state_match:
+        if invariant_match:
             related.append(scenario.key)
     return related
 

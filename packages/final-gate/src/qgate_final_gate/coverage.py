@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from qgate_browser_execution.models import ExecutionReport, ExecutionStatus, ScenarioExecution
-from qgate_impact_analysis.models import ImpactReport
-from qgate_qa_memory.models import MemoryRecallResult, RegressionScenarioHint
 from qgate_scenario_intelligence.models import ScenarioPlan, ScenarioPriority
 
 from .memory import build_historical_risks, historical_links_for_scenario
@@ -13,6 +13,10 @@ from .models import (
     EvidenceRef,
     HistoricalRisk,
 )
+
+if TYPE_CHECKING:
+    from qgate_impact_analysis.models import ImpactReport
+    from qgate_qa_memory.models import MemoryRecallResult, RegressionScenarioHint
 
 
 def _execution_evidence_refs(execution: ScenarioExecution) -> list[EvidenceRef]:

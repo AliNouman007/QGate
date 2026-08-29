@@ -4,10 +4,12 @@ from qgate_browser_execution.models import (
     ExecutionStatus,
     ExecutionSummary,
     FailureCategory,
+    OperationKind,
     ScenarioExecution,
     StepExecution,
-    OperationKind,
 )
+from qgate_final_gate.judge import FinalGateJudge
+from qgate_final_gate.models import GateInputBundle, GateReasonKind, GateVerdict
 from qgate_impact_analysis.models import (
     ChangeSet,
     ChangeSourceKind,
@@ -41,9 +43,6 @@ from qgate_scenario_intelligence.models import (
     ScenarioStep,
     ScenarioSummary,
 )
-
-from qgate_final_gate.judge import FinalGateJudge
-from qgate_final_gate.models import GateInputBundle, GateReasonKind, GateVerdict
 
 
 def _evidence() -> Evidence:

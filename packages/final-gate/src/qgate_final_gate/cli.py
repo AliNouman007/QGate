@@ -86,8 +86,11 @@ def main() -> None:
     if args.command == "show":
         report = store.load_key(args.report)
         if report is None:
+        loaded = store.load_key(args.report)
+        if loaded is None:
             raise SystemExit(f"Gate report not found: {args.report}")
         print(report.model_dump_json(indent=2) if args.json else render_gate_report(report))
+        print(loaded.model_dump_json(indent=2) if args.json else render_gate_report(loaded))
         return
 
     reports = store.list_reports(project_source_id=args.project_source_id)

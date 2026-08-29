@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from pydantic import BaseModel, Field
 
-from .models import GateAIExplanation, GateReport
+if TYPE_CHECKING:
+    from .models import GateAIExplanation, GateReport
 
 
 class GateEvidencePack(BaseModel):
