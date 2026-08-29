@@ -11,11 +11,11 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy import Boolean, ForeignKey, Index, String, Text, text
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from suitest_db.base import Base, TimestampMixin
 from suitest_db.ids import new_id
+from suitest_db.types import UserGUID
 
 
 class AgentDefinition(Base, TimestampMixin):
@@ -32,7 +32,7 @@ class AgentDefinition(Base, TimestampMixin):
     spec_version: Mapped[str] = mapped_column(String(32), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     created_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        UserGUID, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     # TimestampMixin provides created_at / updated_at
 

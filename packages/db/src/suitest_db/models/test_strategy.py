@@ -7,13 +7,12 @@ from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from suitest_shared.domain.enums import TestStrategyStatus
 
 from suitest_db.base import Base, TimestampMixin
 from suitest_db.ids import new_id
-from suitest_db.types import PortableJSON
+from suitest_db.types import PortableJSON, UserGUID
 
 
 class TestStrategy(Base, TimestampMixin):
@@ -36,10 +35,8 @@ class TestStrategy(Base, TimestampMixin):
     agent_session_id: Mapped[str | None] = mapped_column(
         ForeignKey("agent_sessions.id", ondelete="SET NULL")
     )
-    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
-    approved_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id")
-    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UserGUID, ForeignKey("users.id"))
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(UserGUID, ForeignKey("users.id"))
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (

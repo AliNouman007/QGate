@@ -7,12 +7,12 @@ from datetime import datetime
 
 from sqlalchemy import DateTime, Float, ForeignKey, Index, String, Text, UniqueConstraint, func
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from suitest_shared.domain.enums import DefectStatus, DiagnosisKind, Severity
 
 from suitest_db.base import Base, TimestampMixin
 from suitest_db.ids import new_id
+from suitest_db.types import UserGUID
 
 
 class Defect(Base, TimestampMixin):
@@ -35,9 +35,7 @@ class Defect(Base, TimestampMixin):
         SAEnum(DefectStatus, name="defect_status"), default=DefectStatus.OPEN, nullable=False
     )
     component: Mapped[str | None] = mapped_column(String(120))
-    assignee_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id")
-    )
+    assignee_id: Mapped[uuid.UUID | None] = mapped_column(UserGUID, ForeignKey("users.id"))
     agent_diagnosis: Mapped[str | None] = mapped_column(Text)
 
     # NEW — diagnosis kind drives downstream automation (retry / block / triage-manual)

@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/shell/Sidebar";
 import { Topbar } from "@/components/shell/Topbar";
 import { useCurrentUser, type CurrentUser } from "@/hooks/use-current-user";
 import { api } from "@/lib/api-client";
+import { establishLocalSession } from "@/lib/local-auth";
 import { useActiveProject } from "@/stores/use-active-project";
 import { useActiveWorkspace } from "@/stores/use-active-workspace";
 import { useCapabilities } from "@/stores/use-capabilities";
@@ -37,6 +38,10 @@ type ProjectsPage = components["schemas"]["Page_ProjectPublic_"];
 export const Route = createFileRoute("/_app")({
   beforeLoad: async ({ context, location }) => {
     try {
+      // In opt-in local development this creates the same cookie-backed JWT
+      // session as password login. Disabled/server deployments return 404 and
+      // immediately continue through the unchanged auth guard below.
+      await establishLocalSession();
       const me = await context.queryClient.ensureQueryData<CurrentUser>({
         queryKey: ["auth", "me"],
         queryFn: async () => (await api.get<CurrentUser>("/auth/me")).data,

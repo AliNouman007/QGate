@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from suitest_shared.domain.enums import (
     CaseSource,
@@ -27,7 +26,7 @@ from suitest_shared.text import derive_slug, derive_title
 
 from suitest_db.base import Base, TimestampMixin
 from suitest_db.ids import new_id
-from suitest_db.types import PortableJSON
+from suitest_db.types import PortableJSON, UserGUID
 
 if TYPE_CHECKING:
     # Resolved at runtime via SQLAlchemy's registry; a runtime import would create
@@ -93,7 +92,7 @@ class TestCase(Base, TimestampMixin):
     priority: Mapped[Priority] = mapped_column(
         SAEnum(Priority, name="priority"), default=Priority.P2, nullable=False
     )
-    owner_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(UserGUID, ForeignKey("users.id"))
     generated_by: Mapped[str | None] = mapped_column(String(64))
     generated_from: Mapped[dict[str, Any] | None] = mapped_column(PortableJSON)
     testing_approach: Mapped[TestingApproach | None] = mapped_column(
@@ -118,7 +117,7 @@ class TestCase(Base, TimestampMixin):
     automation_status: Mapped[str | None] = mapped_column(String(16))
     automation_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     automation_reviewed_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id")
+        UserGUID, ForeignKey("users.id")
     )
     # Denormalized "last run" pointers — updated by the run-ingest service so the
     # TCM and case list can show status/duration without joining the runs table.

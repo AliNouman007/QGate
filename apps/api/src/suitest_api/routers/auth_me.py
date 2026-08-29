@@ -7,20 +7,55 @@ I see", so it depends only on ``current_active_user`` + a DB session, never on
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from suitest_db.models.user import User
 from suitest_db.repositories.workspaces import WorkspaceRepo
 
 from suitest_api.auth.db import get_async_session
-from suitest_api.auth.manager import current_active_user
+from suitest_api.auth.manager import (
+    auth_backend,
+    current_active_user,
+    current_active_user_optional,
+    get_jwt_strategy,
+)
 from suitest_api.schemas.workspace import (
     MembershipPublic,
     MeResponse,
     WorkspacePublic,
 )
+from suitest_api.settings import Settings
 
 router = APIRouter(prefix="/api/v1", tags=["auth"])
+
+
+@router.post("/auth/local-session", include_in_schema=False)
+async def create_local_session(
+    request: Request,
+    session: AsyncSession = Depends(get_async_session),
+    authenticated_user: User | None = Depends(current_active_user_optional),
+) -> Response:
+    """Issue a normal session cookie for a seeded local OWNER/ADMIN.
+
+    The endpoint is deliberately indistinguishable from a missing route unless
+    both local mode and the explicit bypass flag were accepted at startup.
+    """
+    settings: Settings = request.app.state.settings
+    if not settings.local_auth_bypass:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    membership = await WorkspaceRepo(session).get_local_admin_membership()
+    if membership is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Local auth bypass requires a seeded OWNER or ADMIN workspace membership",
+        )
+    response = (
+        Response(status_code=status.HTTP_204_NO_CONTENT)
+        if authenticated_user is not None and authenticated_user.id == membership.user_id
+        else await auth_backend.login(get_jwt_strategy(), membership.user)
+    )
+    response.headers["X-Suitest-Workspace-Id"] = membership.workspace_id
+    return response
 
 
 @router.get("/auth/me", response_model=MeResponse)
