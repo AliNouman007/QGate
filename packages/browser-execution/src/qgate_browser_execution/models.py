@@ -5,8 +5,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-SCHEMA_VERSION = "1.0"
-RUNNER_VERSION = "0.1.0"
+SCHEMA_VERSION = "1.1"
+RUNNER_VERSION = "0.2.0"
 
 
 class OperationKind(StrEnum):
@@ -81,6 +81,7 @@ class CompiledStep(BaseModel):
     value: str | None = None
     expected: str | None = None
     required: bool = True
+    state_setup: bool = False
 
 
 class CompiledScenario(BaseModel):
