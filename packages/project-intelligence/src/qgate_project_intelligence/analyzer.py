@@ -20,10 +20,15 @@ from .models import (
     FrameworkKind,
     ProjectKnowledge,
     ProjectSummary,
+    SemanticState,
     SymbolKind,
 )
 from .scanner import ProjectScanner
-from .semantic import build_evidence_packs, classify_evidence_packs
+from .semantic import (
+    build_evidence_packs,
+    classify_evidence_packs,
+    derive_concrete_branch_states,
+)
 
 if TYPE_CHECKING:
     from .source import ProjectSource
@@ -87,7 +92,9 @@ class ProjectIntelligenceAnalyzer:
             reused_files=reused,
             analyzed_files=analyzed,
         )
-        semantic_states = classify_evidence_packs(build_evidence_packs(analyses))
+        generic_states = classify_evidence_packs(build_evidence_packs(analyses))
+        concrete_states = derive_concrete_branch_states(analyses)
+        semantic_states = self._dedupe_states([*concrete_states, *generic_states])
         return ProjectKnowledge(
             metadata=metadata,
             summary=summary,
@@ -172,6 +179,18 @@ class ProjectIntelligenceAnalyzer:
                 1 for file in files for symbol in file.symbols if symbol.kind == SymbolKind.HOOK
             ),
         )
+
+    @staticmethod
+    def _dedupe_states(states: list[SemanticState]) -> list[SemanticState]:
+        seen: set[tuple[str, str]] = set()
+        result: list[SemanticState] = []
+        for state in states:
+            key = (state.key, state.label)
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(state)
+        return result
 
     @staticmethod
     def _dedupe_gaps(gaps: list[CoverageGap]) -> list[CoverageGap]:
