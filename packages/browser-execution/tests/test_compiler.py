@@ -14,7 +14,12 @@ from qgate_scenario_intelligence.models import (
 )
 
 
-def _plan(readiness: AutomationReadiness = AutomationReadiness.READY) -> ScenarioPlan:
+def _plan(
+    readiness: AutomationReadiness = AutomationReadiness.READY,
+    *,
+    preconditions: list[str] | None = None,
+    action: str = 'Assert text "You Pay"',
+) -> ScenarioPlan:
     scenario = Scenario(
         key="scn_demo",
         title="Checkout label",
@@ -24,7 +29,8 @@ def _plan(readiness: AutomationReadiness = AutomationReadiness.READY) -> Scenari
         routes=["/checkout"],
         targets=["checkout"],
         states=["guest"],
-        steps=[ScenarioStep(action='Assert text "You Pay"', expected="You Pay", route="/checkout")],
+        preconditions=preconditions or [],
+        steps=[ScenarioStep(action=action, expected="You Pay", route="/checkout")],
         reason="changed checkout label",
         source_impact_keys=["impact:checkout"],
         readiness=readiness,
@@ -60,3 +66,23 @@ def test_runtime_discovery_is_not_promoted_to_ready() -> None:
     )
     assert request.scenarios == []
     assert request.preclassified[0].status == ExecutionStatus.UNVERIFIED
+
+
+def test_ready_scenario_with_unknown_preconditions_fails_closed() -> None:
+    request = ScenarioCompiler().compile_plan(
+        _plan(preconditions=["Establish authenticated wallet state"]),
+        ExecutionConfig(base_url="http://127.0.0.1:4173"),
+    )
+    assert request.scenarios == []
+    assert request.preclassified[0].status == ExecutionStatus.UNVERIFIED
+    assert "preconditions" in request.preclassified[0].reason
+
+
+def test_ready_scenario_with_unsupported_step_fails_closed() -> None:
+    request = ScenarioCompiler().compile_plan(
+        _plan(action="Exercise checkout in both states and compare layout"),
+        ExecutionConfig(base_url="http://127.0.0.1:4173"),
+    )
+    assert request.scenarios == []
+    assert request.preclassified[0].status == ExecutionStatus.UNVERIFIED
+    assert "Unsupported deterministic browser step" in request.preclassified[0].reason
