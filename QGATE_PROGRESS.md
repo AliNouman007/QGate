@@ -23,8 +23,8 @@ Project source
 → Impact Analysis ✅
 → Scenario Intelligence ✅
 → Browser Execution & Evidence ✅
-→ QA Memory ← NEXT
-→ Final Gate
+→ QA Memory ✅
+→ Final Gate ← NEXT
 
 Supported source adapters should eventually include:
 
@@ -359,18 +359,60 @@ The final feature branch was locally verified before merge with:
 - [x] Local read-only Browser Execution API endpoints (`/api/v1/browser-execution/*`).
 - [x] Web dashboard `/execution` view with step previews, failure categories, evidence artifacts, and coverage gaps.
 
-## Phase 5 — QA Memory
+## Phase 5 — QA Memory ✅ V1 COMPLETE
 
-Goal: accumulate confirmed QA knowledge over time.
+### Goal
 
-Planned capabilities:
+Accumulate confirmed human QA findings and regression rules, deduplicate occurrences, enforce explicit human review gates, and provide deterministic recall for Scenario Intelligence planning.
 
-- [ ] Store confirmed human QA findings.
-- [ ] Store reusable regression rules.
-- [ ] Link rules to components/routes/states/symbols.
-- [ ] Recall relevant historical findings when related code changes.
-- [ ] Promote confirmed bugs into permanent regression scenarios.
-- [ ] Distinguish project-specific knowledge from generic QA principles.
+### Status
+
+**QA Memory V1 was merged to `main` through PR #5.**
+
+Merge commit:
+
+`009492c1784b1d68255ee4af5b586e9f385384d3`
+
+The final feature branch was locally verified before merge with:
+
+- QA Memory core unit tests: PASS (12 passed)
+- End-to-end memory flow test: PASS
+- Local QA Memory API tests: PASS (3 passed)
+- Web QA Memory dashboard tests: PASS (3 passed)
+- Ruff: PASS
+- mypy: PASS
+- web typecheck/build: PASS
+- root/affected tests: PASS (11 web passed, 54 python passed)
+- candidate → human confirm/reject gate: PASS
+- confirmed memory + regression rule creation: PASS
+- rejected candidate trusted recall exclusion: PASS
+- dedupe/occurrence history accumulation: PASS
+- supersede/deactivate/reactivate lifecycle: PASS
+- deterministic recall engine & ranking: PASS
+- fingerprint fail-closed check: PASS
+- recall budget bounds & truncation gaps: PASS
+- Scenario Intelligence regression hint adapter: PASS
+- CLI smoke (`add-human`, `ingest-execution`, `list`, `confirm`, `reject`, `recall`): PASS
+- QA Memory dashboard visual smoke: PASS
+
+### V1 implemented capabilities
+
+- [x] Conservative automatic candidate extraction (verified `FAILED` + `ASSERTION_FAILURE` only).
+- [x] Exclude environment/browser/setup/target-resolution failures from automatic regression candidates.
+- [x] Human review lifecycle (`PENDING` → `CONFIRMED` or `REJECTED`).
+- [x] Authenticated user id audit actor for candidate confirmation and rejection.
+- [x] Confirmed memory creation with structured `RegressionRule`.
+- [x] Exclude rejected candidates from trusted recall.
+- [x] Candidate deduplication and occurrence history accumulation.
+- [x] Confirmed memory lifecycle (`ACTIVE`, `SUPERSEDED`, `INACTIVE`) with deactivate and reactivate controls.
+- [x] Deterministic recall engine ranking by scope (symbol, component, route, state) and impact level.
+- [x] Fail-closed source identity and fingerprint check between ProjectKnowledge and ImpactReport.
+- [x] Recall budget bounds and coverage gap reporting.
+- [x] Scenario Intelligence hint adapter converting recalled rules into `RegressionScenarioHint` objects.
+- [x] Save QA memory store outside target repository (`SUITEST_QA_MEMORY_DIR`).
+- [x] Human-readable CLI `qgate-qa-memory` commands and `--json` support.
+- [x] Local authenticated QA Memory API endpoints (`/api/v1/qa-memory/*`).
+- [x] Dashboard `/qa-memory` view with candidate review actions, active memories, rules, and inactive history.
 
 ## Phase 6 — Final Gate
 
@@ -443,9 +485,9 @@ Documentation is a product requirement, not cleanup work.
 
 ## Current Next Step
 
-**Design QA Memory V1, then implement it on a dedicated feature branch.**
+**Design Final Gate V1, then implement it on a dedicated feature branch.**
 
-QA Memory will accumulate confirmed human QA findings, store reusable regression rules, link rules to components/routes/states/symbols, and recall relevant historical findings when related code changes.
+Final Gate will consume evidence from Project Intelligence, Impact Analysis, Scenario Intelligence, Browser Execution, and QA Memory to produce a strict QA decision: PASS, BLOCK, or MANUAL REVIEW REQUIRED.
 
 ## Definition of QGate V1 Success
 
