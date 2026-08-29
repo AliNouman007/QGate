@@ -7,6 +7,7 @@ executable scenario so the normal Tests UI can inspect the concrete steps.
 
 from __future__ import annotations
 
+import hashlib
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
 
 _QGATE_MANAGED = "qgate-managed"
 _PLAYWRIGHT_MCP = "playwright-mcp"
+_TAG_MAX = 64
 
 
 class MaterializedCase(BaseModel):
@@ -69,7 +71,6 @@ class QGateTestMaterializer:
 
     async def materialize(self, plan: ScenarioPlan, *, suite_id: str) -> MaterializeResult:
         result = MaterializeResult(suite_id=suite_id)
-        # Let TestCaseService perform the authoritative suite/workspace scope check.
         for scenario in plan.scenarios:
             steps = self._steps_for(scenario)
             if steps is None:
@@ -150,9 +151,7 @@ class QGateTestMaterializer:
 
     async def _find_exact_existing(self, suite_id: str, tags: list[str]):
         scenario_tag = next(tag for tag in tags if tag.startswith("qgate-scenario:"))
-        rows, _ = await self._repo.list_by_suite_filtered(
-            suite_id, tag=scenario_tag, limit=100
-        )
+        rows, _ = await self._repo.list_by_suite_filtered(suite_id, tag=scenario_tag, limit=100)
         required = set(tags)
         for row in rows:
             existing_tags = set(await self._repo.get_tags(row.id))
@@ -160,13 +159,21 @@ class QGateTestMaterializer:
                 return row
         return None
 
-    @staticmethod
-    def _identity_tags(plan: ScenarioPlan, scenario: Scenario) -> list[str]:
+    @classmethod
+    def _bounded_tag(cls, prefix: str, raw: str) -> str:
+        candidate = f"{prefix}:{raw}"
+        if len(candidate) <= _TAG_MAX:
+            return candidate
+        digest = hashlib.sha256(raw.encode()).hexdigest()[:24]
+        return f"{prefix}:sha256-{digest}"
+
+    @classmethod
+    def _identity_tags(cls, plan: ScenarioPlan, scenario: Scenario) -> list[str]:
         return [
             _QGATE_MANAGED,
-            f"qgate-scenario:{scenario.key}",
-            f"qgate-change:{plan.metadata.impact_change_source_id}"[:255],
-            f"qgate-project:{plan.metadata.project_fingerprint}"[:255],
+            cls._bounded_tag("qgate-scenario", scenario.key),
+            cls._bounded_tag("qgate-change", plan.metadata.impact_change_source_id),
+            cls._bounded_tag("qgate-project", plan.metadata.project_fingerprint),
         ]
 
     @staticmethod
@@ -213,9 +220,6 @@ class QGateTestMaterializer:
         for source_step in scenario.steps:
             normalized = source_step.action.strip().lower()
             if route and (normalized.startswith("open ") or normalized.startswith("navigate ")):
-                # Navigation was emitted explicitly above. Repeating it after a UI
-                # state selection can reset state, so retain the expectation in the
-                # test description but do not add a second navigation step.
                 continue
             steps.append(
                 StepCreate(
