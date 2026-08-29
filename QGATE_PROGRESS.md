@@ -19,11 +19,10 @@ Use Suitest as the execution/platform foundation and add QGate-specific intellig
 Core flow:
 
 Project source
-→ Project Intelligence
-→ Impact Analysis
-→ Scenario Intelligence
-→ Suitest / Playwright execution
-→ Evidence collection
+→ Project Intelligence ✅
+→ Impact Analysis ✅
+→ Scenario Intelligence ✅
+→ Browser Execution & Evidence ← NEXT
 → QA Memory
 → Final Gate
 
@@ -259,21 +258,70 @@ The final feature branch was locally verified before merge with:
 - [x] Add a concise developer-facing Impact view/report.
 - [x] Add unit/integration tests and maintain `docs/IMPACT_ANALYSIS.md` as implementation begins.
 
-## Phase 3 — Scenario Intelligence
+## Phase 3 — Scenario Intelligence ✅ V1 COMPLETE
 
-Goal: turn project knowledge + impact report into high-value QA scenarios.
+### Goal
+
+Turn project knowledge + impact report into high-value, prioritized, evidence-backed QA test scenarios.
+
+### Status
+
+**Scenario Intelligence V1 was merged to `main` through PR #3.**
+
+Merge commit:
+
+`bfba67a68a24678b1cac3a59317abfeb156ce80b`
+
+The final feature branch was locally verified before merge with:
+
+- Scenario Intelligence core unit tests: PASS (7 passed)
+- AI Scenario semantic tests: PASS (2 passed)
+- local Scenario Intelligence API tests: PASS (3 passed)
+- Web Scenario dashboard tests: PASS (2 passed)
+- Ruff: PASS
+- mypy: PASS
+- web typecheck/build: PASS
+- root/affected tests: PASS (397 web passed, 12 python passed)
+- CLI generate & JSON mode smoke: PASS
+- fingerprint mismatch fail-closed check: PASS
+- unrelated route exclusion: PASS
+- state expansion budget bounds: PASS
+- cross-state comparison generation: PASS
+- scenario deduplication: PASS
+- readiness guardrails: PASS
+- AI evidence-pack guardrails & fallback: PASS
+- Scenario dashboard visual smoke: PASS
+
+### V1 implemented capabilities
+
+- [x] Define a structured `ScenarioPlan` / candidate scenario contract.
+- [x] Require matching source identity and fingerprint between ProjectKnowledge and ImpactReport (fail-closed).
+- [x] Generate evidence-backed state variants and negative states without Cartesian explosion.
+- [x] Generate cross-state comparisons when UI/state-sensitive code changes affect multiple related states.
+- [x] Order scenarios by deterministic priority (P0–P3).
+- [x] Distinguish automation readiness (`ready`, `runtime_discovery_required`, `manual_only`, `blocked_by_gap`).
+- [x] Exclude unrelated routes and components.
+- [x] Deduplicate equivalent candidate scenarios.
+- [x] Bound generation via generation budgets and record coverage gaps.
+- [x] Optional provider-backed AI enrichment with strict evidence-pack guardrails.
+- [x] Save scenario plans in QGate-owned storage outside target repositories.
+- [x] Human-readable CLI scenario plan view and `--json` mode.
+- [x] Local read-only Scenario Intelligence API endpoints.
+- [x] Dashboard `/scenarios` view with priority, readiness, step previews, cross-state groups and coverage gaps.
+
+## Phase 4 — Browser Execution & Evidence
+
+Goal: execute READY scenarios in browser/Playwright and capture deterministic evidence.
 
 Planned capabilities:
 
-- [ ] Generate realistic state variants from code evidence.
-- [ ] Prioritize likely/reachable states over purely theoretical states.
-- [ ] Generate E2E scenarios for Suitest/Playwright.
-- [ ] Generate cross-state comparison scenarios where useful.
-- [ ] Mark scenarios that cannot be executed automatically.
-- [ ] Avoid duplicate/redundant scenarios.
-- [ ] Support domain-specific scenario profiles later without contaminating the general core.
+- [ ] Execute READY scenarios in real browser using Suitest/Playwright foundation.
+- [ ] Capture DOM snapshots, computed CSS, console logs, network activity, and visual evidence.
+- [ ] Attempt runtime discovery for `runtime_discovery_required` scenarios.
+- [ ] Classify execution failures (product bug vs test/config/environment issue).
+- [ ] Record structured run artifacts for QA Memory and Final Gate.
 
-## Phase 4 — QA Memory
+## Phase 5 — QA Memory
 
 Goal: accumulate confirmed QA knowledge over time.
 
@@ -286,7 +334,7 @@ Planned capabilities:
 - [ ] Promote confirmed bugs into permanent regression scenarios.
 - [ ] Distinguish project-specific knowledge from generic QA principles.
 
-## Phase 5 — Final Gate
+## Phase 6 — Final Gate
 
 Goal: produce a strict final QA decision from evidence.
 
@@ -357,9 +405,9 @@ Documentation is a product requirement, not cleanup work.
 
 ## Current Next Step
 
-**Design Scenario Intelligence V1, then implement it on a dedicated feature branch.**
+**Design Browser Execution & Evidence V1, then implement it on a dedicated feature branch.**
 
-Scenario Intelligence will consume the existing merged `ProjectKnowledge` and `ImpactReport` models to generate, prioritize, and reach high-value QA test scenarios for Playwright execution.
+Browser Execution & Evidence will consume READY scenarios from `ScenarioPlan`, run them in Playwright/browser, capture runtime DOM/network/console/visual evidence, and classify failures without misreporting environment issues as product bugs.
 
 ## Definition of QGate V1 Success
 
