@@ -12,7 +12,6 @@ from qgate_scenario_intelligence.models import (
     StateSetupHint,
     StateSetupMechanism,
 )
-
 from suitest_api.services.qgate_test_materializer import QGateTestMaterializer
 
 
