@@ -86,7 +86,9 @@ class BrowserExecutor:
                 browser = await browser_type.launch(headless=not request.config.headed)
                 try:
                     for scenario in request.scenarios:
-                        report.scenarios.append(await self._run_scenario(browser, request, scenario, run_id))
+                        report.scenarios.append(
+                            await self._run_scenario(browser, request, scenario, run_id)
+                        )
                 finally:
                     await browser.close()
         except Exception as exc:
@@ -99,7 +101,13 @@ class BrowserExecutor:
             )
         return self._finish(report)
 
-    async def _run_scenario(self, browser: Browser, request: ExecutionRequest, scenario: CompiledScenario, run_id: str) -> ScenarioExecution:
+    async def _run_scenario(
+        self,
+        browser: Browser,
+        request: ExecutionRequest,
+        scenario: CompiledScenario,
+        run_id: str,
+    ) -> ScenarioExecution:
         start_clock = time.perf_counter()
         started = datetime.now(UTC)
         context = await browser.new_context()
@@ -111,9 +119,7 @@ class BrowserExecutor:
         if request.config.capture_console:
             page.on(
                 "console",
-                lambda msg: console.append(
-                    ConsoleEvidence(level=msg.type, message=msg.text[:2000])
-                ),
+                lambda msg: console.append(ConsoleEvidence(level=msg.type, message=msg.text[:2000])),
             )
         if request.config.capture_network:
             page.on(
@@ -150,7 +156,9 @@ class BrowserExecutor:
             started_at=started,
             source_impact_keys=scenario.source_impact_keys,
         )
-        artifact_root = Path(request.config.artifact_dir).expanduser() / run_id / scenario.scenario_key  # noqa: ASYNC240
+        artifact_root = (
+            Path(request.config.artifact_dir).expanduser() / run_id / scenario.scenario_key
+        )
         try:
             for step in scenario.steps:
                 result = await self._run_step(
@@ -212,8 +220,14 @@ class BrowserExecutor:
                     result.failure_category = FailureCategory.TEST_DEFINITION_ERROR
                     result.detail = "navigate operation missing route"
                 else:
-                    url = urljoin(request.config.base_url.rstrip("/") + "/", step.route.lstrip("/"))
-                    response = await page.goto(url, wait_until="domcontentloaded", timeout=request.config.global_timeout_ms)
+                    url = urljoin(
+                        request.config.base_url.rstrip("/") + "/", step.route.lstrip("/")
+                    )
+                    response = await page.goto(
+                        url,
+                        wait_until="domcontentloaded",
+                        timeout=request.config.global_timeout_ms,
+                    )
                     if response is not None and response.status >= 500:
                         result.status = ExecutionStatus.EXECUTION_ERROR
                         result.failure_category = FailureCategory.ENVIRONMENT_FAILURE
@@ -227,7 +241,9 @@ class BrowserExecutor:
                 result.actual = actual
                 if step.expected and step.expected not in actual:
                     result.status, result.failure_category = assertion_failure()
-                    result.detail = f"expected URL containing {step.expected!r}, observed {actual!r}"
+                    result.detail = (
+                        f"expected URL containing {step.expected!r}, observed {actual!r}"
+                    )
             else:
                 if step.target is None:
                     result.status = ExecutionStatus.UNVERIFIED
@@ -248,6 +264,16 @@ class BrowserExecutor:
         except Exception as exc:
             result.status, result.failure_category = classify_exception(step.operation, exc)
             result.detail = str(exc)[:2000]
+
+        if step.state_setup and result.status != ExecutionStatus.PASSED:
+            infrastructure = {
+                FailureCategory.ENVIRONMENT_FAILURE,
+                FailureCategory.BROWSER_FAILURE,
+                FailureCategory.NETWORK_INFRA_FAILURE,
+                FailureCategory.NAVIGATION_FAILURE,
+            }
+            if result.failure_category not in infrastructure:
+                result.failure_category = FailureCategory.STATE_SETUP_FAILURE
 
         screenshot = None
         if request.config.screenshot_on_failure and result.status != ExecutionStatus.PASSED:
@@ -270,7 +296,9 @@ class BrowserExecutor:
         result.duration_ms = (time.perf_counter() - start_clock) * 1000
         return result
 
-    async def _apply_target_operation(self, locator: Locator, step: CompiledStep, result: StepExecution) -> None:
+    async def _apply_target_operation(
+        self, locator: Locator, step: CompiledStep, result: StepExecution
+    ) -> None:
         if step.operation == OperationKind.CLICK:
             await locator.click()
         elif step.operation == OperationKind.FILL:
@@ -295,7 +323,9 @@ class BrowserExecutor:
             result.actual = actual_text
             if expected_text not in actual_text:
                 result.status, result.failure_category = assertion_failure()
-                result.detail = f"expected text containing {expected_text!r}, observed {actual_text!r}"
+                result.detail = (
+                    f"expected text containing {expected_text!r}, observed {actual_text!r}"
+                )
         elif step.operation == OperationKind.ASSERT_VALUE:
             actual_val = await locator.input_value()
             expected_val = step.expected or ""
@@ -339,11 +369,16 @@ class BrowserExecutor:
     def _finish(report: ExecutionReport) -> ExecutionReport:
         report.metadata.completed_at = datetime.now(UTC)
         report.summary.executed = sum(
-            item.status in {ExecutionStatus.PASSED, ExecutionStatus.FAILED, ExecutionStatus.EXECUTION_ERROR}
+            item.status
+            in {ExecutionStatus.PASSED, ExecutionStatus.FAILED, ExecutionStatus.EXECUTION_ERROR}
             for item in report.scenarios
         )
-        report.summary.passed = sum(item.status == ExecutionStatus.PASSED for item in report.scenarios)
-        report.summary.failed = sum(item.status == ExecutionStatus.FAILED for item in report.scenarios)
+        report.summary.passed = sum(
+            item.status == ExecutionStatus.PASSED for item in report.scenarios
+        )
+        report.summary.failed = sum(
+            item.status == ExecutionStatus.FAILED for item in report.scenarios
+        )
         report.summary.execution_error = sum(
             item.status == ExecutionStatus.EXECUTION_ERROR for item in report.scenarios
         )
@@ -353,5 +388,7 @@ class BrowserExecutor:
         report.summary.skipped_manual = sum(
             item.status == ExecutionStatus.SKIPPED_MANUAL for item in report.scenarios
         )
-        report.summary.blocked = sum(item.status == ExecutionStatus.BLOCKED for item in report.scenarios)
+        report.summary.blocked = sum(
+            item.status == ExecutionStatus.BLOCKED for item in report.scenarios
+        )
         return report
