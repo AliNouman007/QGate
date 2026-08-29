@@ -66,6 +66,7 @@ export interface ProjectKnowledge {
     total_source_bytes: number;
     languages: Record<string, number>;
     frameworks: Record<string, number>;
+    declared_frameworks: string[];
     roles: Record<string, number>;
     reused_modules: Record<string, number>;
     behavioral_categories: Record<string, number>;
