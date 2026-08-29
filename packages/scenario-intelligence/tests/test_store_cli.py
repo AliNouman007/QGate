@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from qgate_project_intelligence.models import Confidence, Evidence
-
 from qgate_scenario_intelligence.models import (
     AutomationReadiness,
     GenerationBudget,

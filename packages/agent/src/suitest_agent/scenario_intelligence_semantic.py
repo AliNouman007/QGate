@@ -10,7 +10,7 @@ from qgate_scenario_intelligence.models import AutomationReadiness
 from qgate_scenario_intelligence.semantic import build_scenario_evidence_packs
 
 if TYPE_CHECKING:
-    from qgate_scenario_intelligence.models import Scenario, ScenarioPlan
+    from qgate_scenario_intelligence.models import ScenarioPlan
 
 from suitest_agent.providers.base import ChatMessage, LLMProvider, ModelCall, ProviderError
 

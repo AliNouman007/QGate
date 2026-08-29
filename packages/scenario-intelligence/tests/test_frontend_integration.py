@@ -7,7 +7,6 @@ from qgate_impact_analysis.engine import ImpactAnalyzer
 from qgate_impact_analysis.source import LocalGitSource
 from qgate_project_intelligence.analyzer import ProjectIntelligenceAnalyzer
 from qgate_project_intelligence.source import LocalPathSource
-
 from qgate_scenario_intelligence.generator import ScenarioGenerator
 from qgate_scenario_intelligence.models import ScenarioKind
 from qgate_scenario_intelligence.store import JsonScenarioPlanStore

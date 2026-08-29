@@ -325,7 +325,7 @@ class ScenarioGenerator:
         return result
 
     def _scenario(self, **kwargs: object) -> Scenario:
-        scenario = Scenario(key="pending", **kwargs)  # type: ignore[arg-type]
+        scenario = Scenario(key="pending", **kwargs)
         return scenario.model_copy(update={"key": self._stable_key(scenario_signature(scenario))})
 
     @staticmethod

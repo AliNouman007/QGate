@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+from typing import TYPE_CHECKING
 
-from .models import Scenario
 from .prioritization import stricter_readiness, stronger_priority
+
+if TYPE_CHECKING:
+    from .models import Scenario
 
 
 def scenario_signature(scenario: Scenario) -> str:

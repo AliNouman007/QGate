@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from qgate_project_intelligence.models import ProjectKnowledge, SemanticState
+if TYPE_CHECKING:
+    from qgate_project_intelligence.models import ProjectKnowledge, SemanticState
 
 
 @dataclass(frozen=True)

@@ -22,7 +22,6 @@ from qgate_project_intelligence.models import (
     SemanticState,
     SemanticStateKind,
 )
-
 from qgate_scenario_intelligence.generator import ScenarioGenerator, ScenarioInputMismatchError
 from qgate_scenario_intelligence.models import AutomationReadiness, GenerationBudget, ScenarioKind
 
