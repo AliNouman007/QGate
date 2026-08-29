@@ -66,7 +66,7 @@ class QAMemoryService:
         memory = self._find_memory_by_signature(candidate.project_source_id, signature)
         if memory is None:
             memory = ConfirmedMemory(
-                key=self._stable_key("memory", candidate.project_source_id, signature),
+                key=self._stable_key("memory", candidate.project_source_id, candidate.key),
                 project_source_id=candidate.project_source_id,
                 title=candidate.title,
                 invariant=candidate.invariant,
@@ -87,9 +87,8 @@ class QAMemoryService:
                 confirmed_by=reviewer,
                 semantic_signature=signature,
             )
-        else:
-            if candidate.key not in memory.originating_candidate_keys:
-                memory.originating_candidate_keys.append(candidate.key)
+        elif candidate.key not in memory.originating_candidate_keys:
+            memory.originating_candidate_keys.append(candidate.key)
         self.store.save_memory(memory)
 
         rule = None
