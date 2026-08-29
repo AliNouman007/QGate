@@ -11,7 +11,7 @@ from qgate_project_intelligence.store import JsonKnowledgeStore
 
 from suitest_api.deps.scope import TenantContext, require_workspace_membership
 
-router = APIRouter(prefix="/api/v1/project-intelligence", tags=["project-intelligence"])
+router = APIRouter(prefix="/project-intelligence", tags=["project-intelligence"])
 
 
 class ProjectMapListItem(BaseModel):
