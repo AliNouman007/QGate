@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import shutil
 import tempfile
-from collections.abc import Iterator
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 from zipfile import ZipFile
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 class ProjectSource(Protocol):

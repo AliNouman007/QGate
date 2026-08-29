@@ -11,7 +11,9 @@ from .store import JsonKnowledgeStore
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Analyze a project with QGate Project Intelligence")
+    parser = argparse.ArgumentParser(
+        description="Analyze a project with QGate Project Intelligence"
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     analyze = subparsers.add_parser("analyze", help="Analyze a local directory or ZIP project")
     analyze.add_argument("path")

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import hashlib
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .models import AnalysisBudget, CoverageGap, FileRecord, FileRole
-from .source import ProjectSource
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from .source import ProjectSource
 
 IGNORED_DIRS = {
     ".git",
@@ -85,12 +89,16 @@ class ProjectScanner:
                 gaps.append(CoverageGap(path=relative.as_posix(), reason="max_depth_exceeded"))
                 continue
             if len(records) >= self.budget.max_files:
-                gaps.append(CoverageGap(reason="max_files_exceeded", detail=str(self.budget.max_files)))
+                gaps.append(
+                    CoverageGap(reason="max_files_exceeded", detail=str(self.budget.max_files))
+                )
                 break
             try:
                 size = path.stat().st_size
             except OSError as exc:
-                gaps.append(CoverageGap(path=relative.as_posix(), reason="stat_failed", detail=str(exc)))
+                gaps.append(
+                    CoverageGap(path=relative.as_posix(), reason="stat_failed", detail=str(exc))
+                )
                 continue
             if size > self.budget.max_file_bytes:
                 gaps.append(
@@ -103,13 +111,17 @@ class ProjectScanner:
                 continue
             if total_bytes + size > self.budget.max_total_bytes:
                 gaps.append(
-                    CoverageGap(reason="max_total_bytes_exceeded", detail=str(self.budget.max_total_bytes))
+                    CoverageGap(
+                        reason="max_total_bytes_exceeded", detail=str(self.budget.max_total_bytes)
+                    )
                 )
                 break
             try:
                 content = path.read_bytes()
             except OSError as exc:
-                gaps.append(CoverageGap(path=relative.as_posix(), reason="read_failed", detail=str(exc)))
+                gaps.append(
+                    CoverageGap(path=relative.as_posix(), reason="read_failed", detail=str(exc))
+                )
                 continue
             if b"\x00" in content[:4096]:
                 gaps.append(CoverageGap(path=relative.as_posix(), reason="binary_file_skipped"))
@@ -127,7 +139,9 @@ class ProjectScanner:
         return records, gaps
 
     @staticmethod
-    def read_text(source: ProjectSource, record: FileRecord) -> tuple[str | None, CoverageGap | None]:
+    def read_text(
+        source: ProjectSource, record: FileRecord
+    ) -> tuple[str | None, CoverageGap | None]:
         path = source.root / record.path
         try:
             return path.read_text(encoding="utf-8"), None
@@ -149,17 +163,24 @@ class ProjectScanner:
         lower_parts = [part.lower() for part in relative.parts]
         name = relative.name.lower()
         stem = relative.stem.lower()
-        if name in CONFIG_NAMES or name.startswith(".") and relative.suffix in {".json", ".yaml", ".yml"}:
+        if name in CONFIG_NAMES or (
+            name.startswith(".") and relative.suffix in {".json", ".yaml", ".yml"}
+        ):
             return FileRole.CONFIG
         if "test" in stem or "tests" in lower_parts or "__tests__" in lower_parts or "spec" in stem:
             return FileRole.TEST
         if any(part in {"routes", "pages", "app"} for part in lower_parts[:-1]):
             return FileRole.ROUTE
-        if any(part in {"components", "component"} for part in lower_parts[:-1]) or relative.suffix in {".jsx", ".tsx", ".vue", ".svelte"}:
+        if any(
+            part in {"components", "component"} for part in lower_parts[:-1]
+        ) or relative.suffix in {".jsx", ".tsx", ".vue", ".svelte"}:
             return FileRole.COMPONENT
         if any(part in {"services", "service", "api", "clients"} for part in lower_parts[:-1]):
             return FileRole.SERVICE
-        if any(part in {"store", "stores", "state", "reducers", "contexts"} for part in lower_parts[:-1]):
+        if any(
+            part in {"store", "stores", "state", "reducers", "contexts"}
+            for part in lower_parts[:-1]
+        ):
             return FileRole.STATE
         if relative.suffix.lower() in LANGUAGE_BY_SUFFIX:
             return FileRole.SOURCE

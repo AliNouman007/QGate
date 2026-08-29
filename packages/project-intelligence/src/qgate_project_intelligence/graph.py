@@ -38,7 +38,12 @@ def build_dependency_graph(files: list[FileAnalysis]) -> list[DependencyEdge]:
 
 def reuse_counts(edges: list[DependencyEdge]) -> dict[str, int]:
     counts = Counter(edge.target for edge in edges)
-    return dict(sorted(((path, count) for path, count in counts.items() if count > 1), key=lambda item: (-item[1], item[0])))
+    return dict(
+        sorted(
+            ((path, count) for path, count in counts.items() if count > 1),
+            key=lambda item: (-item[1], item[0]),
+        )
+    )
 
 
 def _resolve_target(

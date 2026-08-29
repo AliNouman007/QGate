@@ -4,6 +4,7 @@ requires-python = "==3.12.*"
 
 [manifest]
 members = [
+    "qgate-project-intelligence",
     "suiflex-suitest-lifecycle",
     "suitest-agent",
     "suitest-api",
@@ -2363,6 +2364,17 @@ wheels = [
 ]
 
 [[package]]
+name = "qgate-project-intelligence"
+version = "0.1.0"
+source = { editable = "packages/project-intelligence" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.9.0" }]
+
+[[package]]
 name = "redis"
 version = "5.3.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2715,6 +2727,7 @@ dependencies = [
     { name = "opentelemetry-instrumentation-httpx" },
     { name = "opentelemetry-instrumentation-sqlalchemy" },
     { name = "opentelemetry-sdk" },
+    { name = "pillow" },
     { name = "prometheus-fastapi-instrumentator" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -2743,6 +2756,7 @@ requires-dist = [
     { name = "opentelemetry-instrumentation-httpx", specifier = ">=0.50b0" },
     { name = "opentelemetry-instrumentation-sqlalchemy", specifier = ">=0.50b0" },
     { name = "opentelemetry-sdk", specifier = ">=1.29.0" },
+    { name = "pillow", specifier = ">=11" },
     { name = "prometheus-fastapi-instrumentator", specifier = ">=8.1.0" },
     { name = "pydantic", specifier = ">=2.9.0" },
     { name = "pydantic-settings", specifier = ">=2.6.0" },

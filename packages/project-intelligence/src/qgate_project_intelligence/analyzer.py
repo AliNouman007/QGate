@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from collections import Counter
+from typing import TYPE_CHECKING
 
 from .extractors import analyze_text_file
 from .graph import build_dependency_graph, reuse_counts
@@ -17,7 +18,9 @@ from .models import (
     ProjectSummary,
 )
 from .scanner import ProjectScanner
-from .source import ProjectSource
+
+if TYPE_CHECKING:
+    from .source import ProjectSource
 
 
 class ProjectIntelligenceAnalyzer:

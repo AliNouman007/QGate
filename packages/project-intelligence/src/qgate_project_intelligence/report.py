@@ -17,7 +17,9 @@ def render_project_map(knowledge: ProjectKnowledge) -> str:
     ]
 
     routes = [file.record.path for file in knowledge.files if file.record.role == FileRole.ROUTE]
-    components = [file.record.path for file in knowledge.files if file.record.role == FileRole.COMPONENT]
+    components = [
+        file.record.path for file in knowledge.files if file.record.role == FileRole.COMPONENT
+    ]
     lines.append(f"Routes/pages: {len(routes)}")
     lines.extend(f"  - {path}" for path in routes[:20])
     lines.append(f"Components: {len(components)}")
@@ -30,10 +32,7 @@ def render_project_map(knowledge: ProjectKnowledge) -> str:
             lines.append(f"  - {path}: {count} importers")
 
     meaningful = [
-        behavior
-        for file in knowledge.files
-        for behavior in file.behaviors
-        if behavior.meaningful
+        behavior for file in knowledge.files for behavior in file.behaviors if behavior.meaningful
     ]
     if meaningful:
         lines.append("Evidence-backed behavioral facts:")

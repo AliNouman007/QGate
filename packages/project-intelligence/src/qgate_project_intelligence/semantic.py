@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from pydantic import BaseModel, Field
 
 from .models import BehaviorFact, Confidence, Evidence, FileAnalysis
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 class EvidencePack(BaseModel):
@@ -38,7 +40,11 @@ class HeuristicSemanticClassifier:
                 needs_runtime_verification=False,
             )
         categories = {fact.category.value for fact in meaningful}
-        confidence = Confidence.HIGH if all(fact.confidence == Confidence.HIGH for fact in meaningful) else Confidence.MEDIUM
+        confidence = (
+            Confidence.HIGH
+            if all(fact.confidence == Confidence.HIGH for fact in meaningful)
+            else Confidence.MEDIUM
+        )
         return SemanticClassification(
             key=pack.key,
             label=" / ".join(sorted(categories)),
@@ -63,7 +69,13 @@ def build_evidence_packs(
         for start in range(0, len(file.behaviors), max_facts_per_pack):
             facts = file.behaviors[start : start + max_facts_per_pack]
             evidence = [fact.evidence for fact in facts]
-            packs.append(EvidencePack(key=f"{file.record.path}:{start // max_facts_per_pack}", facts=facts, evidence=evidence))
+            packs.append(
+                EvidencePack(
+                    key=f"{file.record.path}:{start // max_facts_per_pack}",
+                    facts=facts,
+                    evidence=evidence,
+                )
+            )
             if len(packs) >= max_packs:
                 return packs
     return packs

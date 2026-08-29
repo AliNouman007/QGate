@@ -25,13 +25,30 @@ _CONDITION_PATTERNS = [
 _TERNARY_CONDITION = re.compile(r"(?:\{|\(|=|return\s+)([^?;{}]+?)\s*\?")
 
 _AUTH_TERMS = {"auth", "authenticated", "isloggedin", "loggedin", "session", "currentuser"}
-_PERMISSION_TERMS = {"permission", "permissions", "role", "roles", "canedit", "canwrite", "isadmin", "owner"}
+_PERMISSION_TERMS = {
+    "permission",
+    "permissions",
+    "role",
+    "roles",
+    "canedit",
+    "canwrite",
+    "isadmin",
+    "owner",
+}
 _FEATURE_TERMS = {"featureflag", "feature_flag", "experiment", "variant", "abtest", "a_b_test"}
 _LOADING_TERMS = {"loading", "isloading", "pending", "ispending", "fetching", "isfetching"}
 _ERROR_TERMS = {"error", "haserror", "iserror", "failed", "failure"}
 _EMPTY_TERMS = {"empty", "isempty", "length===0", "length==0", "count===0", "count==0"}
 _STORAGE_TERMS = {"localstorage", "sessionstorage", "document.cookie", "cookie", "cookies"}
-_RESPONSIVE_TERMS = {"matchmedia", "innerwidth", "breakpoint", "ismobile", "isdesktop", "tablet", "viewport"}
+_RESPONSIVE_TERMS = {
+    "matchmedia",
+    "innerwidth",
+    "breakpoint",
+    "ismobile",
+    "isdesktop",
+    "tablet",
+    "viewport",
+}
 
 
 def analyze_text_file(record: FileRecord, text: str) -> FileAnalysis:
@@ -41,7 +58,9 @@ def analyze_text_file(record: FileRecord, text: str) -> FileAnalysis:
         imports.extend(_extract_imports(record, line, index))
         behaviors.extend(_extract_behaviors(record, line, index))
         behaviors.extend(_extract_direct_signals(record, line, index))
-    return FileAnalysis(record=record, imports=_dedupe_imports(imports), behaviors=_dedupe_behaviors(behaviors))
+    return FileAnalysis(
+        record=record, imports=_dedupe_imports(imports), behaviors=_dedupe_behaviors(behaviors)
+    )
 
 
 def _extract_imports(record: FileRecord, line: str, line_number: int) -> list[ImportFact]:
@@ -60,7 +79,10 @@ def _extract_imports(record: FileRecord, line: str, line_number: int) -> list[Im
         dynamic = _JS_DYNAMIC_IMPORT.search(line)
         if dynamic:
             modules.append(dynamic.group(1))
-    return [ImportFact(module=module, evidence=_evidence(record, line_number, line, "import")) for module in modules]
+    return [
+        ImportFact(module=module, evidence=_evidence(record, line_number, line, "import"))
+        for module in modules
+    ]
 
 
 def _extract_behaviors(record: FileRecord, line: str, line_number: int) -> list[BehaviorFact]:
@@ -103,7 +125,9 @@ def _extract_direct_signals(record: FileRecord, line: str, line_number: int) -> 
     ]
 
 
-def _classify_condition(expression: str, full_line: str) -> tuple[BehaviorCategory, Confidence, bool]:
+def _classify_condition(
+    expression: str, full_line: str
+) -> tuple[BehaviorCategory, Confidence, bool]:
     normalized = _normalize(expression)
     category = _category_for(normalized)
     if category != BehaviorCategory.GENERAL:

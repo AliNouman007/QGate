@@ -4,7 +4,12 @@ import zipfile
 from pathlib import Path
 
 from qgate_project_intelligence.analyzer import ProjectIntelligenceAnalyzer
-from qgate_project_intelligence.models import AnalysisBudget, BehaviorCategory, FileRole, ProjectKnowledge
+from qgate_project_intelligence.models import (
+    AnalysisBudget,
+    BehaviorCategory,
+    FileRole,
+    ProjectKnowledge,
+)
 from qgate_project_intelligence.report import render_project_map
 from qgate_project_intelligence.semantic import HeuristicSemanticClassifier, build_evidence_packs
 from qgate_project_intelligence.source import LocalPathSource, ZipProjectSource
