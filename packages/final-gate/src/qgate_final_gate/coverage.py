@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from qgate_browser_execution.models import ExecutionStatus
+from qgate_browser_execution.models import ExecutionReport, ExecutionStatus, ScenarioExecution
 from qgate_impact_analysis.models import ImpactReport
+from qgate_qa_memory.models import MemoryRecallResult, RegressionScenarioHint
 from qgate_scenario_intelligence.models import ScenarioPlan, ScenarioPriority
 
 from .memory import build_historical_risks, historical_links_for_scenario
@@ -14,18 +15,19 @@ from .models import (
 )
 
 
-def _execution_evidence_refs(execution: object) -> list[EvidenceRef]:
-    from qgate_browser_execution.models import ScenarioExecution
-
-    item: ScenarioExecution = execution  # type: ignore[assignment]
+def _execution_evidence_refs(execution: ScenarioExecution) -> list[EvidenceRef]:
     refs: list[EvidenceRef] = []
-    for step in item.steps:
+    for step in execution.steps:
         for artifact in step.evidence.artifacts:
             refs.append(EvidenceRef(kind=artifact.kind, source=artifact.path, detail=artifact.sha256))
     return refs
 
 
-def _required_base(priority: ScenarioPriority, source_impact_keys: list[str], impact: ImpactReport) -> tuple[bool, str | None]:
+def _required_base(
+    priority: ScenarioPriority,
+    source_impact_keys: list[str],
+    impact: ImpactReport,
+) -> tuple[bool, str | None]:
     if priority == ScenarioPriority.P0:
         return True, "P0 scenario is always required"
     if priority == ScenarioPriority.P1:
@@ -38,10 +40,10 @@ def _required_base(priority: ScenarioPriority, source_impact_keys: list[str], im
 
 def build_coverage(
     plan: ScenarioPlan,
-    execution_report: "ExecutionReport",
+    execution_report: ExecutionReport,
     impact: ImpactReport,
-    memory_recall: "MemoryRecallResult | None",
-    regression_hints: list["RegressionScenarioHint"],
+    memory_recall: MemoryRecallResult | None,
+    regression_hints: list[RegressionScenarioHint],
 ) -> tuple[list[CoverageItem], CoverageSummary, list[HistoricalRisk]]:
     executions = {item.scenario_key: item for item in execution_report.scenarios}
     verified_pass_keys = {
@@ -53,11 +55,17 @@ def build_coverage(
 
     items: list[CoverageItem] = []
     for scenario in plan.scenarios:
-        required, required_reason = _required_base(scenario.priority, scenario.source_impact_keys, impact)
+        required, required_reason = _required_base(
+            scenario.priority,
+            scenario.source_impact_keys,
+            impact,
+        )
         memory_keys, rule_keys = historical_links_for_scenario(scenario.key, risks)
         if rule_keys:
             required = True
-            required_reason = "Scenario is required by strongly matched confirmed historical regression risk"
+            required_reason = (
+                "Scenario is required by strongly matched confirmed historical regression risk"
+            )
 
         execution = executions.get(scenario.key)
         status = execution.status if execution else None
@@ -114,7 +122,10 @@ def build_coverage(
                 summary.required_unverified += 1
         else:
             summary.optional_total += 1
-            if item.coverage_outcome in {CoverageOutcome.VERIFIED_PASS, CoverageOutcome.VERIFIED_FAIL}:
+            if item.coverage_outcome in {
+                CoverageOutcome.VERIFIED_PASS,
+                CoverageOutcome.VERIFIED_FAIL,
+            }:
                 summary.optional_verified += 1
 
     strong_risks = [risk for risk in risks if risk.strong_match]
@@ -126,7 +137,3 @@ def build_coverage(
         for gap in plan.coverage_gaps
     ) or bool(memory_recall and memory_recall.coverage_gaps)
     return items, summary, risks
-
-
-from qgate_browser_execution.models import ExecutionReport  # noqa: E402
-from qgate_qa_memory.models import MemoryRecallResult, RegressionScenarioHint  # noqa: E402
