@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import PurePosixPath
 
@@ -39,20 +40,47 @@ _NEXT_APIS = (
 _NEXT_SPECIAL = {"page", "layout", "loading", "error", "not-found", "template", "route"}
 
 
+def detect_declared_frontend_frameworks(manifest_texts: list[str]) -> set[FrameworkKind]:
+    """Read package manifests as project-level evidence before inferring framework routes."""
+    declared: set[FrameworkKind] = set()
+    for text in manifest_texts:
+        try:
+            manifest = json.loads(text)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(manifest, dict):
+            continue
+        package_names: set[str] = set()
+        for section in ("dependencies", "devDependencies", "peerDependencies"):
+            values = manifest.get(section)
+            if isinstance(values, dict):
+                package_names.update(str(name) for name in values)
+        if "next" in package_names:
+            declared.add(FrameworkKind.NEXTJS)
+            declared.add(FrameworkKind.REACT)
+        if "react" in package_names or "react-dom" in package_names:
+            declared.add(FrameworkKind.REACT)
+        if "typescript" in package_names:
+            declared.add(FrameworkKind.TYPESCRIPT)
+    return declared
+
+
 def extract_framework_knowledge(
     record: FileRecord,
     text: str,
+    declared_frameworks: set[FrameworkKind] | None = None,
 ) -> tuple[list[FrameworkFact], list[RouteFact], list[SymbolFact]]:
     if record.language not in {"javascript", "typescript", "vue", "svelte"}:
         return [], [], []
 
+    declared = declared_frameworks or set()
     lines = text.splitlines()
     frameworks: list[FrameworkFact] = []
     routes: list[RouteFact] = []
     symbols: list[SymbolFact] = []
 
-    react_detected = _looks_like_react(record.path, text)
-    next_detected = _looks_like_next(record.path, text)
+    react_detected = _looks_like_react(record.path, text, declared)
+    next_detected = _looks_like_next(text, declared)
     if react_detected:
         frameworks.append(_framework(record, 1, lines, FrameworkKind.REACT, "react_module"))
     if next_detected:
@@ -62,11 +90,11 @@ def extract_framework_knowledge(
 
     for line_number, line in enumerate(lines, start=1):
         stripped = line.strip()
-        if stripped in {'"use client";', "'use client';", '"use client"', "'use client'"}:
+        if next_detected and stripped in {'"use client";', "'use client';", '"use client"', "'use client'"}:
             frameworks.append(
                 _framework(record, line_number, lines, FrameworkKind.NEXTJS, "boundary", "client")
             )
-        if stripped in {'"use server";', "'use server';", '"use server"', "'use server'"}:
+        if next_detected and stripped in {'"use server";', "'use server';", '"use server"', "'use server'"}:
             frameworks.append(
                 _framework(record, line_number, lines, FrameworkKind.NEXTJS, "boundary", "server")
             )
@@ -126,24 +154,29 @@ def extract_framework_knowledge(
                         _symbol(record, line_number, line, match.group(2), kind, bool(match.group(1)))
                     )
 
-    route = _route_fact(record, lines)
-    if route is not None:
-        routes.append(route)
+    if next_detected:
+        route = _route_fact(record, lines)
+        if route is not None:
+            routes.append(route)
 
     return _dedupe_frameworks(frameworks), _dedupe_routes(routes), _dedupe_symbols(symbols)
 
 
-def _looks_like_react(path: str, text: str) -> bool:
+def _looks_like_react(
+    path: str,
+    text: str,
+    declared: set[FrameworkKind],
+) -> bool:
     suffix = PurePosixPath(path).suffix.lower()
-    return suffix in {".jsx", ".tsx"} or bool(
+    direct_evidence = bool(
         re.search(r"from\s+['\"]react['\"]|\bReact\.|\bcreateContext\s*\(", text)
     )
+    return direct_evidence or (FrameworkKind.REACT in declared and suffix in {".jsx", ".tsx"})
 
 
-def _looks_like_next(path: str, text: str) -> bool:
-    parts = PurePosixPath(path).parts
-    in_router = "app" in parts or "pages" in parts
-    return in_router or "next/" in text or "from 'next'" in text or 'from "next"' in text
+def _looks_like_next(text: str, declared: set[FrameworkKind]) -> bool:
+    direct_evidence = "next/" in text or "from 'next'" in text or 'from "next"' in text
+    return direct_evidence or FrameworkKind.NEXTJS in declared
 
 
 def _route_fact(record: FileRecord, lines: list[str]) -> RouteFact | None:
