@@ -26,6 +26,21 @@ class JsonKnowledgeStore:
             return None
         return ProjectKnowledge.model_validate_json(path.read_text(encoding="utf-8"))
 
+    def list_projects(self) -> list[ProjectKnowledge]:
+        if not self.root.exists():
+            return []
+        projects: list[ProjectKnowledge] = []
+        for path in sorted(self.root.glob("*.json")):
+            try:
+                projects.append(self.load_path(path))
+            except (OSError, ValueError):
+                continue
+        return sorted(projects, key=lambda item: item.metadata.analyzed_at, reverse=True)
+
+    def latest(self) -> ProjectKnowledge | None:
+        projects = self.list_projects()
+        return projects[0] if projects else None
+
     @staticmethod
     def load_path(path: str | Path) -> ProjectKnowledge:
         file_path = Path(path).expanduser().resolve()
