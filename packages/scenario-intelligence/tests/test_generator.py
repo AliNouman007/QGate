@@ -5,6 +5,7 @@ from qgate_impact_analysis.models import (
     ChangeCategory,
     ChangeSet,
     ChangeSourceKind,
+    DependencyStep,
     ImpactItem,
     ImpactLevel,
     ImpactMetadata,
@@ -171,6 +172,72 @@ def test_ui_reachable_user_state_gets_deterministic_setup_hint() -> None:
     assert len(scenario.state_setup_hints) == 1
     assert scenario.state_setup_hints[0].mechanism == StateSetupMechanism.UI_CONTROL
     assert scenario.state_setup_hints[0].target_label == "Logged In + Wallet"
+
+
+def test_state_route_selection_prefers_stronger_deterministic_state_evidence() -> None:
+    state = SemanticState(
+        key="src/shop-context.tsx:user:wallet",
+        label="Wallet",
+        kind=SemanticStateKind.USER_STATE,
+        explanation="Wallet user state changes the payable total.",
+        confidence=Confidence.HIGH,
+        evidence=[_e("src/shop-context.tsx", 8, "userMode === 'wallet'")],
+    )
+    cart = ImpactItem(
+        key="route:/cart",
+        target_type=ImpactTargetType.ROUTE,
+        target="/cart",
+        level=ImpactLevel.INDIRECT,
+        reason="Cart depends on shared shop context",
+        confidence=Confidence.HIGH,
+        evidence=[_e("src/cart/page.tsx", 1, "const { subtotal } = useShop()")],
+        dependency_path=[
+            DependencyStep(
+                source="src/cart/page.tsx",
+                target="src/shop-context.tsx",
+                module="../shop-context",
+            )
+        ],
+    )
+    checkout = ImpactItem(
+        key="route:/checkout",
+        target_type=ImpactTargetType.ROUTE,
+        target="/checkout",
+        level=ImpactLevel.INDIRECT,
+        reason="Checkout depends on shared shop context",
+        confidence=Confidence.HIGH,
+        evidence=[
+            _e(
+                "src/checkout/page.tsx",
+                1,
+                "const { wallet, total } = useShop(); Final payable; Wallet deduction",
+            )
+        ],
+        dependency_path=[
+            DependencyStep(
+                source="src/checkout/page.tsx",
+                target="src/shop-context.tsx",
+                module="../shop-context",
+            )
+        ],
+    )
+    impact = ImpactReport(
+        metadata=ImpactMetadata(
+            project_source_id="local:/demo",
+            project_fingerprint="fp1",
+            change_source_id="git:main...feature",
+        ),
+        change_set=ChangeSet(
+            source_kind=ChangeSourceKind.LOCAL_GIT,
+            source_id="git:main...feature",
+        ),
+        summary=ImpactSummary(),
+        affected_routes=[cart, checkout],
+    )
+
+    assert ScenarioGenerator._best_route_for_state(
+        state, impact.affected_routes, impact
+    ) == "/checkout"
 
 
 def test_data_state_without_safe_setup_hint_stays_runtime_discovery() -> None:
