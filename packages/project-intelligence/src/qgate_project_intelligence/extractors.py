@@ -15,8 +15,11 @@ from .models import (
 
 _PY_IMPORT = re.compile(r"^\s*import\s+([A-Za-z_][\w.]*)")
 _PY_FROM_IMPORT = re.compile(r"^\s*from\s+([.A-Za-z_][\w.]*)\s+import\s+")
-_JS_IMPORT = re.compile(r"(?:import\s+(?:.+?\s+from\s+)?|require\s*\()?[\"']([^\"']+)[\"']")
-_JS_DYNAMIC_IMPORT = re.compile(r"import\s*\(\s*[\"']([^\"']+)[\"']\s*\)")
+_JS_STATIC_IMPORT = re.compile(
+    r"\bimport\s*(?:(?:[^;\"']+?)\s+from\s*)?[\"']([^\"']+)[\"']"
+)
+_JS_REQUIRE = re.compile(r"\brequire\s*\(\s*[\"']([^\"']+)[\"']\s*\)")
+_JS_DYNAMIC_IMPORT = re.compile(r"\bimport\s*\(\s*[\"']([^\"']+)[\"']\s*\)")
 _CONDITION_PATTERNS = [
     re.compile(r"\bif\s*\((.+?)\)"),
     re.compile(r"\belse\s+if\s*\((.+?)\)"),
@@ -75,14 +78,9 @@ def _extract_imports(record: FileRecord, line: str, line_number: int) -> list[Im
             if match:
                 modules.append(match.group(1))
     elif record.language in {"javascript", "typescript", "vue", "svelte"}:
-        stripped = line.strip()
-        if stripped.startswith("import ") or "require(" in stripped:
-            match = _JS_IMPORT.search(line)
-            if match:
-                modules.append(match.group(1))
-        dynamic = _JS_DYNAMIC_IMPORT.search(line)
-        if dynamic:
-            modules.append(dynamic.group(1))
+        modules.extend(match.group(1) for match in _JS_STATIC_IMPORT.finditer(line))
+        modules.extend(match.group(1) for match in _JS_REQUIRE.finditer(line))
+        modules.extend(match.group(1) for match in _JS_DYNAMIC_IMPORT.finditer(line))
     return [
         ImportFact(module=module, evidence=_evidence(record, line_number, line, "import"))
         for module in modules
