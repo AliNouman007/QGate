@@ -23,6 +23,10 @@ _CONDITION_PATTERNS = [
     re.compile(r"^\s*if\s+(.+?):\s*$"),
 ]
 _TERNARY_CONDITION = re.compile(r"(?:\{|\(|=|return\s+)([^?;{}]+?)\s*\?")
+_LITERAL_COMPARISON_SIGNAL = re.compile(
+    r"(?:[A-Za-z_$][\w.$]*\s*(?:===|==|!==|!=)\s*['\"][^'\"]{1,64}['\"]"
+    r"|['\"][^'\"]{1,64}['\"]\s*(?:===|==|!==|!=)\s*[A-Za-z_$][\w.$]*)"
+)
 
 _AUTH_TERMS = {"auth", "authenticated", "isloggedin", "loggedin", "session", "currentuser"}
 _PERMISSION_TERMS = {
@@ -111,18 +115,36 @@ def _extract_behaviors(record: FileRecord, line: str, line_number: int) -> list[
 
 
 def _extract_direct_signals(record: FileRecord, line: str, line_number: int) -> list[BehaviorFact]:
-    category = _category_for(_normalize(line))
-    if category not in {BehaviorCategory.STORAGE, BehaviorCategory.RESPONSIVE}:
-        return []
-    return [
-        BehaviorFact(
-            expression=line.strip(),
-            category=category,
-            confidence=Confidence.HIGH,
-            meaningful=True,
-            evidence=_evidence(record, line_number, line, "runtime_signal"),
+    normalized_line = _normalize(line)
+    category = _category_for(normalized_line)
+    facts: list[BehaviorFact] = []
+
+    if category in {BehaviorCategory.STORAGE, BehaviorCategory.RESPONSIVE}:
+        facts.append(
+            BehaviorFact(
+                expression=line.strip(),
+                category=category,
+                confidence=Confidence.HIGH,
+                meaningful=True,
+                evidence=_evidence(record, line_number, line, "runtime_signal"),
+            )
         )
-    ]
+
+    if record.language in {"javascript", "typescript", "vue", "svelte"}:
+        for match in _LITERAL_COMPARISON_SIGNAL.finditer(line):
+            expression = match.group(0).strip()
+            comparison_category = _category_for(_normalize(expression))
+            facts.append(
+                BehaviorFact(
+                    expression=expression,
+                    category=comparison_category,
+                    confidence=Confidence.HIGH,
+                    meaningful=True,
+                    evidence=_evidence(record, line_number, line, "literal_comparison"),
+                )
+            )
+
+    return facts
 
 
 def _classify_condition(
@@ -222,11 +244,8 @@ def import_candidates(source_path: str, module: str, language: str | None) -> li
         return [f"{prefix}.py", f"{prefix}/__init__.py"]
 
     if language in {"javascript", "typescript", "vue", "svelte"} and module.startswith("."):
-        prefix = (source.parent / module).as_posix()
         prefix_path = source.parent / module
         suffixes = [".ts", ".tsx", ".js", ".jsx", ".vue", ".svelte"]
-        candidates = [f"{prefix}{suffix}" for suffix in suffixes]
-        candidates.extend(f"{prefix}/index{suffix}" for suffix in suffixes[:4])
         candidates = [f"{prefix_path}{suffix}" for suffix in suffixes]
         candidates.extend(f"{prefix_path}/index{suffix}" for suffix in suffixes[:4])
         return candidates
