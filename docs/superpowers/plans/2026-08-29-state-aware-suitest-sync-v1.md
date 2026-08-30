@@ -2,156 +2,78 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make QGate stateful scenarios establish their required browser state instead of passing on route-only evidence, and project executable QGate scenarios into visible, idempotent Suitest test cases.
+**Goal:** Make QGate stateful scenarios establish their required browser state, synthesize grounded product assertions from stable clean-baseline evidence, and project executable QGate scenarios into visible, idempotent Suitest test cases.
 
-**Architecture:** Keep ScenarioPlan/ExecutionReport as canonical QGate artifacts. Add an explicit bounded runtime state setup hint to Scenario Intelligence, consume it in Browser Execution before scenario assertions, and fail closed when a required state cannot be established. Add an API-side materializer that reuses existing Suitest TestCaseService semantics to create/update QGate-managed cases in a caller-selected Suitest suite.
+**Architecture:** Keep ScenarioPlan/ExecutionReport as canonical QGate artifacts. Use deterministic state setup and route ranking to reach the correct surface, run clean-baseline observation for the same state pass, synthesize bounded assertions only from stable relevant DOM evidence, then execute the same assertion contract against the changed build. Fail closed when target/state/assertion evidence is ambiguous.
 
-**Tech Stack:** Python, Pydantic, FastAPI, SQLAlchemy, existing QGate Scenario Intelligence and Browser Execution packages, existing Suitest TestCaseService/repositories.
+**Tech Stack:** Python, Pydantic, FastAPI, SQLAlchemy, Playwright, existing QGate Scenario Intelligence and Browser Execution packages, existing Suitest TestCaseService/repositories.
 
 **Spec:** `docs/superpowers/specs/2026-08-29-state-aware-suitest-sync-v1-design.md`
 
 ## Global Constraints
 
-- No wallet-, fixture-, route-, or project-specific production hard-coding.
+- No wallet-, fixture-, route-, test-id-, or expected-value-specific production hard-coding.
 - Required state unresolved or unverifiable must not PASS.
-- Reuse existing CLICK/NAVIGATE/assertion operations where possible.
+- Assertion target/value must come from deterministic project + browser evidence, not AI invention.
+- Baseline output is usable only when the same target/state can be uniquely and stably re-resolved.
 - QGate artifacts remain canonical; Suitest cases are a user-visible synchronized projection.
-- Materialization must be idempotent for exact scenario identity.
-- Do not alter Final Gate decision policy, local auth bypass, or LLM configuration behavior.
+- Do not alter Final Gate decision policy unless a failing regression proves an actual policy bug.
 - Do not modify the target application.
 
 ---
 
-### Task 1: Add explicit bounded runtime state setup hints to Scenario Intelligence
+### Tasks 1-8
+
+Existing state setup, Suitest sync, route ranking, multi-state pass aggregation, select setup, and lint tasks remain as previously implemented and validated on this branch.
+
+### Task 9: Add baseline-backed deterministic assertion synthesis
 
 **Files:**
-- Modify: `packages/scenario-intelligence/src/qgate_scenario_intelligence/models.py`
-- Modify: `packages/scenario-intelligence/src/qgate_scenario_intelligence/generator.py`
-- Test: `packages/scenario-intelligence/tests/test_generator.py`
-
-**Interfaces:**
-- Produces: `StateSetupHint` attached to `Scenario.state_setup_hints`.
-- Consumes: existing `SemanticState` label/kind/confidence/evidence.
-
-- [ ] **Step 1: Write failing generator tests** proving that a high/medium-confidence evidence-backed UI-reachable semantic state receives a bounded UI-control setup hint, while unknown/runtime-only states remain without a deterministic hint.
-- [ ] **Step 2: Add `StateSetupMechanism` and `StateSetupHint` models** with semantic state key/label, mechanism, target label, optional value, verification text/attribute, confidence and evidence.
-- [ ] **Step 3: Populate state setup hints conservatively** for evidence-backed user/feature/data states where the semantic label can be used as an obvious accessible UI control label. Do not promote technical/runtime states or low-confidence ambiguous states.
-- [ ] **Step 4: Keep readiness fail-closed**: a state scenario may be READY only when its route is known and at least one deterministic setup hint exists; otherwise it remains runtime discovery required.
-- [ ] **Step 5: Run Scenario Intelligence tests.**
-
-### Task 2: Compile required state setup before assertions and fail closed on missing setup
-
-**Files:**
+- Modify: `packages/scenario-intelligence/src/qgate_scenario_intelligence/models.py` only if an assertion-candidate/contract type belongs in Scenario artifacts.
+- Modify: `packages/scenario-intelligence/src/qgate_scenario_intelligence/generator.py` only for bounded assertion intent/relevance metadata, not runtime values.
 - Modify: `packages/browser-execution/src/qgate_browser_execution/models.py`
+- Modify/Create: focused assertion synthesis module under `packages/browser-execution/src/qgate_browser_execution/` following existing file-size/pattern conventions.
 - Modify: `packages/browser-execution/src/qgate_browser_execution/compiler.py`
 - Modify: `packages/browser-execution/src/qgate_browser_execution/executor.py`
+- Modify: `packages/browser-execution/src/qgate_browser_execution/evidence.py` only if bounded DOM candidate capture cannot be expressed with current evidence.
+- Test: `packages/scenario-intelligence/tests/test_generator.py`
 - Test: `packages/browser-execution/tests/test_compiler.py`
 - Test: `packages/browser-execution/tests/test_executor.py`
-
-**Interfaces:**
-- Consumes: `Scenario.state_setup_hints`.
-- Produces: setup CLICK plus verification step(s) before scenario actions, with setup failures classified as `STATE_SETUP_FAILURE`.
-
-- [ ] **Step 1: Write failing compiler tests** for a state scenario that must compile as NAVIGATE -> state CLICK -> state verification -> scenario action/assertion/capture.
-- [ ] **Step 2: Add a `state_setup` marker on `CompiledStep`** so executor/classifier can distinguish setup failures from product assertion failures without inventing a new execution engine.
-- [ ] **Step 3: Extend `ScenarioCompiler`** to consume the bounded UI-control hint, emit CLICK using accessible label/name text, then emit a verification step proving the selected state control is active/visible. Preserve existing scenario steps afterward.
-- [ ] **Step 4: Prevent route-only false verification**: any scenario with semantic states but no usable setup hint becomes `UNVERIFIED` instead of NAVIGATE+CAPTURE.
-- [ ] **Step 5: Classify failures on setup-marked steps as `STATE_SETUP_FAILURE`** while keeping scenario assertions as `ASSERTION_FAILURE`.
-- [ ] **Step 6: Run Browser Execution tests.**
-
-### Task 3: Materialize executable QGate scenarios into visible Suitest test cases
-
-**Files:**
-- Create: `apps/api/src/suitest_api/services/qgate_test_materializer.py`
-- Modify: `apps/api/src/suitest_api/routers/scenario_intelligence.py`
-- Test: `apps/api/tests/test_qgate_test_materializer.py`
-- Test: `apps/api/tests/test_scenario_intelligence.py`
-
-**Interfaces:**
-- New API: `POST /api/v1/scenario-intelligence/plans/{key}/materialize` with `suiteId`.
-- Produces: a response listing created/updated/skipped Suitest case ids/public ids for that plan.
-- Reuses: `TestCaseService.create`, `TestCaseService.update`, `TestCaseService.replace_steps`, `TestCaseRepo`, `SuiteRepo`, `ProjectRepo`.
-
-- [ ] **Step 1: Write failing materializer tests** for create, exact-identity reuse/update, unresolved scenario skip, and distinct change identity isolation.
-- [ ] **Step 2: Implement QGate identity tags** using bounded tag values: `qgate-managed`, `qgate-scenario:<key>`, `qgate-change:<change-id>`, `qgate-project:<fingerprint>`.
-- [ ] **Step 3: Convert executable QGate scenario steps to existing Suitest `StepCreate`** using natural action/expected text and `mcpProvider="playwright"`/`targetKind=FE_WEB`, preserving compiled order where available.
-- [ ] **Step 4: Reuse exact identity** by finding an existing case in the selected suite with the exact `qgate-scenario:<key>` plus current change/project tags. Update metadata/steps instead of creating a duplicate.
-- [ ] **Step 5: Add the materialize endpoint** guarded by existing workspace membership/writer role and local-mode ScenarioPlan store. Return explicit created/updated/skipped outcomes; never fabricate execution evidence.
-- [ ] **Step 6: Confirm the materialized cases are visible through the existing Test Cases list/read API.**
-- [ ] **Step 7: Run API/test-case regression tests.**
-
-### Task 4: Reconcile stateful evidence with current Final Gate contract
-
-**Files:**
-- Test: `packages/final-gate/tests/test_judge.py`
-- Test: integration/fixture test location chosen from existing QGate validation tests.
-
-**Interfaces:**
-- Consumes: current `ExecutionReport`; no Final Gate policy API change.
-
-- [ ] **Step 1: Add a regression test** showing a required state scenario with setup failure is not eligible for PASS.
-- [ ] **Step 2: Add a regression test** showing a pipeline-owned verified assertion failure in the stateful scenario yields `BLOCK`.
-- [ ] **Step 3: Do not alter Final Gate logic unless a failing regression test proves an actual policy bug.**
-
-### Task 5: Documentation and end-to-end validation handoff
-
-**Files:**
-- Modify: `docs/BROWSER_EXECUTION.md` if present, otherwise the existing Browser Execution documentation file.
-- Modify: `docs/SCENARIO_INTELLIGENCE.md` if present.
-- Modify: `docs/API.md` for the materialize endpoint.
-
-- [ ] **Step 1: Document state setup/fail-closed semantics.**
-- [ ] **Step 2: Document QGate-managed Suitest tags and idempotency.**
-- [ ] **Step 3: Document the materialize endpoint and that QGate JSON artifacts remain canonical.**
-- [ ] **Step 4: Local verification must rerun the existing unchanged wallet fixture** from baseline `1ed1d06f01681a69ffbd5388771da512c61affd6` to buggy `40cf5de975eb6b0c8779a163acebf44b92fa885d`.
-- [ ] **Step 5: Required validation outcome:** state is established by pipeline-owned steps; if the existing QGate assertions expose the wrong final payable, the current scenario must produce verified failure and Final Gate `BLOCK`; otherwise report the remaining assertion-generation gap rather than forcing BLOCK.
-- [ ] **Step 6: Confirm at least one QGate-managed generated case is visible in the Suitest Tests UI and repeated materialization does not duplicate it.**
-
-### Task 6: Rank affected routes by deterministic state relevance instead of list order
-
-**Files:**
-- Modify: `packages/scenario-intelligence/src/qgate_scenario_intelligence/generator.py`
-- Test: `packages/scenario-intelligence/tests/test_generator.py`
-
-**Interfaces:**
-- Consumes: `SemanticState`, `ImpactReport.affected_routes`, route evidence/dependency paths, and `ProjectKnowledge.files`.
-- Produces: deterministic best-route selection with stable conservative fallback.
-
-- [ ] **Step 1: Keep the existing failing regression test** `test_state_route_selection_prefers_stronger_deterministic_state_evidence` as the RED case.
-- [ ] **Step 2: Build route relevance tokens** from the semantic-state key, label, explanation, and evidence excerpts; normalize to bounded lowercase identifier-like tokens and discard generic stop words.
-- [ ] **Step 3: Score candidate routes deterministically** using direct token hits in the route file's imports/behaviors/symbols/evidence before dependency-only matches. Do not special-case any state name, route, fixture, test id, or project.
-- [ ] **Step 4: Preserve conservative fallback**: if candidates have no stronger route-specific state evidence or tie exactly, use the existing stable affected-route ordering rather than inventing certainty.
-- [ ] **Step 5: Run the focused route-ranking test and full Scenario Intelligence suite.**
-
-### Task 7: Compile cross-state scenarios into independent executable state passes
-
-**Files:**
-- Modify: `packages/browser-execution/src/qgate_browser_execution/models.py`
-- Modify: `packages/browser-execution/src/qgate_browser_execution/compiler.py`
-- Modify: `packages/browser-execution/src/qgate_browser_execution/executor.py`
-- Test: `packages/browser-execution/tests/test_compiler.py`
 - Test: `packages/browser-execution/tests/test_browser_integration.py`
+- Test: add a focused assertion-synthesis test file if responsibility is separated into a new module.
 
 **Interfaces:**
-- Consumes: one `Scenario` with multiple `state_setup_hints` and one selected route.
-- Produces: one `CompiledScenario` per state pass, each carrying the original scenario identity plus a stable pass identity/state label; executor aggregates all passes back to the original scenario result.
+- Consumes: current `ScenarioPlan`, selected route, state-pass identity/setup hints, `ImpactReport`/scenario evidence metadata, clean baseline URL/ref/fingerprint, and bounded rendered DOM evidence.
+- Produces: deterministic `AssertionContract` objects containing target hint, comparison kind, expected baseline value, route/state identity, baseline provenance, and relevance reason.
+- Compiler consumes `AssertionContract` and emits existing assertion operations (`ASSERT_TEXT`, `ASSERT_VALUE`, `ASSERT_ATTRIBUTE`) where possible.
+- Executor evaluates the changed build against the contract and reports normal `ASSERTION_FAILURE` on mismatch.
 
-- [ ] **Step 1: Write a failing compiler regression test** proving a two-state comparison produces two compiled passes instead of an `UNVERIFIED` preclassification.
-- [ ] **Step 2: Add bounded pass metadata** to `CompiledScenario` such as `pass_key`, `state_key`, and `state_label` without changing Final Gate scenario identity.
-- [ ] **Step 3: Compile each state hint independently** as NAVIGATE -> state setup -> state verification -> original deterministic scenario actions/assertions, never applying two mutually exclusive states in one pass.
-- [ ] **Step 4: Aggregate pass execution conservatively**: any product assertion failure makes the original scenario FAILED; any required pass setup/environment/unverified result prevents PASSED; only all required passes passing may yield PASSED.
-- [ ] **Step 5: Preserve failure provenance** so setup failures remain `STATE_SETUP_FAILURE` and product assertions remain `ASSERTION_FAILURE`.
-- [ ] **Step 6: Run focused compiler/integration tests and the full Browser Execution suite.**
+- [ ] **Step 1: Write RED tests for candidate eligibility.** Create tests showing that a stable uniquely identifiable rendered value linked to impacted-state evidence becomes an assertion candidate, while ambiguous, duplicate, missing, or volatile observations are rejected.
 
-### Task 8: Clean touched lint issue and run the full verification matrix
+- [ ] **Step 2: Write RED tests for state-specific baseline contracts.** Prove that baseline observations are keyed by original scenario + route + pass/state identity so one state's value cannot silently become another state's expectation.
 
-**Files:**
-- Modify: `apps/api/src/suitest_api/services/qgate_test_materializer.py` only for import ordering if Ruff still reports it.
+- [ ] **Step 3: Add bounded assertion contract models.** Include scenario key, route, state/pass key, `TargetHint`, operation/comparison kind, expected baseline observable, source baseline fingerprint/ref, change source id, supporting evidence/relevance reason, and confidence/stability metadata. Do not add fixture literals.
 
-**Interfaces:**
-- No runtime behavior change.
+- [ ] **Step 4: Implement deterministic DOM candidate collection.** After successful baseline navigation + state verification, collect a bounded set of uniquely resolvable visible output candidates. Prefer existing stable semantic locator metadata in this order where available: test id; accessible label/name/role; unique stable selector fallback. Capture normalized text/value/selected attribute as appropriate. Do not crawl the entire DOM without bounds.
 
-- [ ] **Step 1: Apply Ruff-compatible import ordering only; do not refactor the materializer.**
-- [ ] **Step 2: Run import regression, Project Intelligence, agent semantic, Scenario Intelligence, Browser Execution, Final Gate, Ruff, and mypy.**
-- [ ] **Step 3: Rerun the hidden-wallet fixture using clean baseline `f6f8d42674ee78adab2bbd2a2c31e163d4f4fb3a` and bug commit `5217bea6f6b6fb5fe40054fd422e5aa2a9d6f1e5`.**
-- [ ] **Step 4: Report the next remaining pipeline blocker without injecting a wallet-specific assertion or modifying the target shop.**
+- [ ] **Step 5: Implement volatility and ambiguity rejection.** Reject candidates with non-unique locators, missing/empty values without evidence of relevance, obvious timestamps/random identifiers/request tokens, or candidates that cannot be deterministically re-resolved. Keep rules conservative; uncertainty yields no assertion.
+
+- [ ] **Step 6: Implement deterministic relevance ranking.** Build bounded relevance tokens from scenario reason/state label/state key/source impact evidence and rank observable candidates using direct token overlap with locator metadata, nearby rendered label/text, and supplied impacted evidence. Direct rendered/state-specific evidence outranks generic route/dependency evidence. Exact ties without a clear winner remain unresolved rather than choosing arbitrarily.
+
+- [ ] **Step 7: Promote only stable high-confidence candidates into `AssertionContract`.** Preserve provenance showing baseline route/state/target/value and why the target is relevant. AI may explain/rank bounded candidates only if already supported, but cannot invent selector/expected value.
+
+- [ ] **Step 8: Compile assertion contracts into existing browser operations.** Exact input/select value -> `ASSERT_VALUE`; visible text/output -> `ASSERT_TEXT` or a more precise existing assertion form; attribute contract -> `ASSERT_ATTRIBUTE` only if executor already supports it safely, otherwise keep the candidate unresolved instead of adding a broad new mechanism.
+
+- [ ] **Step 9: Execute the same contract against the changed build.** Re-establish the exact same route/state pass in a clean context, resolve the same target, and compare to baseline expected value. A mismatch is `FAILED` + `ASSERTION_FAILURE`; target/setup/environment failures retain their existing classifications and cannot become product failures.
+
+- [ ] **Step 10: Aggregate assertion failures correctly for multi-state scenarios.** Any verified product assertion failure in a required pass makes the original logical scenario FAILED. A missing/unverifiable assertion for an important required pass prevents PASS and remains UNVERIFIED/MANUAL according to existing fail-closed policy.
+
+- [ ] **Step 11: Preserve assertion provenance in execution evidence/materialization.** Ensure current scenario/change/fingerprint/pass identity and baseline expected value are traceable in compiled/execution artifacts. Do not make Final Gate parse screenshots or infer expectations itself.
+
+- [ ] **Step 12: Add end-to-end hidden-regression test/harness coverage.** Using generic fixture semantics, prove the pipeline can learn a stable baseline observable under a required state and then classify a changed-build mismatch as `ASSERTION_FAILURE` without manually injecting the expected value.
+
+- [ ] **Step 13: Run full verification matrix.** Run Project Intelligence, agent, Scenario Intelligence, Browser Execution, Final Gate, relevant API/materializer tests, Ruff, and mypy. Fix only regressions attributable to this task; avoid unrelated refactoring.
+
+- [ ] **Step 14: Rerun corrected hidden-wallet validation fixture unchanged.** Clean baseline `f6f8d42674ee78adab2bbd2a2c31e163d4f4fb3a`; bug commit `5217bea6f6b6fb5fe40054fd422e5aa2a9d6f1e5`. Required ideal result: relevant `/checkout` state pass established; a stable payable-related output chosen from generic relevance evidence; expected value comes from clean baseline; buggy build mismatch yields `ASSERTION_FAILURE`; Final Gate returns `BLOCK`; Suitest case remains visible; target shop unchanged.
+
+- [ ] **Step 15: If ideal result is not reached, report all remaining blockers in one batch.** Do not inject a wallet-specific assertion, expected `$9.00`, selector, or route. Return stage/root cause/file-function for each remaining blocker so the next iteration stays batched.
