@@ -86,6 +86,9 @@ class CompiledStep(BaseModel):
 
 class CompiledScenario(BaseModel):
     scenario_key: str
+    pass_key: str | None = None
+    state_key: str | None = None
+    state_label: str | None = None
     title: str
     kind: str
     priority: str

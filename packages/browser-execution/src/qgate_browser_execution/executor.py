@@ -85,10 +85,22 @@ class BrowserExecutor:
                 browser_type = getattr(playwright, request.config.browser, playwright.chromium)
                 browser = await browser_type.launch(headless=not request.config.headed)
                 try:
+                    grouped_scenarios: dict[str, list[CompiledScenario]] = {}
                     for scenario in request.scenarios:
-                        report.scenarios.append(
-                            await self._run_scenario(browser, request, scenario, run_id)
-                        )
+                        grouped_scenarios.setdefault(scenario.scenario_key, []).append(scenario)
+
+                    for scenario_key, scenario_passes in grouped_scenarios.items():
+                        if len(scenario_passes) == 1:
+                            report.scenarios.append(
+                                await self._run_scenario(browser, request, scenario_passes[0], run_id)
+                            )
+                        else:
+                            pass_executions: list[ScenarioExecution] = []
+                            for pass_scenario in scenario_passes:
+                                pass_executions.append(
+                                    await self._run_scenario(browser, request, pass_scenario, run_id)
+                                )
+                            report.scenarios.append(self._aggregate_pass_executions(pass_executions))
                 finally:
                     await browser.close()
         except Exception as exc:
@@ -100,6 +112,69 @@ class BrowserExecutor:
                 ExecutionCoverageGap(reason="browser_runtime_failure", detail=str(exc))
             )
         return self._finish(report)
+
+    @staticmethod
+    def _aggregate_pass_executions(passes: list[ScenarioExecution]) -> ScenarioExecution:
+        first = passes[0]
+        logical_title = first.title.split(" (")[0]
+        all_steps: list[StepExecution] = []
+        idx = 0
+        for p in passes:
+            for st in p.steps:
+                st_copy = st.model_copy(update={"index": idx})
+                all_steps.append(st_copy)
+                idx += 1
+
+        started_at = min(p.started_at for p in passes)
+        completed_at = max(p.completed_at for p in passes)
+        duration_ms = sum(p.duration_ms for p in passes)
+
+        assertion_fail = next((p for p in passes if p.status == ExecutionStatus.FAILED and p.failure_category == FailureCategory.ASSERTION_FAILURE), None)
+        setup_fail = next((p for p in passes if p.failure_category == FailureCategory.STATE_SETUP_FAILURE), None)
+        unverified_pass = next((p for p in passes if p.status == ExecutionStatus.UNVERIFIED), None)
+        failed_pass = next((p for p in passes if p.status == ExecutionStatus.FAILED), None)
+
+        if assertion_fail:
+            status = ExecutionStatus.FAILED
+            failure_category = FailureCategory.ASSERTION_FAILURE
+            detail = assertion_fail.detail
+        elif setup_fail:
+            status = ExecutionStatus.FAILED
+            failure_category = FailureCategory.STATE_SETUP_FAILURE
+            detail = setup_fail.detail
+        elif failed_pass:
+            status = ExecutionStatus.FAILED
+            failure_category = failed_pass.failure_category
+            detail = failed_pass.detail
+        elif unverified_pass:
+            status = ExecutionStatus.UNVERIFIED
+            failure_category = unverified_pass.failure_category
+            detail = unverified_pass.detail
+        else:
+            status = ExecutionStatus.PASSED
+            failure_category = None
+            detail = None
+
+        verified = status in {ExecutionStatus.PASSED, ExecutionStatus.FAILED}
+        attempts = [AttemptRecord(attempt=1, status=status, failure_category=failure_category, reason=detail)]
+
+        return ScenarioExecution(
+            scenario_key=first.scenario_key,
+            title=logical_title,
+            kind=first.kind,
+            priority=first.priority,
+            status=status,
+            verified=verified,
+            failure_category=failure_category,
+            detail=detail,
+            target_route=first.target_route,
+            steps=all_steps,
+            attempts=attempts,
+            started_at=started_at,
+            completed_at=completed_at,
+            duration_ms=duration_ms,
+            source_impact_keys=first.source_impact_keys,
+        )
 
     async def _run_scenario(
         self,
@@ -299,18 +374,77 @@ class BrowserExecutor:
     async def _apply_target_operation(
         self, locator: Locator, step: CompiledStep, result: StepExecution
     ) -> None:
-        if step.operation == OperationKind.CLICK:
-            await locator.click()
+        import re
+
+        is_select = False
+        try:
+            is_select = await locator.evaluate("el => el.tagName === 'SELECT'")
+        except Exception:
+            is_select = False
+
+        if step.operation == OperationKind.CLICK or step.operation == OperationKind.SELECT:
+            if is_select:
+                options = await locator.evaluate(
+                    "el => Array.from(el.options).map(o => ({ value: o.value, text: o.text }))"
+                )
+                target_str = (
+                    step.value
+                    or (step.target.text if step.target else None)
+                    or (step.target.name if step.target else None)
+                    or (step.target.label if step.target else None)
+                    or ""
+                )
+                target_tokens = {t.lower() for t in re.findall(r"\b[A-Za-z0-9_$]+\b", target_str)}
+                matched_value = None
+                for opt in options:
+                    opt_tokens = {
+                        t.lower()
+                        for t in re.findall(r"\b[A-Za-z0-9_$]+\b", f"{opt['value']} {opt['text']}")
+                    }
+                    if target_tokens.issubset(opt_tokens):
+                        matched_value = opt["value"]
+                        break
+                if matched_value is not None:
+                    await locator.select_option(value=matched_value)
+                    result.actual = matched_value
+                else:
+                    await locator.click()
+            else:
+                await locator.click()
         elif step.operation == OperationKind.FILL:
             await locator.fill(step.value or "")
-        elif step.operation == OperationKind.SELECT:
-            await locator.select_option(step.value or "")
         elif step.operation == OperationKind.ASSERT_VISIBLE:
             is_visible = await locator.is_visible()
             result.actual = str(is_visible)
-            if not is_visible:
-                result.status, result.failure_category = assertion_failure()
-                result.detail = "expected target to be visible"
+            if is_select:
+                selected_text = await locator.evaluate(
+                    "el => el.options[el.selectedIndex]?.text || ''"
+                )
+                selected_val = await locator.evaluate("el => el.value")
+                target_str = (
+                    (step.target.text if step.target else None)
+                    or (step.target.name if step.target else None)
+                    or (step.target.label if step.target else None)
+                    or ""
+                )
+                target_tokens = {t.lower() for t in re.findall(r"\b[A-Za-z0-9_$]+\b", target_str)}
+                opt_tokens = {
+                    t.lower()
+                    for t in re.findall(r"\b[A-Za-z0-9_$]+\b", f"{selected_val} {selected_text}")
+                }
+                if is_visible and target_tokens.issubset(opt_tokens):
+                    result.actual = selected_text
+                    result.status = ExecutionStatus.PASSED
+                elif not is_visible:
+                    result.status, result.failure_category = assertion_failure()
+                    result.detail = "expected target select to be visible"
+                else:
+                    result.status, result.failure_category = assertion_failure()
+                    result.detail = f"expected select value matching {target_str!r}, observed {selected_text!r}"
+            else:
+                if not is_visible:
+                    result.status, result.failure_category = assertion_failure()
+                    result.detail = "expected target to be visible"
         elif step.operation == OperationKind.ASSERT_HIDDEN:
             is_visible = await locator.is_visible()
             result.actual = str(is_visible)

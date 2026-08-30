@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 
 from qgate_impact_analysis.models import ChangeCategory, ImpactItem, ImpactLevel, ImpactReport
 from qgate_project_intelligence.models import (
@@ -57,7 +58,7 @@ class ScenarioGenerator:
         default_routes = [item.target for item in route_items]
         for item in impact.affected_states:
             state = state_lookup.get(item.target) or state_by_label.get(item.target)
-            route = self._best_route_for_state(state, route_items, impact)
+            route = self._best_route_for_state(state, route_items, impact, knowledge=knowledge)
             candidates.append(
                 self._state_scenario(
                     item,
@@ -86,7 +87,7 @@ class ScenarioGenerator:
                 pair = related_state_pair(family.states)
                 if pair is None or not self._family_relevant(pair, impact):
                     continue
-                route = self._route_for_family(pair, route_items, impact)
+                route = self._route_for_family(pair, route_items, impact, knowledge=knowledge)
                 if route is None:
                     continue
                 scenario = self._cross_state_scenario(route, pair, impact)
@@ -327,29 +328,139 @@ class ScenarioGenerator:
         return ScenarioKind.STATE_VARIANT
 
     @staticmethod
-    def _best_route_for_state(state: SemanticState | None, routes: list[ImpactItem], impact: ImpactReport) -> str | None:
+    def _tokenize(text: str) -> set[str]:
+        stop_words = {
+            "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
+            "of", "to", "in", "for", "on", "with", "at", "by", "from", "up", "about",
+            "into", "over", "after", "state", "user", "page", "app", "js", "ts", "jsx",
+            "tsx", "component", "components", "context", "provider", "src", "route",
+        }
+        raw_tokens = re.findall(r"\b[A-Za-z_$][\w.$-]*\b", text)
+        tokens: set[str] = set()
+        for tok in raw_tokens:
+            clean = tok.lower().strip(".-_")
+            if len(clean) >= 3 and clean not in stop_words:
+                tokens.add(clean)
+        return tokens
+
+    @staticmethod
+    def _best_route_for_state(
+        state: SemanticState | None,
+        routes: list[ImpactItem],
+        impact: ImpactReport,
+        knowledge: ProjectKnowledge | None = None,
+    ) -> str | None:
+        if not routes:
+            return None
         if state is None:
             return routes[0].target if len(routes) == 1 else None
-        evidence_paths = {item.path for item in state.evidence}
-        for route in routes:
+
+        state_tokens: set[str] = set()
+        if state.key:
+            state_tokens.update(ScenarioGenerator._tokenize(state.key))
+        if state.label:
+            state_tokens.update(ScenarioGenerator._tokenize(state.label))
+        if state.explanation:
+            state_tokens.update(ScenarioGenerator._tokenize(state.explanation))
+        for ev in state.evidence:
+            if hasattr(ev, "excerpt") and ev.excerpt:
+                state_tokens.update(ScenarioGenerator._tokenize(ev.excerpt))
+
+        state_evidence_paths = {item.path for item in state.evidence}
+
+        file_lookup = {}
+        if knowledge and hasattr(knowledge, "files"):
+            for f in knowledge.files:
+                file_lookup[f.record.path] = f
+
+        scored_routes: list[tuple[int, int, int, str]] = []
+        for idx, route in enumerate(routes):
             route_paths = {item.path for item in route.evidence}
             route_paths.update(step.source for step in route.dependency_path)
             route_paths.update(step.target for step in route.dependency_path)
-            if evidence_paths & route_paths:
-                return route.target
+
+            dep_match = 1 if (state_evidence_paths & route_paths) else 0
+
+            route_tokens: set[str] = set()
+            for ev in route.evidence:
+                if hasattr(ev, "excerpt") and ev.excerpt:
+                    route_tokens.update(ScenarioGenerator._tokenize(ev.excerpt))
+                if hasattr(ev, "path") and ev.path:
+                    route_tokens.update(ScenarioGenerator._tokenize(ev.path))
+            if route.target:
+                route_tokens.update(ScenarioGenerator._tokenize(route.target))
+
+            for r_path in route_paths:
+                f_analysis = file_lookup.get(r_path)
+                if f_analysis:
+                    for imp in f_analysis.imports:
+                        route_tokens.update(ScenarioGenerator._tokenize(imp.module))
+                    for beh in f_analysis.behaviors:
+                        route_tokens.update(ScenarioGenerator._tokenize(beh.expression))
+
+            direct_hits = len(state_tokens & route_tokens)
+            scored_routes.append((direct_hits, dep_match, -idx, route.target))
+
+        scored_routes.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
+        best = scored_routes[0]
+        if best[0] > 0 or best[1] > 0:
+            return best[3]
+
         for group in impact.shared_groups:
-            if evidence_paths & set(group.affected_files) and group.affected_routes:
+            if state_evidence_paths & set(group.affected_files) and group.affected_routes:
                 return group.affected_routes[0]
-        return routes[0].target if len(routes) == 1 else None
+        return routes[0].target
 
     def _route_for_family(
         self,
         pair: tuple[SemanticState, SemanticState],
         routes: list[ImpactItem],
         impact: ImpactReport,
+        knowledge: ProjectKnowledge | None = None,
     ) -> str | None:
+        best_route = None
+        max_hits = -1
         for state in pair:
-            route = self._best_route_for_state(state, routes, impact)
+            state_tokens: set[str] = set()
+            if state.key:
+                state_tokens.update(ScenarioGenerator._tokenize(state.key))
+            if state.label:
+                state_tokens.update(ScenarioGenerator._tokenize(state.label))
+            if state.explanation:
+                state_tokens.update(ScenarioGenerator._tokenize(state.explanation))
+            for ev in state.evidence:
+                if hasattr(ev, "excerpt") and ev.excerpt:
+                    state_tokens.update(ScenarioGenerator._tokenize(ev.excerpt))
+
+            for route in routes:
+                route_tokens: set[str] = set()
+                for ev in route.evidence:
+                    if hasattr(ev, "excerpt") and ev.excerpt:
+                        route_tokens.update(ScenarioGenerator._tokenize(ev.excerpt))
+                    if hasattr(ev, "path") and ev.path:
+                        route_tokens.update(ScenarioGenerator._tokenize(ev.path))
+                if route.target:
+                    route_tokens.update(ScenarioGenerator._tokenize(route.target))
+
+                if knowledge and hasattr(knowledge, "files"):
+                    for r_path in {item.path for item in route.evidence}:
+                        for f in knowledge.files:
+                            if f.record.path == r_path:
+                                for imp in f.imports:
+                                    route_tokens.update(ScenarioGenerator._tokenize(imp.module))
+                                for beh in f.behaviors:
+                                    route_tokens.update(ScenarioGenerator._tokenize(beh.expression))
+
+                hits = len(state_tokens & route_tokens)
+                if hits > max_hits and hits > 0:
+                    max_hits = hits
+                    best_route = route.target
+
+        if best_route is not None:
+            return best_route
+
+        for state in pair:
+            route = self._best_route_for_state(state, routes, impact, knowledge=knowledge)
             if route is not None:
                 return route
         return None

@@ -11,16 +11,12 @@ import hashlib
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field
-
 from qgate_scenario_intelligence.models import (
     AutomationReadiness,
     Scenario,
     ScenarioPlan,
     StateSetupMechanism,
 )
-from suitest_api.deps.scope import TenantContext
-from suitest_api.schemas.test_case import StepCreate, TestCaseCreate, TestCaseUpdate
-from suitest_api.services.test_case_service import TestCaseService
 from suitest_db.models.case import TestCase
 from suitest_db.repositories.projects import ProjectRepo
 from suitest_db.repositories.suites import SuiteRepo
@@ -30,9 +26,13 @@ from suitest_shared.domain.enums import (
     CaseStatus,
     Priority,
     TargetKind,
-    TestLevel,
     TestingApproach,
+    TestLevel,
 )
+
+from suitest_api.deps.scope import TenantContext
+from suitest_api.schemas.test_case import StepCreate, TestCaseCreate, TestCaseUpdate
+from suitest_api.services.test_case_service import TestCaseService
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession

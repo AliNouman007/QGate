@@ -48,6 +48,8 @@ class ScenarioCompiler:
             result = self._compile_scenario(scenario)
             if isinstance(result, PreclassifiedScenario):
                 preclassified.append(result)
+            elif isinstance(result, list):
+                compiled.extend(result)
             else:
                 compiled.append(result)
         return ExecutionRequest(
@@ -69,11 +71,9 @@ class ScenarioCompiler:
         )
         return hashlib.sha256(identity.encode()).hexdigest()[:24]
 
-    def _compile_scenario(self, scenario: Scenario) -> CompiledScenario | PreclassifiedScenario:
-        # A state label alone is not proof that runtime setup is required. Legacy
-        # route scenarios may carry descriptive state metadata. Explicit
-        # preconditions are the contract that says the browser must establish a
-        # state before the scenario can be considered verified.
+    def _compile_scenario(
+        self, scenario: Scenario
+    ) -> CompiledScenario | list[CompiledScenario] | PreclassifiedScenario:
         if scenario.states and scenario.preconditions and not scenario.state_setup_hints:
             return PreclassifiedScenario(
                 scenario_key=scenario.key,
@@ -82,16 +82,6 @@ class ScenarioCompiler:
                 reason=(
                     "Scenario requires semantic state setup but no deterministic setup hint "
                     "is available."
-                ),
-            )
-        if len(scenario.state_setup_hints) > 1:
-            return PreclassifiedScenario(
-                scenario_key=scenario.key,
-                title=scenario.title,
-                status=ExecutionStatus.UNVERIFIED,
-                reason=(
-                    "Multi-state comparison requires separate state passes; Browser Execution "
-                    "V1.1 will not fake verification by applying both states in one pass."
                 ),
             )
         if scenario.preconditions and not scenario.state_setup_hints:
@@ -105,6 +95,25 @@ class ScenarioCompiler:
                 ),
             )
 
+        if len(scenario.state_setup_hints) > 1:
+            passes: list[CompiledScenario] = []
+            for idx, hint in enumerate(scenario.state_setup_hints):
+                pass_res = self._compile_single_state_scenario(scenario, hint=hint, pass_index=idx)
+                if isinstance(pass_res, PreclassifiedScenario):
+                    return pass_res
+                passes.append(pass_res)
+            return passes
+
+        hint = scenario.state_setup_hints[0] if scenario.state_setup_hints else None
+        return self._compile_single_state_scenario(scenario, hint=hint, pass_index=0)
+
+    def _compile_single_state_scenario(
+        self,
+        scenario: Scenario,
+        *,
+        hint: StateSetupHint | None,
+        pass_index: int,
+    ) -> CompiledScenario | PreclassifiedScenario:
         route = scenario.routes[0] if scenario.routes else None
         steps: list[CompiledStep] = []
         if route:
@@ -119,7 +128,7 @@ class ScenarioCompiler:
                 )
             )
 
-        for hint in scenario.state_setup_hints:
+        if hint:
             setup_steps = self._compile_state_setup(hint, len(steps), route)
             if setup_steps is None:
                 return PreclassifiedScenario(
@@ -169,14 +178,21 @@ class ScenarioCompiler:
                     route=route,
                 )
             )
+        pass_key = f"{scenario.key}:pass:{pass_index}" if hint else None
+        state_key = hint.state_key if hint else None
+        state_label = hint.state_label if hint else None
+        title = f"{scenario.title} ({hint.state_label})" if hint and len(scenario.state_setup_hints) > 1 else scenario.title
         return CompiledScenario(
             scenario_key=scenario.key,
-            title=scenario.title,
+            pass_key=pass_key,
+            state_key=state_key,
+            state_label=state_label,
+            title=title,
             kind=scenario.kind.value,
             priority=scenario.priority.value,
             route=route,
             steps=steps,
-            preconditions=scenario.preconditions,
+            preconditions=[hint.state_label] if hint else scenario.preconditions,
             source_impact_keys=scenario.source_impact_keys,
         )
 
