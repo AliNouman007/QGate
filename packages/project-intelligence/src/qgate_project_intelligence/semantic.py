@@ -114,7 +114,7 @@ def derive_concrete_branch_states(
     if max_states < 1:
         raise ValueError("max_states must be positive")
     states: list[SemanticState] = []
-    seen: set[tuple[str, str, int]] = set()
+    seen: set[tuple[str, str, str]] = set()
     for file in files:
         for fact in file.behaviors:
             if not fact.meaningful:
@@ -128,7 +128,7 @@ def derive_concrete_branch_states(
             value = match.group("value").strip()
             if not value or _looks_non_state_literal(value):
                 continue
-            dedupe_key = (file.record.path, variable, fact.evidence.line)
+            dedupe_key = (file.record.path, variable, value)
             if dedupe_key in seen:
                 continue
             seen.add(dedupe_key)
