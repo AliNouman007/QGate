@@ -6,7 +6,7 @@ from enum import StrEnum
 from pydantic import BaseModel, Field
 
 SCHEMA_VERSION = "1.1"
-ANALYZER_VERSION = "0.2.0"
+ANALYZER_VERSION = "0.4.0"
 
 
 class Confidence(StrEnum):

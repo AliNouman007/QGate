@@ -6,8 +6,8 @@ from enum import StrEnum
 from pydantic import BaseModel, Field
 from qgate_project_intelligence.models import Confidence, Evidence
 
-SCHEMA_VERSION = "1.0"
-ANALYZER_VERSION = "0.1.0"
+SCHEMA_VERSION = "1.1"
+ANALYZER_VERSION = "0.2.0"
 
 
 class ScenarioKind(StrEnum):
@@ -33,6 +33,21 @@ class AutomationReadiness(StrEnum):
     BLOCKED_BY_GAP = "blocked_by_gap"
 
 
+class StateSetupMechanism(StrEnum):
+    UI_CONTROL = "ui_control"
+
+
+class StateSetupHint(BaseModel):
+    state_key: str
+    state_label: str
+    mechanism: StateSetupMechanism
+    target_label: str
+    value: str | None = None
+    verification_text: str | None = None
+    confidence: Confidence
+    evidence: list[Evidence] = Field(default_factory=list)
+
+
 class GenerationBudget(BaseModel):
     max_scenarios: int = Field(default=40, ge=1, le=500)
     max_state_variants_per_surface: int = Field(default=6, ge=1, le=50)
@@ -56,6 +71,7 @@ class Scenario(BaseModel):
     routes: list[str] = Field(default_factory=list)
     targets: list[str] = Field(default_factory=list)
     states: list[str] = Field(default_factory=list)
+    state_setup_hints: list[StateSetupHint] = Field(default_factory=list)
     preconditions: list[str] = Field(default_factory=list)
     steps: list[ScenarioStep] = Field(default_factory=list)
     reason: str

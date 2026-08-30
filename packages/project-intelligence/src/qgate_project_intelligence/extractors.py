@@ -15,14 +15,21 @@ from .models import (
 
 _PY_IMPORT = re.compile(r"^\s*import\s+([A-Za-z_][\w.]*)")
 _PY_FROM_IMPORT = re.compile(r"^\s*from\s+([.A-Za-z_][\w.]*)\s+import\s+")
-_JS_IMPORT = re.compile(r"(?:import\s+(?:.+?\s+from\s+)?|require\s*\()?[\"']([^\"']+)[\"']")
-_JS_DYNAMIC_IMPORT = re.compile(r"import\s*\(\s*[\"']([^\"']+)[\"']\s*\)")
+_JS_STATIC_IMPORT = re.compile(
+    r"\bimport\s*(?:(?:[^;\"']+?)\s*from\s*)?[\"']([^\"']+)[\"']"
+)
+_JS_REQUIRE = re.compile(r"\brequire\s*\(\s*[\"']([^\"']+)[\"']\s*\)")
+_JS_DYNAMIC_IMPORT = re.compile(r"\bimport\s*\(\s*[\"']([^\"']+)[\"']\s*\)")
 _CONDITION_PATTERNS = [
     re.compile(r"\bif\s*\((.+?)\)"),
     re.compile(r"\belse\s+if\s*\((.+?)\)"),
     re.compile(r"^\s*if\s+(.+?):\s*$"),
 ]
 _TERNARY_CONDITION = re.compile(r"(?:\{|\(|=|return\s+)([^?;{}]+?)\s*\?")
+_LITERAL_COMPARISON_SIGNAL = re.compile(
+    r"(?:[A-Za-z_$][\w.$]*\s*(?:===|==|!==|!=)\s*['\"][^'\"]{1,64}['\"]"
+    r"|['\"][^'\"]{1,64}['\"]\s*(?:===|==|!==|!=)\s*[A-Za-z_$][\w.$]*)"
+)
 
 _AUTH_TERMS = {"auth", "authenticated", "isloggedin", "loggedin", "session", "currentuser"}
 _PERMISSION_TERMS = {
@@ -71,14 +78,9 @@ def _extract_imports(record: FileRecord, line: str, line_number: int) -> list[Im
             if match:
                 modules.append(match.group(1))
     elif record.language in {"javascript", "typescript", "vue", "svelte"}:
-        stripped = line.strip()
-        if stripped.startswith("import ") or "require(" in stripped:
-            match = _JS_IMPORT.search(line)
-            if match:
-                modules.append(match.group(1))
-        dynamic = _JS_DYNAMIC_IMPORT.search(line)
-        if dynamic:
-            modules.append(dynamic.group(1))
+        modules.extend(match.group(1) for match in _JS_STATIC_IMPORT.finditer(line))
+        modules.extend(match.group(1) for match in _JS_REQUIRE.finditer(line))
+        modules.extend(match.group(1) for match in _JS_DYNAMIC_IMPORT.finditer(line))
     return [
         ImportFact(module=module, evidence=_evidence(record, line_number, line, "import"))
         for module in modules
@@ -111,18 +113,36 @@ def _extract_behaviors(record: FileRecord, line: str, line_number: int) -> list[
 
 
 def _extract_direct_signals(record: FileRecord, line: str, line_number: int) -> list[BehaviorFact]:
-    category = _category_for(_normalize(line))
-    if category not in {BehaviorCategory.STORAGE, BehaviorCategory.RESPONSIVE}:
-        return []
-    return [
-        BehaviorFact(
-            expression=line.strip(),
-            category=category,
-            confidence=Confidence.HIGH,
-            meaningful=True,
-            evidence=_evidence(record, line_number, line, "runtime_signal"),
+    normalized_line = _normalize(line)
+    category = _category_for(normalized_line)
+    facts: list[BehaviorFact] = []
+
+    if category in {BehaviorCategory.STORAGE, BehaviorCategory.RESPONSIVE}:
+        facts.append(
+            BehaviorFact(
+                expression=line.strip(),
+                category=category,
+                confidence=Confidence.HIGH,
+                meaningful=True,
+                evidence=_evidence(record, line_number, line, "runtime_signal"),
+            )
         )
-    ]
+
+    if record.language in {"javascript", "typescript", "vue", "svelte"}:
+        for match in _LITERAL_COMPARISON_SIGNAL.finditer(line):
+            expression = match.group(0).strip()
+            comparison_category = _category_for(_normalize(expression))
+            facts.append(
+                BehaviorFact(
+                    expression=expression,
+                    category=comparison_category,
+                    confidence=Confidence.HIGH,
+                    meaningful=True,
+                    evidence=_evidence(record, line_number, line, "literal_comparison"),
+                )
+            )
+
+    return facts
 
 
 def _classify_condition(
@@ -222,11 +242,8 @@ def import_candidates(source_path: str, module: str, language: str | None) -> li
         return [f"{prefix}.py", f"{prefix}/__init__.py"]
 
     if language in {"javascript", "typescript", "vue", "svelte"} and module.startswith("."):
-        prefix = (source.parent / module).as_posix()
         prefix_path = source.parent / module
         suffixes = [".ts", ".tsx", ".js", ".jsx", ".vue", ".svelte"]
-        candidates = [f"{prefix}{suffix}" for suffix in suffixes]
-        candidates.extend(f"{prefix}/index{suffix}" for suffix in suffixes[:4])
         candidates = [f"{prefix_path}{suffix}" for suffix in suffixes]
         candidates.extend(f"{prefix_path}/index{suffix}" for suffix in suffixes[:4])
         return candidates

@@ -15,6 +15,12 @@ def scenario_signature(scenario: Scenario) -> str:
             scenario.kind.value,
             ",".join(sorted(scenario.routes)),
             ",".join(sorted(scenario.states)),
+            ",".join(
+                sorted(
+                    f"{hint.state_key}:{hint.mechanism.value}:{hint.target_label}"
+                    for hint in scenario.state_setup_hints
+                )
+            ),
             ";".join(step.action.strip().lower() for step in scenario.steps),
             ";".join(step.expected.strip().lower() for step in scenario.steps),
         ]
@@ -33,15 +39,24 @@ def merge_scenarios(existing: Scenario, incoming: Scenario) -> Scenario:
         (item.path, item.line, item.kind, item.excerpt): item
         for item in [*existing.evidence, *incoming.evidence]
     }
+    hints_by_key = {
+        (hint.state_key, hint.mechanism.value, hint.target_label): hint
+        for hint in [*existing.state_setup_hints, *incoming.state_setup_hints]
+    }
     return existing.model_copy(
         update={
             "priority": stronger_priority(existing.priority, incoming.priority),
             "readiness": stricter_readiness(existing.readiness, incoming.readiness),
             "confidence": confidence,
-            "source_impact_keys": sorted(set(existing.source_impact_keys + incoming.source_impact_keys)),
+            "source_impact_keys": sorted(
+                set(existing.source_impact_keys + incoming.source_impact_keys)
+            ),
             "evidence": list(evidence_by_key.values()),
             "targets": sorted(set(existing.targets + incoming.targets)),
-            "needs_runtime_discovery": existing.needs_runtime_discovery or incoming.needs_runtime_discovery,
+            "state_setup_hints": list(hints_by_key.values()),
+            "needs_runtime_discovery": (
+                existing.needs_runtime_discovery or incoming.needs_runtime_discovery
+            ),
             "manual_reason": existing.manual_reason or incoming.manual_reason,
         }
     )

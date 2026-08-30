@@ -38,9 +38,10 @@ async def enrich_project_knowledge(
     model: str,
     knowledge: ProjectKnowledge,
 ) -> ProjectKnowledge:
-    """Return a copy of ProjectKnowledge with bounded provider-enriched semantic states."""
+    """Return ProjectKnowledge with AI states added without replacing deterministic states."""
     packs = build_evidence_packs(knowledge.files)
-    semantic_states = await enrich_evidence_packs(provider, model=model, packs=packs)
+    ai_states = await enrich_evidence_packs(provider, model=model, packs=packs)
+    semantic_states = _merge_semantic_states(knowledge.semantic_states, ai_states)
     return knowledge.model_copy(update={"semantic_states": semantic_states})
 
 
@@ -106,6 +107,20 @@ async def enrich_evidence_packs(
     for pack in packs:
         states.append(await enrich_evidence_pack(provider, model=model, pack=pack))
     return states
+
+
+def _merge_semantic_states(
+    deterministic: list[SemanticState], ai_states: list[SemanticState]
+) -> list[SemanticState]:
+    """Keep deterministic states authoritative and append only new AI state keys."""
+    merged = list(deterministic)
+    seen_keys = {state.key for state in deterministic}
+    for state in ai_states:
+        if state.key in seen_keys:
+            continue
+        seen_keys.add(state.key)
+        merged.append(state)
+    return merged
 
 
 def _supporting_confidence(pack: EvidencePack) -> Confidence:

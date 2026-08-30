@@ -5,8 +5,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-SCHEMA_VERSION = "1.0"
-RUNNER_VERSION = "0.1.0"
+SCHEMA_VERSION = "1.1"
+RUNNER_VERSION = "0.2.0"
 
 
 class OperationKind(StrEnum):
@@ -49,6 +49,7 @@ class FailureCategory(StrEnum):
 
 class ExecutionConfig(BaseModel):
     base_url: str
+    baseline_url: str | None = None
     browser: str = "chromium"
     headed: bool = False
     global_timeout_ms: int = Field(default=45_000, ge=1_000, le=300_000)
@@ -81,10 +82,14 @@ class CompiledStep(BaseModel):
     value: str | None = None
     expected: str | None = None
     required: bool = True
+    state_setup: bool = False
 
 
 class CompiledScenario(BaseModel):
     scenario_key: str
+    pass_key: str | None = None
+    state_key: str | None = None
+    state_label: str | None = None
     title: str
     kind: str
     priority: str

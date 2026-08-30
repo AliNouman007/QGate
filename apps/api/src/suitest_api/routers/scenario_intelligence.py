@@ -1,4 +1,4 @@
-"""Read-only local Scenario Intelligence endpoints."""
+"""Local Scenario Intelligence endpoints plus QGate -> Suitest materialization."""
 
 from __future__ import annotations
 
@@ -6,13 +6,19 @@ import os
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from qgate_scenario_intelligence.models import ScenarioPlan, ScenarioSummary
 from qgate_scenario_intelligence.store import JsonScenarioPlanStore
+from sqlalchemy.ext.asyncio import AsyncSession
+from suitest_shared.domain.enums import Role
 
+from suitest_api.auth.db import get_async_session
+from suitest_api.deps.role import require_role
 from suitest_api.deps.scope import TenantContext, require_workspace_membership
+from suitest_api.services.qgate_test_materializer import MaterializeResult, QGateTestMaterializer
 
 router = APIRouter(prefix="/scenario-intelligence", tags=["scenario-intelligence"])
+_WRITER_ROLES = {Role.QA, Role.ADMIN, Role.OWNER}
 
 
 class ScenarioPlanListItem(BaseModel):
@@ -22,6 +28,12 @@ class ScenarioPlanListItem(BaseModel):
     project_fingerprint: str
     impact_change_source_id: str
     summary: ScenarioSummary
+
+
+class MaterializeBody(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    suite_id: str = Field(alias="suiteId", min_length=1)
 
 
 def _store(request: Request) -> JsonScenarioPlanStore:
@@ -74,3 +86,30 @@ async def get_scenario_plan(
     if plan is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="scenario plan not found")
     return plan
+
+
+@router.post("/plans/{key}/materialize", response_model=MaterializeResult)
+async def materialize_scenario_plan(
+    key: str,
+    body: MaterializeBody,
+    request: Request,
+    ctx: TenantContext = Depends(require_role(_WRITER_ROLES)),
+    session: AsyncSession = Depends(get_async_session),
+) -> MaterializeResult:
+    """Create/update visible QGate-managed Suitest cases for one ScenarioPlan.
+
+    This is a projection only: ScenarioPlan JSON stays canonical and no Suitest
+    row is treated as execution evidence until it is actually run.
+    """
+    plan = _store(request).load_key(key)
+    if plan is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="scenario plan not found")
+    try:
+        result = await QGateTestMaterializer(session, ctx).materialize(
+            plan, suite_id=body.suite_id
+        )
+        await session.commit()
+    except ValueError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return result
