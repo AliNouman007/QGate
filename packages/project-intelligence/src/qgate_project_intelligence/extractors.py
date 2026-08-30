@@ -16,7 +16,7 @@ from .models import (
 _PY_IMPORT = re.compile(r"^\s*import\s+([A-Za-z_][\w.]*)")
 _PY_FROM_IMPORT = re.compile(r"^\s*from\s+([.A-Za-z_][\w.]*)\s+import\s+")
 _JS_STATIC_IMPORT = re.compile(
-    r"\bimport\s*(?:(?:[^;\"']+?)\s+from\s*)?[\"']([^\"']+)[\"']"
+    r"\bimport\s*(?:(?:[^;\"']+?)\s*from\s*)?[\"']([^\"']+)[\"']"
 )
 _JS_REQUIRE = re.compile(r"\brequire\s*\(\s*[\"']([^\"']+)[\"']\s*\)")
 _JS_DYNAMIC_IMPORT = re.compile(r"\bimport\s*\(\s*[\"']([^\"']+)[\"']\s*\)")
