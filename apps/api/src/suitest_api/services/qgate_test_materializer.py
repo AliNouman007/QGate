@@ -11,6 +11,7 @@ import hashlib
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field
+
 from qgate_scenario_intelligence.models import (
     AutomationReadiness,
     Scenario,
