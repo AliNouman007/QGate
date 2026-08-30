@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from .models import FailureCategory, TargetHint
@@ -97,7 +97,7 @@ async def resolve_target(page: Page, hint: TargetHint, *, timeout_ms: int) -> Re
                         failure_category=FailureCategory.TARGET_RESOLUTION_FAILURE,
                         detail=f"ambiguous select target: {len(matching_selects)} select controls matched {target_str!r}",
                     )
-            except Exception as exc:
+            except Exception:
                 pass
 
     return ResolutionResult(

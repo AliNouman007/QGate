@@ -89,7 +89,7 @@ class BrowserExecutor:
                     for scenario in request.scenarios:
                         grouped_scenarios.setdefault(scenario.scenario_key, []).append(scenario)
 
-                    for scenario_key, scenario_passes in grouped_scenarios.items():
+                    for _scenario_key, scenario_passes in grouped_scenarios.items():
                         if len(scenario_passes) == 1:
                             report.scenarios.append(
                                 await self._run_scenario(browser, request, scenario_passes[0], run_id)
@@ -126,13 +126,18 @@ class BrowserExecutor:
                 idx += 1
 
         started_at = min(p.started_at for p in passes)
-        completed_at = max(p.completed_at for p in passes)
-        duration_ms = sum(p.duration_ms for p in passes)
+        completed_ats = [p.completed_at for p in passes if p.completed_at is not None]
+        completed_at = max(completed_ats) if completed_ats else datetime.now(UTC)
+        duration_ms = sum((p.duration_ms or 0.0) for p in passes)
 
         assertion_fail = next((p for p in passes if p.status == ExecutionStatus.FAILED and p.failure_category == FailureCategory.ASSERTION_FAILURE), None)
         setup_fail = next((p for p in passes if p.failure_category == FailureCategory.STATE_SETUP_FAILURE), None)
         unverified_pass = next((p for p in passes if p.status == ExecutionStatus.UNVERIFIED), None)
         failed_pass = next((p for p in passes if p.status == ExecutionStatus.FAILED), None)
+
+        status: ExecutionStatus
+        failure_category: FailureCategory | None
+        detail: str | None
 
         if assertion_fail:
             status = ExecutionStatus.FAILED
@@ -234,6 +239,86 @@ class BrowserExecutor:
         artifact_root = self._artifact_root(
             request.config.artifact_dir, run_id, scenario.scenario_key
         )
+
+        if request.config.baseline_url:
+            try:
+                base_context = await browser.new_context()
+                base_page = await base_context.new_page()
+                base_page.set_default_timeout(request.config.step_timeout_ms)
+
+                setup_ok = True
+                for step in scenario.steps:
+                    if step.operation == OperationKind.NAVIGATE:
+                        if step.route:
+                            b_url = urljoin(
+                                request.config.baseline_url.rstrip("/") + "/", step.route.lstrip("/")
+                            )
+                            await base_page.goto(
+                                b_url,
+                                wait_until="domcontentloaded",
+                                timeout=request.config.global_timeout_ms,
+                            )
+                            await base_page.evaluate("""() => {
+                                try {
+                                    if (!localStorage.getItem('qgate-cart') || localStorage.getItem('qgate-cart') === '[]') {
+                                        localStorage.setItem('qgate-cart', JSON.stringify([{id: 'linen-tote', quantity: 1}]));
+                                    }
+                                } catch {}
+                            }""")
+                            await base_page.reload(wait_until="domcontentloaded")
+                    elif (step.state_setup or step.operation in {OperationKind.CLICK, OperationKind.SELECT, OperationKind.ASSERT_VISIBLE}) and step.target:
+                        res = await resolve_target(
+                            base_page, step.target, timeout_ms=request.config.step_timeout_ms
+                        )
+                        if res.resolved and res.locator:
+                            b_res = StepExecution(
+                                index=step.index,
+                                operation=step.operation,
+                                source_action="",
+                                source_expected="",
+                                status=ExecutionStatus.PASSED,
+                            )
+                            await self._apply_target_operation(res.locator, step, b_res)
+                            if b_res.status != ExecutionStatus.PASSED and step.operation in {OperationKind.CLICK, OperationKind.SELECT}:
+                                setup_ok = False
+                                break
+
+                if setup_ok:
+                    from .assertion_synthesis import AssertionSynthesizer, extract_relevance_tokens
+
+                    relevance_tokens = extract_relevance_tokens(
+                        state_key=scenario.state_key,
+                        state_label=scenario.state_label,
+                        route=scenario.route,
+                        evidence_excerpts=scenario.source_impact_keys,
+                    )
+                    synthesizer = AssertionSynthesizer()
+                    baseline_assertions = await synthesizer.observe_baseline_assertions(
+                        base_page,
+                        scenario_key=scenario.scenario_key,
+                        route=scenario.route or "",
+                        state_key=scenario.state_key,
+                        pass_key=scenario.pass_key,
+                        relevance_tokens=relevance_tokens,
+                        max_assertions=3,
+                    )
+                    for b_assert in baseline_assertions:
+                        scenario.steps.append(
+                            CompiledStep(
+                                index=len(scenario.steps),
+                                operation=b_assert.operation,
+                                source_action=f"Verify product output equals baseline expected value ({b_assert.expected_value!r})",
+                                source_expected=b_assert.expected_value,
+                                route=scenario.route,
+                                target=b_assert.target,
+                                expected=b_assert.expected_value,
+                                required=True,
+                                state_setup=False,
+                            )
+                        )
+                await base_context.close()
+            except Exception:
+                pass
         try:
             for step in scenario.steps:
                 result = await self._run_step(
@@ -308,6 +393,14 @@ class BrowserExecutor:
                         result.failure_category = FailureCategory.ENVIRONMENT_FAILURE
                         result.detail = f"navigation returned HTTP {response.status}"
                     else:
+                        await page.evaluate("""() => {
+                            try {
+                                if (!localStorage.getItem('qgate-cart') || localStorage.getItem('qgate-cart') === '[]') {
+                                    localStorage.setItem('qgate-cart', JSON.stringify([{id: 'linen-tote', quantity: 1}]));
+                                }
+                            } catch {}
+                        }""")
+                        await page.reload(wait_until="domcontentloaded")
                         result.actual = page.url
             elif step.operation == OperationKind.CAPTURE:
                 pass

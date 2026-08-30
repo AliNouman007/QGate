@@ -49,6 +49,7 @@ class FailureCategory(StrEnum):
 
 class ExecutionConfig(BaseModel):
     base_url: str
+    baseline_url: str | None = None
     browser: str = "chromium"
     headed: bool = False
     global_timeout_ms: int = Field(default=45_000, ge=1_000, le=300_000)

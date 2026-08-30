@@ -334,6 +334,8 @@ class ScenarioGenerator:
             "of", "to", "in", "for", "on", "with", "at", "by", "from", "up", "about",
             "into", "over", "after", "state", "user", "page", "app", "js", "ts", "jsx",
             "tsx", "component", "components", "context", "provider", "src", "route",
+            "const", "let", "var", "function", "export", "default", "import", "return",
+            "null", "true", "false", "style", "styles", "module", "css", "next", "react", "link",
         }
         raw_tokens = re.findall(r"\b[A-Za-z_$][\w.$-]*\b", text)
         tokens: set[str] = set()
@@ -355,11 +357,14 @@ class ScenarioGenerator:
         if state is None:
             return routes[0].target if len(routes) == 1 else None
 
-        state_tokens: set[str] = set()
+        state_key_label_tokens: set[str] = set()
         if state.key:
-            state_tokens.update(ScenarioGenerator._tokenize(state.key))
+            state_key_label_tokens.update(ScenarioGenerator._tokenize(state.key))
         if state.label:
-            state_tokens.update(ScenarioGenerator._tokenize(state.label))
+            state_key_label_tokens.update(ScenarioGenerator._tokenize(state.label))
+
+        state_tokens: set[str] = set()
+        state_tokens.update(state_key_label_tokens)
         if state.explanation:
             state_tokens.update(ScenarioGenerator._tokenize(state.explanation))
         for ev in state.evidence:
@@ -390,15 +395,16 @@ class ScenarioGenerator:
             if route.target:
                 route_tokens.update(ScenarioGenerator._tokenize(route.target))
 
-            for r_path in route_paths:
-                f_analysis = file_lookup.get(r_path)
+            for r_ev in route.evidence:
+                f_analysis = file_lookup.get(r_ev.path)
                 if f_analysis:
                     for imp in f_analysis.imports:
                         route_tokens.update(ScenarioGenerator._tokenize(imp.module))
                     for beh in f_analysis.behaviors:
                         route_tokens.update(ScenarioGenerator._tokenize(beh.expression))
 
-            direct_hits = len(state_tokens & route_tokens)
+            key_label_hits = len(state_key_label_tokens & route_tokens)
+            direct_hits = (10 * key_label_hits) + len(state_tokens & route_tokens)
             scored_routes.append((direct_hits, dep_match, -idx, route.target))
 
         scored_routes.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
@@ -418,7 +424,7 @@ class ScenarioGenerator:
         impact: ImpactReport,
         knowledge: ProjectKnowledge | None = None,
     ) -> str | None:
-        best_route = None
+        best_route: str | None = None
         max_hits = -1
         for state in pair:
             state_tokens: set[str] = set()
@@ -460,9 +466,9 @@ class ScenarioGenerator:
             return best_route
 
         for state in pair:
-            route = self._best_route_for_state(state, routes, impact, knowledge=knowledge)
-            if route is not None:
-                return route
+            target_route = self._best_route_for_state(state, routes, impact, knowledge=knowledge)
+            if target_route is not None:
+                return target_route
         return None
 
     @staticmethod

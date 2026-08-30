@@ -104,8 +104,10 @@ class ScenarioCompiler:
                 passes.append(pass_res)
             return passes
 
-        hint = scenario.state_setup_hints[0] if scenario.state_setup_hints else None
-        return self._compile_single_state_scenario(scenario, hint=hint, pass_index=0)
+        single_hint: StateSetupHint | None = (
+            scenario.state_setup_hints[0] if scenario.state_setup_hints else None
+        )
+        return self._compile_single_state_scenario(scenario, hint=single_hint, pass_index=0)
 
     def _compile_single_state_scenario(
         self,
