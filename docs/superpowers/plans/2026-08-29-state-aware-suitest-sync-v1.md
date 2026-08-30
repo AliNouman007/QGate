@@ -105,4 +105,53 @@
 - [ ] **Step 3: Document the materialize endpoint and that QGate JSON artifacts remain canonical.**
 - [ ] **Step 4: Local verification must rerun the existing unchanged wallet fixture** from baseline `1ed1d06f01681a69ffbd5388771da512c61affd6` to buggy `40cf5de975eb6b0c8779a163acebf44b92fa885d`.
 - [ ] **Step 5: Required validation outcome:** state is established by pipeline-owned steps; if the existing QGate assertions expose the wrong final payable, the current scenario must produce verified failure and Final Gate `BLOCK`; otherwise report the remaining assertion-generation gap rather than forcing BLOCK.
-- [ ] **Step 6: Confirm at least one QGate-managed generated case is visible in the Suitest Tests UI and repeated materialization does not duplicate it.
+- [ ] **Step 6: Confirm at least one QGate-managed generated case is visible in the Suitest Tests UI and repeated materialization does not duplicate it.**
+
+### Task 6: Rank affected routes by deterministic state relevance instead of list order
+
+**Files:**
+- Modify: `packages/scenario-intelligence/src/qgate_scenario_intelligence/generator.py`
+- Test: `packages/scenario-intelligence/tests/test_generator.py`
+
+**Interfaces:**
+- Consumes: `SemanticState`, `ImpactReport.affected_routes`, route evidence/dependency paths, and `ProjectKnowledge.files`.
+- Produces: deterministic best-route selection with stable conservative fallback.
+
+- [ ] **Step 1: Keep the existing failing regression test** `test_state_route_selection_prefers_stronger_deterministic_state_evidence` as the RED case.
+- [ ] **Step 2: Build route relevance tokens** from the semantic-state key, label, explanation, and evidence excerpts; normalize to bounded lowercase identifier-like tokens and discard generic stop words.
+- [ ] **Step 3: Score candidate routes deterministically** using direct token hits in the route file's imports/behaviors/symbols/evidence before dependency-only matches. Do not special-case any state name, route, fixture, test id, or project.
+- [ ] **Step 4: Preserve conservative fallback**: if candidates have no stronger route-specific state evidence or tie exactly, use the existing stable affected-route ordering rather than inventing certainty.
+- [ ] **Step 5: Run the focused route-ranking test and full Scenario Intelligence suite.**
+
+### Task 7: Compile cross-state scenarios into independent executable state passes
+
+**Files:**
+- Modify: `packages/browser-execution/src/qgate_browser_execution/models.py`
+- Modify: `packages/browser-execution/src/qgate_browser_execution/compiler.py`
+- Modify: `packages/browser-execution/src/qgate_browser_execution/executor.py`
+- Test: `packages/browser-execution/tests/test_compiler.py`
+- Test: `packages/browser-execution/tests/test_browser_integration.py`
+
+**Interfaces:**
+- Consumes: one `Scenario` with multiple `state_setup_hints` and one selected route.
+- Produces: one `CompiledScenario` per state pass, each carrying the original scenario identity plus a stable pass identity/state label; executor aggregates all passes back to the original scenario result.
+
+- [ ] **Step 1: Write a failing compiler regression test** proving a two-state comparison produces two compiled passes instead of an `UNVERIFIED` preclassification.
+- [ ] **Step 2: Add bounded pass metadata** to `CompiledScenario` such as `pass_key`, `state_key`, and `state_label` without changing Final Gate scenario identity.
+- [ ] **Step 3: Compile each state hint independently** as NAVIGATE -> state setup -> state verification -> original deterministic scenario actions/assertions, never applying two mutually exclusive states in one pass.
+- [ ] **Step 4: Aggregate pass execution conservatively**: any product assertion failure makes the original scenario FAILED; any required pass setup/environment/unverified result prevents PASSED; only all required passes passing may yield PASSED.
+- [ ] **Step 5: Preserve failure provenance** so setup failures remain `STATE_SETUP_FAILURE` and product assertions remain `ASSERTION_FAILURE`.
+- [ ] **Step 6: Run focused compiler/integration tests and the full Browser Execution suite.**
+
+### Task 8: Clean touched lint issue and run the full verification matrix
+
+**Files:**
+- Modify: `apps/api/src/suitest_api/services/qgate_test_materializer.py` only for import ordering if Ruff still reports it.
+
+**Interfaces:**
+- No runtime behavior change.
+
+- [ ] **Step 1: Apply Ruff-compatible import ordering only; do not refactor the materializer.**
+- [ ] **Step 2: Run import regression, Project Intelligence, agent semantic, Scenario Intelligence, Browser Execution, Final Gate, Ruff, and mypy.**
+- [ ] **Step 3: Rerun the hidden-wallet fixture using clean baseline `f6f8d42674ee78adab2bbd2a2c31e163d4f4fb3a` and bug commit `5217bea6f6b6fb5fe40054fd422e5aa2a9d6f1e5`.**
+- [ ] **Step 4: Report the next remaining pipeline blocker without injecting a wallet-specific assertion or modifying the target shop.**
