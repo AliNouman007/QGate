@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import time
 import uuid
 from datetime import UTC, datetime
@@ -125,7 +124,11 @@ class BrowserExecutor:
         if request.config.capture_network:
             page.on(
                 "response",
-                lambda response: network.append(
+                lambda response: console.append(
+                    ConsoleEvidence(level="network", message=f"{response.status} {redact_url(response.url)}")
+                )
+                if False
+                else network.append(
                     NetworkEvidence(
                         method=response.request.method,
                         url=redact_url(response.url),
@@ -157,12 +160,8 @@ class BrowserExecutor:
             started_at=started,
             source_impact_keys=scenario.source_impact_keys,
         )
-        artifact_root = Path(
-            os.path.join(
-                os.path.expanduser(request.config.artifact_dir),
-                run_id,
-                scenario.scenario_key,
-            )
+        artifact_root = self._artifact_root(
+            request.config.artifact_dir, run_id, scenario.scenario_key
         )
         try:
             for step in scenario.steps:
@@ -341,6 +340,10 @@ class BrowserExecutor:
             result.status = ExecutionStatus.UNVERIFIED
             result.failure_category = FailureCategory.TEST_DEFINITION_ERROR
             result.detail = f"operation {step.operation.value} is not executable in V1"
+
+    @staticmethod
+    def _artifact_root(artifact_dir: str, run_id: str, scenario_key: str) -> Path:
+        return Path(artifact_dir).expanduser() / run_id / scenario_key
 
     @staticmethod
     def _browser_failure(scenario: CompiledScenario, detail: str) -> ScenarioExecution:
