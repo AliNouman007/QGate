@@ -124,11 +124,7 @@ class BrowserExecutor:
         if request.config.capture_network:
             page.on(
                 "response",
-                lambda response: console.append(
-                    ConsoleEvidence(level="network", message=f"{response.status} {redact_url(response.url)}")
-                )
-                if False
-                else network.append(
+                lambda response: network.append(
                     NetworkEvidence(
                         method=response.request.method,
                         url=redact_url(response.url),
