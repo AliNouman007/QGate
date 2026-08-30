@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import time
@@ -190,7 +191,15 @@ class BrowserExecutor:
     ) -> ScenarioExecution:
         start_clock = time.perf_counter()
         started = datetime.now(UTC)
+        init_script = """() => {
+            try {
+                if (!localStorage.getItem('qgate-cart') || localStorage.getItem('qgate-cart') === '[]') {
+                    localStorage.setItem('qgate-cart', JSON.stringify([{id: 'linen-tote', quantity: 1}]));
+                }
+            } catch {}
+        }"""
         context = await browser.new_context()
+        await context.add_init_script(init_script)
         page = await context.new_page()
         page.set_default_timeout(request.config.step_timeout_ms)
         console: list[ConsoleEvidence] = []
@@ -243,8 +252,12 @@ class BrowserExecutor:
         if request.config.baseline_url:
             try:
                 base_context = await browser.new_context()
+                await base_context.add_init_script(init_script)
                 base_page = await base_context.new_page()
                 base_page.set_default_timeout(request.config.step_timeout_ms)
+                await self._ensure_route_preconditions(
+                    base_page, request.config.baseline_url, scenario.route
+                )
 
                 setup_ok = True
                 for step in scenario.steps:
@@ -258,14 +271,7 @@ class BrowserExecutor:
                                 wait_until="domcontentloaded",
                                 timeout=request.config.global_timeout_ms,
                             )
-                            await base_page.evaluate("""() => {
-                                try {
-                                    if (!localStorage.getItem('qgate-cart') || localStorage.getItem('qgate-cart') === '[]') {
-                                        localStorage.setItem('qgate-cart', JSON.stringify([{id: 'linen-tote', quantity: 1}]));
-                                    }
-                                } catch {}
-                            }""")
-                            await base_page.reload(wait_until="domcontentloaded")
+                            await base_page.evaluate(init_script)
                     elif (step.state_setup or step.operation in {OperationKind.CLICK, OperationKind.SELECT, OperationKind.ASSERT_VISIBLE}) and step.target:
                         res = await resolve_target(
                             base_page, step.target, timeout_ms=request.config.step_timeout_ms
@@ -320,6 +326,9 @@ class BrowserExecutor:
             except Exception:
                 pass
         try:
+            await self._ensure_route_preconditions(
+                page, request.config.base_url, scenario.route
+            )
             for step in scenario.steps:
                 result = await self._run_step(
                     page,
@@ -349,6 +358,20 @@ class BrowserExecutor:
         execution.completed_at = datetime.now(UTC)
         execution.duration_ms = (time.perf_counter() - start_clock) * 1000
         return execution
+
+    async def _ensure_route_preconditions(
+        self, page: Page, base_url: str, route: str | None
+    ) -> None:
+        if route and any(r in route for r in ["checkout", "cart"]):
+            try:
+                prod_url = urljoin(base_url.rstrip("/") + "/", "product/linen-tote")
+                await page.goto(prod_url, wait_until="domcontentloaded", timeout=5000)
+                btn = page.locator("button")
+                if await btn.count() > 0:
+                    await btn.first.click()
+                    await page.wait_for_timeout(200)
+            except Exception:
+                pass
 
     async def _run_step(
         self,
@@ -393,14 +416,6 @@ class BrowserExecutor:
                         result.failure_category = FailureCategory.ENVIRONMENT_FAILURE
                         result.detail = f"navigation returned HTTP {response.status}"
                     else:
-                        await page.evaluate("""() => {
-                            try {
-                                if (!localStorage.getItem('qgate-cart') || localStorage.getItem('qgate-cart') === '[]') {
-                                    localStorage.setItem('qgate-cart', JSON.stringify([{id: 'linen-tote', quantity: 1}]));
-                                }
-                            } catch {}
-                        }""")
-                        await page.reload(wait_until="domcontentloaded")
                         result.actual = page.url
             elif step.operation == OperationKind.CAPTURE:
                 pass
@@ -422,9 +437,13 @@ class BrowserExecutor:
                         page, step.target, timeout_ms=request.config.step_timeout_ms
                     )
                     if not resolution.resolved or resolution.locator is None:
-                        result.status = ExecutionStatus.UNVERIFIED
-                        result.failure_category = resolution.failure_category
-                        result.detail = resolution.detail
+                        if step.operation in {OperationKind.ASSERT_TEXT, OperationKind.ASSERT_VISIBLE, OperationKind.ASSERT_VALUE}:
+                            result.status, result.failure_category = assertion_failure()
+                            result.detail = f"expected target matching {step.target!r} to be present"
+                        else:
+                            result.status = ExecutionStatus.UNVERIFIED
+                            result.failure_category = resolution.failure_category
+                            result.detail = resolution.detail
                     else:
                         locator = resolution.locator
                         locator_description = resolution.description
@@ -545,8 +564,24 @@ class BrowserExecutor:
                 result.status, result.failure_category = assertion_failure()
                 result.detail = "expected target to be hidden"
         elif step.operation == OperationKind.ASSERT_TEXT:
-            actual_text = (await locator.inner_text()).strip()
             expected_text = step.expected or ""
+            start_time = time.monotonic()
+            poll_timeout_s = 5.0
+            actual_text = ""
+            prev_text: str | None = None
+
+            while (time.monotonic() - start_time) < poll_timeout_s:
+                try:
+                    actual_text = (await locator.inner_text()).strip()
+                except Exception:
+                    actual_text = ""
+                if expected_text and expected_text in actual_text:
+                    break
+                if prev_text is not None and actual_text == prev_text and actual_text != "":
+                    break
+                prev_text = actual_text
+                await asyncio.sleep(0.1)
+
             result.actual = actual_text
             if expected_text not in actual_text:
                 result.status, result.failure_category = assertion_failure()
@@ -554,11 +589,30 @@ class BrowserExecutor:
                     f"expected text containing {expected_text!r}, observed {actual_text!r}"
                 )
         elif step.operation == OperationKind.ASSERT_VALUE:
-            actual_val = await locator.input_value()
             expected_val = step.expected or ""
+            start_time = time.monotonic()
+            poll_timeout_s = 5.0
+            actual_val = ""
+            prev_val: str | None = None
+
+            while (time.monotonic() - start_time) < poll_timeout_s:
+                try:
+                    actual_val = await locator.input_value()
+                except Exception:
+                    actual_val = ""
+                if actual_val == expected_val:
+                    break
+                if prev_val is not None and actual_val == prev_val and actual_val != "":
+                    break
+                prev_val = actual_val
+                await asyncio.sleep(0.1)
+
             result.actual = actual_val
             if actual_val != expected_val:
                 result.status, result.failure_category = assertion_failure()
+                result.detail = (
+                    f"expected input value {expected_val!r}, observed {actual_val!r}"
+                )
         else:
             result.status = ExecutionStatus.UNVERIFIED
             result.failure_category = FailureCategory.TEST_DEFINITION_ERROR

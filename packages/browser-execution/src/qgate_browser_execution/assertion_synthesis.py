@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import re
+import time
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
@@ -150,6 +152,8 @@ class AssertionSynthesizer:
         pass_key: str | None,
         relevance_tokens: set[str],
         max_assertions: int = 3,
+        stabilization_timeout_ms: int = 5000,
+        poll_interval_ms: int = 100,
     ) -> list[BaselineAssertion]:
         try:
             js_eval = """
@@ -185,15 +189,25 @@ class AssertionSynthesizer:
                 return candidates;
             }
             """
-            raw_candidates_1: list[dict[str, Any]] = await page.evaluate(js_eval)
-            await page.wait_for_timeout(100)
-            raw_candidates_2: list[dict[str, Any]] = await page.evaluate(js_eval)
+            start_time = time.monotonic()
+            stabilization_timeout_s = stabilization_timeout_ms / 1000.0
+            poll_interval_s = poll_interval_ms / 1000.0
+            prev_sig: str | None = None
+            stable_candidates: list[dict[str, Any]] = []
 
-            c2_map = {f"{c.get('testId')}:{c.get('id')}:{c.get('text')}": c for c in raw_candidates_2}
-            stable_candidates = [
-                c1 for c1 in raw_candidates_1
-                if f"{c1.get('testId')}:{c1.get('id')}:{c1.get('text')}" in c2_map
-            ]
+            while (time.monotonic() - start_time) < stabilization_timeout_s:
+                raw_cands: list[dict[str, Any]] = await page.evaluate(js_eval)
+                curr_sig = "|".join(
+                    f"{c.get('testId')}:{c.get('id')}:{c.get('text')}" for c in raw_cands
+                )
+                if prev_sig is not None and curr_sig == prev_sig and raw_cands:
+                    stable_candidates = raw_cands
+                    break
+                prev_sig = curr_sig
+                await asyncio.sleep(poll_interval_s)
+
+            if not stable_candidates:
+                return []
 
             ranked = self.filter_and_rank_candidates(
                 stable_candidates,

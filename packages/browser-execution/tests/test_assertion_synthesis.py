@@ -1,3 +1,6 @@
+import asyncio
+from unittest.mock import AsyncMock, MagicMock
+
 from qgate_browser_execution.assertion_synthesis import (
     AssertionSynthesizer,
     BaselineAssertion,
@@ -172,4 +175,58 @@ def test_compiled_assertion_step_fails_on_value_mismatch():
     failure_category = FailureCategory.ASSERTION_FAILURE if status == ExecutionStatus.FAILED else None
     assert status == ExecutionStatus.FAILED
     assert failure_category == FailureCategory.ASSERTION_FAILURE
+
+
+def test_baseline_observation_stabilizes_consecutive_reads():
+    synthesizer = AssertionSynthesizer()
+    mock_page = MagicMock()
+    # Simulate 3 reads: un-hydrated -> changing -> stabilized
+    read_1 = [{"tag": "span", "testId": "payable", "id": None, "role": None, "name": None, "text": "$31.00", "hasChildren": False}]
+    read_2 = [{"tag": "span", "testId": "payable", "id": None, "role": None, "name": None, "text": "$9.00", "hasChildren": False}]
+    read_3 = [{"tag": "span", "testId": "payable", "id": None, "role": None, "name": None, "text": "$9.00", "hasChildren": False}]
+
+    mock_page.evaluate = AsyncMock(side_effect=[read_1, read_2, read_3])
+
+    res = asyncio.run(
+        synthesizer.observe_baseline_assertions(
+            mock_page,
+            scenario_key="scn_test",
+            route="/checkout",
+            state_key="app/shop-context.js:user:wallet",
+            pass_key="scn_test:pass:1",
+            relevance_tokens={"payable", "wallet", "total"},
+        )
+    )
+
+    assert len(res) >= 1
+    assert res[0].expected_value == "$9.00"
+    assert mock_page.evaluate.call_count == 3
+
+def test_stabilization_timeout_fails_closed():
+    synthesizer = AssertionSynthesizer()
+    mock_page = MagicMock()
+    # Volatile candidate that changes on every read
+    counter = [0]
+    def get_volatile_cands():
+        counter[0] += 1
+        return [{"tag": "span", "testId": "payable", "id": None, "role": None, "name": None, "text": f"${counter[0]}.00", "hasChildren": False}]
+
+    mock_page.evaluate = AsyncMock(side_effect=lambda js: get_volatile_cands())
+
+    res = asyncio.run(
+        synthesizer.observe_baseline_assertions(
+            mock_page,
+            scenario_key="scn_volatile",
+            route="/checkout",
+            state_key="app/shop-context.js:user:wallet",
+            pass_key="scn_volatile:pass:1",
+            relevance_tokens={"payable"},
+            stabilization_timeout_ms=300,
+            poll_interval_ms=50,
+        )
+    )
+
+    # Never stabilized -> fails closed (returns empty list)
+    assert res == []
+
 
