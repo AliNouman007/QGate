@@ -1,11 +1,23 @@
-import { Outlet, createFileRoute, isRedirect, redirect } from "@tanstack/react-router";
-import { useState } from "react";
+import { Outlet, createFileRoute, isRedirect, redirect, useNavigate } from "@tanstack/react-router";
+import { Play, ShieldCheck } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { AiPanel } from "@/components/shell/AiPanel";
 import { CreateWorkspaceDialog } from "@/components/shell/CreateWorkspaceDialog";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { Topbar } from "@/components/shell/Topbar";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useCurrentUser, type CurrentUser } from "@/hooks/use-current-user";
+import { useCreateRun } from "@/hooks/use-runs";
+import { useProject } from "@/hooks/use-projects";
 import { api } from "@/lib/api-client";
 import { establishLocalSession } from "@/lib/local-auth";
 import { useActiveProject } from "@/stores/use-active-project";
@@ -15,48 +27,19 @@ import type { components } from "@/lib/api-types";
 
 type ProjectsPage = components["schemas"]["Page_ProjectPublic_"];
 
-/**
- * Pathless protected layout. Every authenticated route nests under this so
- * the `beforeLoad` guard runs once per navigation. On 401 we redirect to
- * `/login?next=<original-path>` so the user lands back where they started
- * after authenticating.
- *
- * NOTE: `api-client` already redirects on 401 in its response interceptor —
- * this guard is belt-and-suspenders, and also ensures router state stays in
- * sync (the interceptor mutates `window.location` outside React).
- *
- * The guard also performs two boot-time side effects:
- *
- *   1. Seeds the active workspace from the first membership when no
- *      selection is persisted — this is what makes the `X-Workspace-Id`
- *      header non-empty on subsequent requests.
- *
- *   2. Awaits the capabilities fetch so descendant surfaces (TierBadge,
- *      Gated, AiPanel rail) render with the real tier on first paint
- *      instead of flashing ZERO and snapping to CLOUD.
- */
 export const Route = createFileRoute("/_app")({
   beforeLoad: async ({ context, location }) => {
     try {
-      // In opt-in local development this creates the same cookie-backed JWT
-      // session as password login. Disabled/server deployments return 404 and
-      // immediately continue through the unchanged auth guard below.
       await establishLocalSession();
       const me = await context.queryClient.ensureQueryData<CurrentUser>({
         queryKey: ["auth", "me"],
         queryFn: async () => (await api.get<CurrentUser>("/auth/me")).data,
       });
-      // Force a password change before anything else when an admin reset set
-      // the marker. Done in `beforeLoad` (not a component effect) so there's no
-      // render flash and no redirect loop — `/settings` is excluded.
+
       if (me.must_change_password && location.pathname !== "/settings") {
         throw redirect({ to: "/settings", search: { force_password: "1" } });
       }
-      // Seed the active workspace when the user hasn't picked one yet, OR when
-      // the persisted id is stale (e.g. the DB was reseeded and workspace ids
-      // regenerated). Without this reconciliation the api-client keeps sending
-      // a dead `X-Workspace-Id`, and every authed endpoint returns 403
-      // "user is not a member of the requested workspace".
+
       const ws = useActiveWorkspace.getState();
       const validIds = new Set(me.memberships.map((m) => m.workspace_id));
       if ((ws.workspaceId === null || !validIds.has(ws.workspaceId)) && me.memberships.length > 0) {
@@ -65,17 +48,9 @@ export const Route = createFileRoute("/_app")({
           ws.setWorkspaceId(first.workspace_id);
         }
       }
-      // Seed / reconcile the active project — but ONLY when we have an active
-      // workspace. A freshly-registered or invited user with zero workspaces
-      // reaches the shell with no workspace and bootstraps one from the sidebar
-      // picker; `/projects` (like every workspace-scoped endpoint) 400s without
-      // an `X-Workspace-Id`, so fetching it here would bounce them to /login.
+
       const activeWorkspaceId = useActiveWorkspace.getState().workspaceId;
       if (activeWorkspaceId) {
-        // Every project-scoped endpoint (`/analytics/*`, `/suites`, `/runs`,
-        // `/traceability/matrix`) returns 422 without a `projectId`, so resolve
-        // the active project before the shell renders. The persisted id may be
-        // null (first login), stale (DB reseed), or belong to another workspace.
         const projects = await context.queryClient.ensureQueryData<ProjectsPage>({
           queryKey: ["projects"],
           queryFn: async () => (await api.get<ProjectsPage>("/projects")).data,
@@ -92,14 +67,11 @@ export const Route = createFileRoute("/_app")({
           }
         }
       }
-      // Capabilities boot — block render until we know the tier so the
-      // shell doesn't flash ZERO → CLOUD on first paint.
+
       if (useCapabilities.getState().capabilities === null) {
         await useCapabilities.getState().fetch();
       }
     } catch (err) {
-      // A deliberate redirect (e.g. the must_change_password guard above) must
-      // propagate unchanged — only auth failures fall through to /login.
       if (isRedirect(err)) {
         throw err;
       }
@@ -112,26 +84,107 @@ export const Route = createFileRoute("/_app")({
   component: AppLayout,
 });
 
-/**
- * Responsive flex shell:
- *   [Sidebar 224px | mobile drawer] [Topbar + Outlet flex-1 min-w-0] [AiPanel 380px xl+]
- *
- * Flexbox (not a grid with reserved tracks) so a column only takes space when
- * its content actually renders — the AI rail self-gates (`<Gated>` → null) and
- * previously left an empty 380px stripe when the grid reserved its track.
- * Below `md:` the sidebar becomes an overlay drawer toggled from the Topbar.
- */
+function GlobalStartQaCheckModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }): React.ReactElement {
+  const navigate = useNavigate();
+  const projectId = useActiveProject((s) => s.projectId);
+  const { data: project } = useProject(projectId);
+  const createRunMutation = useCreateRun();
+  const [isRunning, setIsRunning] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) setErrorMessage(null);
+  }, [open]);
+
+  const handleStartRun = () => {
+    if (!projectId) {
+      setErrorMessage("No active project selected. Please select a project first.");
+      return;
+    }
+    setIsRunning(true);
+    setErrorMessage(null);
+
+    createRunMutation.mutate(
+      {
+        projectId,
+        name: `QGate Automated QA Check - ${new Date().toLocaleTimeString()}`,
+        selection: [],
+        env: "staging",
+        trigger: "MANUAL",
+      },
+      {
+        onSuccess: () => {
+          setIsRunning(false);
+          onOpenChange(false);
+          void navigate({ to: "/gate" });
+        },
+        onError: (err) => {
+          setIsRunning(false);
+          const msg = err instanceof Error ? err.message : "Failed to trigger QA check.";
+          setErrorMessage(msg);
+        },
+      },
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="border-border bg-bg-elev-1 sm:max-w-[500px]" data-testid="start-qa-check-dialog">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-fg-1">
+            <ShieldCheck className="h-5 w-5 text-accent" aria-hidden="true" />
+            <span>Start QA Check</span>
+          </DialogTitle>
+          <DialogDescription className="text-fg-4 text-[13px]">
+            Target Project: <strong className="font-mono text-fg-1">{project?.name ?? "D:\\QGate\\qgate-test-shop"}</strong>
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 py-2 text-[12.5px] leading-relaxed text-fg-3">
+          {errorMessage ? (
+            <div className="rounded-md border border-red/30 bg-red/10 p-3 text-[12px] text-red font-medium" data-testid="start-qa-check-error">
+              {errorMessage}
+            </div>
+          ) : null}
+
+          <p>
+            QGate will automatically index code changes, calculate risk scores, synthesize baseline assertions, execute Playwright browser scenarios, and issue a <strong>PASS</strong> or <strong>BLOCK</strong> verdict.
+          </p>
+          <div className="rounded-md border border-border-subtle bg-bg-elev-2 p-3 text-[12px] text-fg-2">
+            <strong className="text-fg-1">Pipeline Steps:</strong> Project Intelligence → Impact Analysis → Scenario Synthesis → Browser Execution → Gate Verdict.
+          </div>
+        </div>
+
+        <DialogFooter className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+          <Button
+            size="sm"
+            disabled={isRunning}
+            onClick={handleStartRun}
+            className="gap-1.5 bg-accent text-accent-fg hover:bg-accent/90"
+            data-testid="confirm-run-qa-check-button"
+          >
+            <Play className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>{isRunning ? "Launching Pipeline..." : "Run QA Check Now"}</span>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function AppLayout(): React.ReactElement {
   const tier = useCapabilities((s) => s.capabilities?.tier);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [qaModalOpen, setQaModalOpen] = useState(false);
 
   const { data: user } = useCurrentUser();
   const activeWorkspaceId = useActiveWorkspace((s) => s.workspaceId);
   const setWorkspaceId = useActiveWorkspace((s) => s.setWorkspaceId);
   const setProjectId = useActiveProject((s) => s.setProjectId);
-  // Auto-open the create-workspace flow for a user with zero workspaces (fresh
-  // register / invite) so onboarding starts immediately instead of landing on a
-  // workspace-less shell.
+
   const [workspaceDialogOpen, setWorkspaceDialogOpen] = useState(user.memberships.length === 0);
   const memberships = user.memberships;
   const activeMembership =
@@ -144,9 +197,12 @@ function AppLayout(): React.ReactElement {
   const userName = user.name ?? user.email.split("@")[0] ?? "Account";
   const userRole = activeMembership?.role;
 
-  // Switching tenants resets the active project (a different workspace has its
-  // own projects) and hard-navigates so `_app.beforeLoad` re-seeds the project
-  // + capabilities for the new workspace from scratch.
+  useEffect(() => {
+    const handleOpenModal = () => setQaModalOpen(true);
+    window.addEventListener("open-start-qa-check", handleOpenModal);
+    return () => window.removeEventListener("open-start-qa-check", handleOpenModal);
+  }, []);
+
   const handleSwitchWorkspace = (id: string): void => {
     setWorkspaceId(id);
     setProjectId(null);
@@ -177,6 +233,7 @@ function AppLayout(): React.ReactElement {
           setWorkspaceDialogOpen(false);
         }}
       />
+      <GlobalStartQaCheckModal open={qaModalOpen} onOpenChange={setQaModalOpen} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar
           onMenuClick={() => {

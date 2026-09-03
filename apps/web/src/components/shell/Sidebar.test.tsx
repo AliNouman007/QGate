@@ -8,57 +8,57 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { Sidebar, type SidebarProps } from "@/components/shell/Sidebar";
 
-/**
- * Mount the Sidebar inside a minimal in-memory TanStack Router so `<Link>`
- * children resolve. Real route tree is not used — we only need a few
- * matching paths so `activeProps` can fire when the test asks for one.
- */
 async function renderSidebar(
-  initialPath: string,
+  initialPath = "/dashboard",
   props: SidebarProps = {},
-): Promise<ReturnType<typeof render>> {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-
+) {
   const rootRoute = createRootRoute({
     component: () => (
-      <div className="flex">
+      <div data-testid="app-shell">
         <Sidebar {...props} />
         <Outlet />
       </div>
     ),
   });
 
-  const pages = [
+  const routes = [
     "/dashboard",
-    "/inbox",
+    "/gate",
+    "/project-map",
+    "/impact",
+    "/qa-memory",
+    "/settings",
     "/cases",
     "/runs",
     "/defects",
+    "/execution",
     "/analytics",
-    "/trace",
+    "/inbox",
     "/integrations",
     "/docs",
-    "/settings",
     "/admin",
-  ];
-  const children = pages.map((p) =>
+  ].map((path) =>
     createRoute({
       getParentRoute: () => rootRoute,
-      path: p,
-      component: () => <div data-testid={`page-${p}`}>{p}</div>,
+      path,
+      component: () => <div data-testid={`page-${path}`}>{path}</div>,
     }),
   );
-  const routeTree = rootRoute.addChildren(children);
+
+  rootRoute.addChildren(routes);
 
   const router = createRouter({
-    routeTree,
+    routeTree: rootRoute,
     history: createMemoryHistory({ initialEntries: [initialPath] }),
+  });
+
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
   });
 
   const result = render(
@@ -67,7 +67,6 @@ async function renderSidebar(
     </QueryClientProvider>,
   );
 
-  // Wait for the Sidebar (and the rest of the tree) to actually render.
   await waitFor(() => {
     expect(result.container.querySelector("[data-testid='sidebar']")).not.toBeNull();
   });
@@ -76,63 +75,73 @@ async function renderSidebar(
 }
 
 describe("<Sidebar>", () => {
-  it("renders all primary nav items", async () => {
+  it("renders only the 6 primary QGate navigation items by default", async () => {
     await renderSidebar("/dashboard");
-    const expected = [
-      "Dashboard",
-      "Inbox",
-      "Test Cases",
-      "Test Runs",
-      "Defects",
-      "Analytics",
-      "Traceability",
-      "Integrations",
-      "Docs",
+    const expectedPrimary = [
+      "Overview",
+      "QA Checks",
+      "Project Knowledge",
+      "Impact & Test Plan",
+      "QA Memory",
       "Settings",
     ];
-    for (const label of expected) {
+    for (const label of expectedPrimary) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
+
+    // Uncluttered: old broad section headers are not rendered
+    expect(screen.queryByText("Workspace")).toBeNull();
+    expect(screen.queryByText("Testing")).toBeNull();
+    expect(screen.queryByText("Insights")).toBeNull();
+    expect(screen.queryByText("Config")).toBeNull();
+
+    // Secondary items hidden by default
+    expect(screen.queryByText("Inbox")).toBeNull();
+    expect(screen.queryByText("Test Runs")).toBeNull();
+    expect(screen.queryByText("Browser Execution")).toBeNull();
+    expect(screen.queryByText("Analytics")).toBeNull();
+    expect(screen.queryByText("Docs")).toBeNull();
+    expect(screen.queryByText("Integrations")).toBeNull();
   });
 
-  it("renders the workspace picker trigger and brand wordmark", async () => {
-    await renderSidebar("/dashboard", { workspaceName: "Acme QA" });
-    expect(screen.getByTestId("workspace-picker")).toHaveTextContent("Acme QA");
-    // Brand wordmark renders as a single "suitest" word split across spans.
-    expect(screen.getByText("test", { selector: "span" })).toBeInTheDocument();
+  it("keeps More tools collapsed by default and expands on click", async () => {
+    await renderSidebar("/dashboard");
+    expect(screen.queryByTestId("more-tools-list")).toBeNull();
+
+    const toggle = screen.getByTestId("nav-more-tools-toggle");
+    expect(toggle).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(toggle);
+
+    expect(screen.getByTestId("more-tools-list")).toBeInTheDocument();
+    expect(screen.getByText("Test Cases & Suites")).toBeInTheDocument();
+    expect(screen.getByText("Docs")).toBeInTheDocument();
+  });
+
+  it("renders active project picker", async () => {
+    await renderSidebar("/dashboard");
+    expect(screen.getByTestId("project-picker")).toBeInTheDocument();
   });
 
   it("highlights the active route via Link activeProps", async () => {
-    await renderSidebar("/runs");
-    // TanStack Router applies `data-status="active"` automatically on the
-    // anchor when the route matches.
-    const runs = screen.getByTestId("nav-test-runs");
+    await renderSidebar("/gate");
+    const gateNav = screen.getByTestId("nav-qa-checks");
     await waitFor(() => {
-      expect(runs.getAttribute("data-status")).toBe("active");
+      expect(gateNav.getAttribute("data-status")).toBe("active");
     });
-    const dashboard = screen.getByTestId("nav-dashboard");
-    expect(dashboard.getAttribute("data-status")).not.toBe("active");
+    const dashboardNav = screen.getByTestId("nav-overview");
+    expect(dashboardNav.getAttribute("data-status")).not.toBe("active");
   });
 
-  it("shows an inbox badge when count > 0", async () => {
-    await renderSidebar("/dashboard", { inboxCount: 3 });
-    const badge = screen.getByTestId("nav-inbox-badge");
-    expect(badge).toHaveTextContent("3");
-  });
-
-  it("omits the inbox badge when count is 0", async () => {
-    await renderSidebar("/dashboard", { inboxCount: 0 });
-    expect(screen.queryByTestId("nav-inbox-badge")).toBeNull();
-  });
-
-  it("shows a live dot next to Test Runs when activeRunsCount > 0", async () => {
+  it("shows a live dot next to QA Checks when activeRunsCount > 0", async () => {
     await renderSidebar("/dashboard", { activeRunsCount: 2 });
-    expect(screen.getByTestId("nav-test-runs-live-dot")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-qa-checks-live-dot")).toBeInTheDocument();
   });
 
   it("hides the live dot when activeRunsCount is 0", async () => {
     await renderSidebar("/dashboard", { activeRunsCount: 0 });
-    expect(screen.queryByTestId("nav-test-runs-live-dot")).toBeNull();
+    expect(screen.queryByTestId("nav-qa-checks-live-dot")).toBeNull();
   });
 
   it("renders the notification bell with a red dot when unreadCount > 0", async () => {
@@ -146,7 +155,7 @@ describe("<Sidebar>", () => {
     expect(screen.queryByTestId("sidebar-bell-unread")).toBeNull();
   });
 
-  it("Settings nav item links to /settings (enabled in M1e)", async () => {
+  it("Settings nav item links to /settings", async () => {
     await renderSidebar("/dashboard");
     const settings = screen.getByTestId("nav-settings");
     expect(settings.getAttribute("aria-disabled")).toBeNull();
@@ -158,8 +167,10 @@ describe("<Sidebar>", () => {
     expect(screen.queryByText("Admin")).toBeNull();
   });
 
-  it("shows the Admin nav item for superusers", async () => {
+  it("shows the Admin nav item for superusers under More tools", async () => {
     await renderSidebar("/dashboard", { isSuperuser: true });
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("nav-more-tools-toggle"));
     const adminNav = screen.getByTestId("nav-admin");
     expect(adminNav.getAttribute("href")).toBe("/admin");
   });

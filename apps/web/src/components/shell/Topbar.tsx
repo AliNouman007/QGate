@@ -3,18 +3,15 @@ import {
   BarChart3,
   BookOpen,
   Bug,
-  Coffee,
   FileCode2,
-  HeartHandshake,
-  HelpCircle,
+  GitPullRequest,
   Inbox,
   LayoutDashboard,
   Menu,
-  Network,
   Play,
   Plug,
-  Plus,
   Search,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -31,36 +28,39 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 interface CommandTarget {
   label: string;
-  to: string;
   icon: LucideIcon;
+  to: string;
 }
 
-const COMMAND_TARGETS: ReadonlyArray<CommandTarget> = [
-  { label: "Go to Dashboard", to: "/dashboard", icon: LayoutDashboard },
-  { label: "Go to Test Cases", to: "/cases", icon: FileCode2 },
-  { label: "Go to Test Runs", to: "/runs", icon: Play },
-  { label: "Go to Defects", to: "/defects", icon: Bug },
-  { label: "Go to Analytics", to: "/analytics", icon: BarChart3 },
-  { label: "Go to Traceability", to: "/trace", icon: Network },
-  { label: "Go to Integrations", to: "/integrations", icon: Plug },
-  { label: "Go to Docs", to: "/docs", icon: BookOpen },
-  { label: "Go to Inbox", to: "/inbox", icon: Inbox },
+const COMMAND_TARGETS: CommandTarget[] = [
+  { label: "Go to Dashboard", icon: LayoutDashboard, to: "/dashboard" },
+  { label: "Go to Test Cases", icon: FileCode2, to: "/cases" },
+  { label: "Go to Test Runs", icon: Play, to: "/runs" },
+  { label: "Go to Defects", icon: Bug, to: "/defects" },
+  { label: "Go to Analytics", icon: BarChart3, to: "/analytics" },
+  { label: "Go to Traceability", icon: GitPullRequest, to: "/trace" },
+  { label: "Go to Integrations", icon: Plug, to: "/integrations" },
+  { label: "Go to Docs", icon: BookOpen, to: "/docs" },
+  { label: "Go to Inbox", icon: Inbox, to: "/inbox" },
 ];
 
 export interface TopbarProps {
-  /** External docs link opened by the help icon. */
+  /** External docs link opened by the help icon (preserved for interface compatibility). */
   helpHref?: string;
   /** Opens the mobile sidebar drawer (< md). Hamburger hidden when omitted. */
   onMenuClick?: () => void;
 }
 
-/** Icon-only controls say nothing on their own; the aria-label is read by
- *  screen readers but never shown. Wrap them so a pointer gets the same text. */
 function IconTip({
   label,
   children,
@@ -76,26 +76,12 @@ function IconTip({
   );
 }
 
-/** Where the sponsor icons point. Constants, not props: the project funds
- *  itself in exactly one place, and no caller has a reason to redirect them. */
-const SPONSOR_HREF = "https://github.com/sponsors/suiflex";
-const SAWERIA_HREF = "https://saweria.co/suiflex";
-
-/**
- * Persistent top bar (47px). Breadcrumbs left, search palette + tier badge +
- * actions on the right. `+ New` is intentionally disabled in M1b — authoring
- * tools arrive in M1d.
- */
 export function Topbar({
-  helpHref = "https://github.com/suitest/docs",
   onMenuClick,
 }: TopbarProps = {}): React.ReactElement {
   const [commandOpen, setCommandOpen] = useState(false);
   const navigate = useNavigate();
 
-  // Build breadcrumbs from every route match that declares a title in its
-  // `staticData`. The root + `_app` pathless layout are intentionally
-  // excluded — they don't carry a title.
   const breadcrumbs = useMatches({
     select: (matches) =>
       matches
@@ -103,8 +89,6 @@ export function Topbar({
         .filter((t): t is string => typeof t === "string" && t.length > 0),
   });
 
-  // Global ⌘K / Ctrl+K shortcut. Re-bound on each render is cheap because
-  // there's only one Topbar mounted in the shell.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
@@ -127,7 +111,7 @@ export function Topbar({
   return (
     <TooltipProvider delayDuration={150}>
       <header
-        className="flex h-[47px] items-center gap-3 border-b border-border-subtle bg-bg-base px-4"
+        className="flex h-[47px] shrink-0 items-center justify-between border-b border-border-subtle bg-bg-elev-1 px-4"
         data-testid="topbar"
       >
         {/* Mobile — sidebar drawer trigger */}
@@ -149,11 +133,11 @@ export function Topbar({
         <Breadcrumbs segments={breadcrumbs} />
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          {/* Search palette trigger — full field ≥ sm, icon-only below */}
+          {/* Search palette trigger */}
           <button
             type="button"
             onClick={() => setCommandOpen(true)}
-            className="hidden h-7 w-[160px] items-center gap-2 rounded-md border border-border bg-bg-elev-1 px-2 text-left text-[12.5px] text-fg-4 hover:bg-bg-elev-2 sm:inline-flex lg:w-[220px]"
+            className="hidden h-7 w-[160px] items-center gap-2 rounded-md border border-border bg-bg-elev-1 px-2 text-left text-[12.5px] text-fg-4 hover:bg-bg-elev-2 sm:inline-flex lg:w-[200px]"
             data-testid="topbar-search-trigger"
           >
             <Search className="h-3.5 w-3.5" aria-hidden="true" />
@@ -174,76 +158,27 @@ export function Topbar({
             </button>
           </IconTip>
 
-          {/* Language switcher (M4-12) */}
+          {/* Language switcher */}
           <LanguageSwitcher />
 
           {/* Dark / light theme toggle */}
           <ThemeToggle />
 
-          {/* Sponsor icons */}
-          <IconTip label="Sponsor Suitest on GitHub">
-            <a
-              href={SPONSOR_HREF}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Sponsor Suitest on GitHub"
-              className="flex h-7 w-7 items-center justify-center rounded-md text-fg-3 hover:bg-bg-elev-2 hover:text-fg-1"
-              data-testid="topbar-sponsor-link"
-            >
-              <HeartHandshake className="h-4 w-4" aria-hidden="true" />
-            </a>
-          </IconTip>
-
-          <IconTip label="Support Suitest on Saweria">
-            <a
-              href={SAWERIA_HREF}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Support Suitest on Saweria"
-              className="flex h-7 w-7 items-center justify-center rounded-md text-fg-3 hover:bg-bg-elev-2 hover:text-fg-1"
-              data-testid="topbar-saweria-link"
-            >
-              <Coffee className="h-4 w-4" aria-hidden="true" />
-            </a>
-          </IconTip>
-
-          {/* Help icon */}
-          <IconTip label="Help & documentation">
-            <a
-              href={helpHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Help"
-              className="flex h-7 w-7 items-center justify-center rounded-md text-fg-3 hover:bg-bg-elev-2 hover:text-fg-1"
-              data-testid="topbar-help-link"
-            >
-              <HelpCircle className="h-4 w-4" aria-hidden="true" />
-            </a>
-          </IconTip>
-
+          {/* Tier Badge */}
           <TierBadge />
 
-          {/* + New (disabled in M1b) */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              {/* Wrapping span lets the tooltip fire even when the underlying
-                  button is disabled (pointer-events:none on disabled). */}
-              <span tabIndex={0} data-testid="topbar-new-wrapper">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled
-                  className="gap-1 border-border bg-bg-elev-1 text-fg-3"
-                  data-testid="topbar-new-button"
-                >
-                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                  New
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>Authoring tools enabled in M1d</TooltipContent>
-          </Tooltip>
+          {/* Primary Action — Start QA Check */}
+          <Button
+            size="sm"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("open-start-qa-check"));
+            }}
+            className="h-7 gap-1.5 rounded-md bg-accent text-[12px] font-semibold text-accent-fg hover:bg-accent/90"
+            data-testid="topbar-start-qa-check-button"
+          >
+            <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>Start QA Check</span>
+          </Button>
         </div>
 
         <CommandDialog

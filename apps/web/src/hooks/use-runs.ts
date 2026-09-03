@@ -175,6 +175,25 @@ export function useRunNetwork(
  * the optimistic queue badge). Invalidates the runs list + summary so the new
  * row pops in immediately on the Runs screen.
  */
+export function useActiveRun(): UseQueryResult<components["schemas"]["RunListItem"] | null> {
+  const projectId = useActiveProject((s) => s.projectId);
+  return useQuery({
+    queryKey: ["runs", "active", projectId] as const,
+    queryFn: async () => {
+      const params = projectId ? { projectId, limit: 1 } : { limit: 1 };
+      const res = await api.get<RunsPage>("/runs", { params });
+      return res.data.items[0] ?? null;
+    },
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      if (status === "QUEUED" || status === "RUNNING") {
+        return 2000;
+      }
+      return false;
+    },
+  });
+}
+
 export function useCreateRun(): UseMutationResult<RunPublicResponse, Error, CreateRunInput> {
   const qc = useQueryClient();
   return useMutation({
@@ -191,8 +210,8 @@ export function useCreateRun(): UseMutationResult<RunPublicResponse, Error, Crea
       return res.data;
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["runs", "summary"] });
-      void qc.invalidateQueries({ queryKey: ["runs", { limit: 50 }] });
+      void qc.invalidateQueries({ queryKey: ["runs"] });
+      void qc.invalidateQueries({ queryKey: ["final-gate"] });
     },
   });
 }

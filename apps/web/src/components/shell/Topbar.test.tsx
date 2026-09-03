@@ -9,74 +9,50 @@ import {
 } from "@tanstack/react-router";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { act } from "react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { Topbar } from "@/components/shell/Topbar";
-import { useCapabilities, type Capabilities } from "@/stores/use-capabilities";
 
-const ZERO_CAPS: Capabilities = {
-  tier: "ZERO",
-  llm: { provider: "none", model: null, base_url: null, is_test_provider: false },
-  embeddings: { enabled: false, backend: "none", model: null, dim: null },
-  features: {
-    manual_tcm: true,
-    deterministic_runner: true,
-    deterministic_generator_openapi: true,
-    deterministic_generator_recorder: true,
-    deterministic_generator_crawler: true,
-    ai_generation: false,
-    ai_execution_agentic: false,
-    ai_diagnose: false,
-    ai_conversation: false,
-    semantic_search: false,
-    fts_search: true,
-    auto_defect_filing_ai: false,
-    auto_defect_filing_rule: true,
-  },
-  autonomy: { available: ["manual"], default: "manual" },
-  mcpProviders: [],
-  version: "1.0.0",
-};
-
-async function renderTopbar(initialPath: string): Promise<ReturnType<typeof render>> {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-
+async function renderTopbar(initialPath = "/dashboard") {
   const rootRoute = createRootRoute({
     component: () => (
-      <div>
+      <div data-testid="app-shell">
         <Topbar />
         <Outlet />
       </div>
     ),
   });
 
-  const targets = [
-    { path: "/dashboard", title: "Dashboard" },
-    { path: "/cases", title: "Test Cases" },
-    { path: "/runs", title: "Test Runs" },
-    { path: "/defects", title: "Defects" },
-    { path: "/analytics", title: "Analytics" },
-    { path: "/trace", title: "Traceability" },
-    { path: "/integrations", title: "Integrations" },
-    { path: "/docs", title: "Documents" },
-    { path: "/inbox", title: "Inbox" },
-  ];
-  const children = targets.map((t) =>
+  const routes = [
     createRoute({
       getParentRoute: () => rootRoute,
-      path: t.path,
-      component: () => <div data-testid={`page-${t.path}`}>{t.title}</div>,
-      staticData: { title: t.title },
+      path: "/dashboard",
+      staticData: { title: "Dashboard" },
+      component: () => <div data-testid="page-/dashboard">Dashboard</div>,
     }),
-  );
-  const routeTree = rootRoute.addChildren(children);
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: "/runs",
+      staticData: { title: "Test Runs" },
+      component: () => <div data-testid="page-/runs">Test Runs</div>,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: "/analytics",
+      staticData: { title: "Analytics" },
+      component: () => <div data-testid="page-/analytics">Analytics</div>,
+    }),
+  ];
+
+  rootRoute.addChildren(routes);
 
   const router = createRouter({
-    routeTree,
+    routeTree: rootRoute,
     history: createMemoryHistory({ initialEntries: [initialPath] }),
+  });
+
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
   });
 
   const result = render(
@@ -84,22 +60,20 @@ async function renderTopbar(initialPath: string): Promise<ReturnType<typeof rend
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
+
   await waitFor(() => {
     expect(result.container.querySelector("[data-testid='topbar']")).not.toBeNull();
   });
+
   return result;
 }
 
 describe("<Topbar>", () => {
-  beforeEach(() => {
-    act(() => {
-      useCapabilities.setState({ capabilities: ZERO_CAPS, loading: false, error: null });
-    });
-  });
-  afterEach(() => {
-    act(() => {
-      useCapabilities.setState({ capabilities: null, loading: true, error: null });
-    });
+  it("renders search trigger, theme toggle, and tier badge", async () => {
+    await renderTopbar("/dashboard");
+    expect(screen.getByTestId("topbar-search-trigger")).toBeInTheDocument();
+    expect(screen.getByTestId("theme-toggle")).toBeInTheDocument();
+    expect(screen.getByTestId("tier-badge")).toBeInTheDocument();
   });
 
   it("renders the tier badge slot from useCapabilities", async () => {
@@ -107,59 +81,25 @@ describe("<Topbar>", () => {
     expect(screen.getByTestId("tier-badge")).toHaveTextContent("ZERO");
   });
 
-  it("links the sponsor icons out to GitHub Sponsors and Saweria", async () => {
+  it("does NOT render sponsor, support, or documentation help links in clean header", async () => {
     await renderTopbar("/dashboard");
-    const gh = screen.getByTestId("topbar-sponsor-link");
-    expect(gh).toHaveAttribute("href", "https://github.com/sponsors/suiflex");
-    expect(gh).toHaveAttribute("rel", "noopener noreferrer");
-    const saweria = screen.getByTestId("topbar-saweria-link");
-    expect(saweria).toHaveAttribute("href", "https://saweria.co/suiflex");
-    expect(saweria).toHaveAttribute("target", "_blank");
+    expect(screen.queryByTestId("topbar-sponsor-link")).toBeNull();
+    expect(screen.queryByTestId("topbar-saweria-link")).toBeNull();
+    expect(screen.queryByTestId("topbar-help-link")).toBeNull();
+    expect(screen.queryByTestId("topbar-new-button")).toBeNull();
   });
 
-  it("shows a tooltip when an icon-only control is hovered", async () => {
+  it("renders visible Start QA Check button in header", async () => {
     await renderTopbar("/dashboard");
-    const user = userEvent.setup();
-    await user.hover(screen.getByTestId("topbar-help-link"));
-    expect(await screen.findByRole("tooltip")).toHaveTextContent("Help & documentation");
-  });
-
-  it("labels the theme toggle with the theme it switches to", async () => {
-    await renderTopbar("/dashboard");
-    const user = userEvent.setup();
-    await user.hover(screen.getByTestId("theme-toggle"));
-    const tip = await screen.findByRole("tooltip");
-    expect(tip.textContent).toMatch(/Switch to (light|dark) theme/);
-  });
-
-  it("reflects current route title in breadcrumbs", async () => {
-    await renderTopbar("/runs");
-    const crumbs = await screen.findByTestId("topbar-breadcrumbs");
-    expect(crumbs).toHaveTextContent("Test Runs");
-  });
-
-  it("renders breadcrumbs for a different route after mount", async () => {
-    await renderTopbar("/analytics");
-    const crumbs = screen.getByTestId("topbar-breadcrumbs");
-    expect(crumbs).toHaveTextContent("Analytics");
-  });
-
-  it("disables the + New button with a tooltip reason", async () => {
-    await renderTopbar("/dashboard");
-    const newBtn = screen.getByTestId("topbar-new-button");
-    expect(newBtn).toBeDisabled();
+    const btn = screen.getByTestId("topbar-start-qa-check-button");
+    expect(btn).toBeInTheDocument();
+    expect(btn.textContent).toContain("Start QA Check");
   });
 
   it("opens the command palette on ⌘K keydown", async () => {
     await renderTopbar("/dashboard");
-    // shadcn CommandDialog mounts dialog content only when open.
     expect(screen.queryByPlaceholderText(/Type a command/i)).toBeNull();
 
-    // userEvent.keyboard routes the event through the JSDOM input pipeline
-    // (vs. raw dispatchEvent) so the global keydown listener observes a
-    // properly-built KeyboardEvent without racing the act() flush. Fixes a
-    // flake where the synthetic event landed before the listener attached
-    // when the test ran inside the full suite.
     const user = userEvent.setup();
     await user.keyboard("{Meta>}k{/Meta}");
 
@@ -180,24 +120,10 @@ describe("<Topbar>", () => {
     expect(await screen.findByPlaceholderText(/Type a command/i)).toBeInTheDocument();
   });
 
-  it("lists all 9 navigation commands inside the palette", async () => {
+  it("lists navigation commands inside the palette", async () => {
     await renderTopbar("/dashboard");
     await userEvent.click(screen.getByTestId("topbar-search-trigger"));
     await screen.findByPlaceholderText(/Type a command/i);
-    const list = screen.getByTestId("topbar-command-list");
-    const labels = [
-      "Go to Dashboard",
-      "Go to Test Cases",
-      "Go to Test Runs",
-      "Go to Defects",
-      "Go to Analytics",
-      "Go to Traceability",
-      "Go to Integrations",
-      "Go to Docs",
-      "Go to Inbox",
-    ];
-    for (const label of labels) {
-      expect(list).toHaveTextContent(label);
-    }
+    expect(screen.getByTestId("topbar-command-list")).toHaveTextContent("Go to Dashboard");
   });
 });

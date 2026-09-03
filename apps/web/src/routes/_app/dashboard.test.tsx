@@ -4,17 +4,14 @@ import {
   createMemoryHistory,
   createRouter,
 } from "@tanstack/react-router";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
-import { CLOUD_CAPS, ZERO_CAPS, resetCaps, setCaps } from "@/test/capabilities";
+import { ZERO_CAPS, resetCaps, setCaps } from "@/test/capabilities";
 
-// Recharts doesn't play well with jsdom (ResponsiveContainer needs layout).
-// Stub the modules used by the dashboard chart so the lazy import resolves
-// to noop components that still render their children.
 vi.mock("recharts", () => {
   const Pass = (props: { children?: React.ReactNode }) => <>{props.children}</>;
   return {
@@ -71,85 +68,34 @@ describe("Dashboard screen", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders the loading skeleton before data resolves", async () => {
-    // Delay every analytics call so we observe the Suspense fallback.
-    server.use(
-      http.get("*/api/v1/analytics/*", async () => {
-        await new Promise((r) => setTimeout(r, 50));
-        return HttpResponse.json({});
-      }),
-    );
+  it("renders welcome header, prominent Start QA Check button, 5-step process card, latest verdict, and recent checks", async () => {
     renderDashboard();
-    expect(await screen.findByTestId("dashboard-skeleton")).toBeInTheDocument();
+    expect(await screen.findByTestId("dashboard-header", undefined, { timeout: 3000 })).toBeInTheDocument();
+    expect(await screen.findByTestId("start-qa-check-button", undefined, { timeout: 3000 })).toBeInTheDocument();
+    expect(await screen.findByTestId("dashboard-qa-pipeline-card", undefined, { timeout: 3000 })).toBeInTheDocument();
+    expect(await screen.findByTestId("dashboard-latest-result", undefined, { timeout: 3000 })).toBeInTheDocument();
+    expect(await screen.findByTestId("dashboard-recent-runs", undefined, { timeout: 3000 })).toBeInTheDocument();
+
+    // Verify uncluttered layout: legacy heavy KPI grid & readiness cards are removed
+    expect(screen.queryByTestId("dashboard-kpis")).toBeNull();
+    expect(screen.queryByTestId("dashboard-pass-rate")).toBeNull();
+    expect(screen.queryByTestId("dashboard-readiness")).toBeNull();
   });
 
-  it("renders KPI cards, charts, recent runs, readiness when data resolves (ZERO)", async () => {
+  it("opens Start QA Check dialog when button is clicked", async () => {
     renderDashboard();
-    // KPI values from fixtures: passRate=0.92, runCount=84.
-    const kpis = await screen.findByTestId("dashboard-kpis", undefined, { timeout: 3000 });
-    expect(kpis.textContent).toContain("92%");
-    expect(screen.getByTestId("dashboard-pass-rate")).toBeInTheDocument();
-    expect(screen.getByTestId("dashboard-coverage")).toBeInTheDocument();
-    expect(screen.getByTestId("dashboard-recent-runs")).toBeInTheDocument();
-    expect(screen.getByTestId("dashboard-readiness")).toBeInTheDocument();
-  });
-
-  it("shows '—' placeholders in KPI cards when there are zero runs", async () => {
-    server.use(
-      http.get("*/api/v1/analytics/kpis", () =>
-        HttpResponse.json({ passRate: 0, runCount: 0, avgDurationMs: 0, defectsOpen: 0 }),
-      ),
-    );
-    renderDashboard();
-    const kpis = await screen.findByTestId("dashboard-kpis", undefined, { timeout: 3000 });
-    expect(kpis.textContent).toContain("—");
-  });
-
-  it("renders the ErrorBoundary fallback when an analytics call 500s", async () => {
-    server.use(
-      http.get("*/api/v1/analytics/kpis", () =>
-        HttpResponse.json({ code: "BOOM", message: "nope" }, { status: 500 }),
-      ),
-    );
-    renderDashboard();
-    expect(
-      await screen.findByText(/Couldn't load dashboard/i, undefined, { timeout: 3000 }),
-    ).toBeInTheDocument();
-  });
-
-  it("ZERO tier: agent activity card shows 'Agent disabled' empty state", async () => {
-    renderDashboard();
-    const card = await screen.findByTestId("dashboard-agent-activity", undefined, {
-      timeout: 3000,
+    const btn = await screen.findByTestId("start-qa-check-button");
+    act(() => {
+      btn.click();
     });
-    expect(card).toHaveTextContent(/Agent disabled/i);
+    expect(await screen.findByTestId("start-qa-check-dialog")).toBeInTheDocument();
   });
 
-  it("CLOUD tier: agent activity card renders feed items when present", async () => {
-    setCaps(CLOUD_CAPS);
+  it("shows empty state when no recent checks exist", async () => {
     server.use(
-      http.get("*/api/v1/audit-logs", () =>
-        HttpResponse.json({
-          items: [
-            {
-              id: "evt_1",
-              action: "agent.diagnose",
-              actor: "agent",
-              message: "Diagnosed RUN-1002 as REGRESSION",
-              at: "2026-05-29T10:00:00Z",
-            },
-          ],
-        }),
-      ),
+      http.get("*/api/v1/runs", () => HttpResponse.json({ items: [] })),
     );
     renderDashboard();
-    await waitFor(
-      () => {
-        expect(screen.getByTestId("dashboard-agent-activity")).toHaveTextContent(
-          /Diagnosed RUN-1002/,
-        );
-      },
-      { timeout: 3000 },
-    );
+    expect(await screen.findByTestId("dashboard-latest-result")).toHaveTextContent("No QA check has run yet");
   });
 });

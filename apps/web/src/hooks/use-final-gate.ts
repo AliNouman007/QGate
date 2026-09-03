@@ -102,8 +102,8 @@ export function useLatestFinalGate(): UseQueryResult<GateReport | null> {
     queryFn: async () => {
       try {
         return (await api.get<GateReport>("/final-gate/latest")).data;
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 404) return null;
+      } catch (error: any) {
+        if (error?.status === 404 || (error instanceof ApiError && error.status === 404)) return null;
         throw error;
       }
     },

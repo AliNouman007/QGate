@@ -116,3 +116,41 @@ async def test_signed_url_404_when_cross_workspace() -> None:
     svc = RunArtifactSignedUrlService(_ctx("ws_1"), repo, project_repo)
 
     assert await svc.signed_url("run_1", "art_1") is None
+
+
+@pytest.mark.asyncio
+async def test_create_run_empty_selection() -> None:
+    repo = AsyncMock()
+    session = AsyncMock()
+    repo.session = session
+
+    from unittest.mock import MagicMock
+    execute_mock = MagicMock()
+    execute_mock.all.return_value = []
+    session.execute = AsyncMock(return_value=execute_mock)
+    scalars_mock = MagicMock()
+    scalars_mock.all.return_value = []
+    session.scalars = AsyncMock(return_value=scalars_mock)
+    session.scalar = AsyncMock(return_value=None)
+    session.get = AsyncMock(return_value=None)
+
+    project_repo = AsyncMock()
+    project_repo.get_by_id.return_value = _project("ws_1")
+    svc = RunService(_ctx("ws_1"), repo, project_repo)
+
+    run = await svc.create_run(
+        project_id="proj_1",
+        name="QA Check",
+        selection=[],
+        branch=None,
+        commit_sha=None,
+        env="staging",
+        trigger=RunTrigger.MANUAL,
+        user_id="user_1",
+        mcp_routing_override=None,
+    )
+
+    assert run.project_id == "proj_1"
+    assert run.name == "QA Check"
+    assert run.status == RunStatus.QUEUED
+

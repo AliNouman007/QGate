@@ -444,7 +444,7 @@ async def create_run(
     body: CreateRunBody,
     ctx: TenantContext = Depends(require_workspace_membership),
     session: AsyncSession = Depends(get_async_session),
-    arq: ArqRedis = Depends(get_arq),
+    arq: ArqRedis | None = Depends(get_arq),
 ) -> RunPublic:
     """Validate selection + MCP routing, persist the run, enqueue the ARQ job.
 
@@ -487,7 +487,7 @@ async def create_suite_run(
     body: CreateSuiteRunBody,
     ctx: TenantContext = Depends(require_workspace_membership),
     session: AsyncSession = Depends(get_async_session),
-    arq: ArqRedis = Depends(get_arq),
+    arq: ArqRedis | None = Depends(get_arq),
 ) -> RunPublic:
     """Run every active case in a suite as ONE bundle run, then enqueue the ARQ job.
 

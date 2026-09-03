@@ -1,349 +1,459 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { formatDistanceToNow } from "date-fns";
 import {
-  AlertTriangle,
-  Bot,
-  Check,
-  ChevronDown,
-  Clock,
-  ListChecks,
+  CheckCircle2,
+  FolderKanban,
+  Loader2,
   Play,
+  ShieldAlert,
   ShieldCheck,
-  Sparkles,
-  X,
+  XCircle,
 } from "lucide-react";
-import { Suspense } from "react";
-import { useTranslation } from "react-i18next";
+import { Suspense, useEffect, useState } from "react";
 
 import { DashboardSkeleton } from "@/components/dashboard/skeleton";
-import { PassRateChart } from "@/components/dashboard/PassRateChart";
-import { EmptyState } from "@/components/shared/EmptyState";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
-import { Gauge } from "@/components/shared/Gauge";
-import { KpiCard } from "@/components/shared/KpiCard";
-import { ProgressBar } from "@/components/shared/ProgressBar";
-import { StatusBadge } from "@/components/shared/StatusBadge";
+import { StatusBadge, type StatusBadgeStatus } from "@/components/shared/StatusBadge";
 import { Button } from "@/components/ui/button";
-import {
-  useAgentActivity,
-  useDashboardCoverage,
-  useDashboardKpis,
-  useDashboardPassRate,
-  useDashboardReadiness,
-  useRecentRuns,
-} from "@/hooks/use-dashboard";
-import { useCurrentUser } from "@/hooks/use-current-user";
-import type { components } from "@/lib/api-types";
-import { formatDuration } from "@/lib/test-case-format";
-import { cn } from "@/lib/utils";
+import { useRecentRuns } from "@/hooks/use-dashboard";
+import { useLatestFinalGate } from "@/hooks/use-final-gate";
+import { useProject } from "@/hooks/use-projects";
+import { useActiveRun } from "@/hooks/use-runs";
+import { useActiveProject } from "@/stores/use-active-project";
 
-const DASHBOARD_PERIOD = "7d";
+export const Route = createFileRoute("/_app/dashboard")({
+  component: DashboardPage,
+  staticData: { title: "Overview" },
+});
 
-function KpiSection(): React.ReactElement {
-  const { data: kpis } = useDashboardKpis(DASHBOARD_PERIOD);
-  const hasData = kpis.runCount > 0;
-  const passPct = hasData ? `${Math.round(kpis.passRate * 100)}%` : "—";
-  const runs = hasData ? kpis.runCount.toString() : "—";
-  const avg = hasData ? formatDuration(kpis.avgDurationMs) : "—";
-  const defects = hasData ? kpis.defectsOpen.toString() : "—";
+type StepStageStatus = "Pending" | "Running" | "Completed" | "Failed" | "Skipped";
 
-  return (
-    <div className="grid grid-cols-4 gap-[14px]" data-testid="dashboard-kpis">
-      <KpiCard label="Tests run · 7d" value={runs} icon={Play} />
-      <KpiCard label="Pass rate" value={passPct} icon={Check} />
-      <KpiCard label="Avg duration" value={avg} icon={Clock} />
-      <KpiCard label="Open defects" value={defects} icon={AlertTriangle} />
-    </div>
-  );
+interface JourneyStepState {
+  num: number;
+  title: string;
+  desc: string;
+  status: StepStageStatus;
 }
 
-function PassRateCard(): React.ReactElement {
-  const { data } = useDashboardPassRate("11d");
-  return (
-    <section
-      className="rounded-md border border-border bg-bg-elev-1 p-[14px]"
-      data-testid="dashboard-pass-rate"
-    >
-      <header className="mb-3 flex items-center justify-between">
-        <div>
-          <h3 className="text-[13px] font-semibold text-fg-1">Pass rate</h3>
-          <p className="text-[11.5px] text-fg-4">Daily, last 11 days</p>
-        </div>
-        <span className="font-mono text-[11px] text-fg-4">{data.total} runs</span>
-      </header>
-      <PassRateChart data={data} />
-    </section>
-  );
+function mapRunStatus(status?: string | null): StatusBadgeStatus {
+  if (!status) return "neutral";
+  const s = status.toLowerCase();
+  if (s === "pass" || s === "passed") return "pass";
+  if (s === "fail" || s === "failed" || s === "error") return "fail";
+  if (s === "running" || s === "queued") return "running";
+  return "neutral";
 }
 
-function CoverageCard(): React.ReactElement {
-  const { data } = useDashboardCoverage();
-  const suites = data.bySuite ?? [];
-  return (
-    <section
-      className="rounded-md border border-border bg-bg-elev-1 p-[14px]"
-      data-testid="dashboard-coverage"
-    >
-      <header className="mb-3 flex items-center justify-between">
-        <h3 className="text-[13px] font-semibold text-fg-1">Coverage by suite</h3>
-        <span className="font-mono text-[11px] text-fg-4">{suites.length} suites</span>
-      </header>
-      {suites.length === 0 ? (
-        <EmptyState
-          icon={ListChecks}
-          title="No suites yet"
-          subtitle="Group cases into suites to see coverage rollups."
-        />
-      ) : (
-        <ul className="flex flex-col gap-3">
-          {suites.map((s) => (
-            <li key={s.suiteId} className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between text-[12px]">
-                <span className="text-fg-1">{s.name}</span>
-                <span className="font-mono text-fg-4">
-                  {s.covered}/{s.total}
-                </span>
-              </div>
-              <ProgressBar value={s.coverage * 100} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-type RunListItem = components["schemas"]["RunListItem"];
-
-function runStatusToBadge(
-  status: RunListItem["status"],
-): "pass" | "fail" | "warn" | "running" | "neutral" {
-  switch (status) {
-    case "PASS":
-      return "pass";
-    case "FAIL":
-    case "ERROR":
-      return "fail";
-    case "RUNNING":
-      return "running";
-    case "QUEUED":
-      return "neutral";
-    case "CANCELLED":
-      return "warn";
-    default:
-      return "neutral";
+function deriveJourneySteps(activeRun: any): { steps: JourneyStepState[]; completedCount: number; activeStage: string | null } {
+  if (!activeRun) {
+    return {
+      steps: [
+        { num: 1, title: "Analyze Project", desc: "Static code index & route graph", status: "Pending" },
+        { num: 2, title: "Assess Impact", desc: "Git diff risk scoring", status: "Pending" },
+        { num: 3, title: "Build Test Plan", desc: "Scenario & assertion synthesis", status: "Pending" },
+        { num: 4, title: "Execute Checks", desc: "Parallel Playwright execution", status: "Pending" },
+        { num: 5, title: "Get Verdict", desc: "PASS / BLOCK decision", status: "Pending" },
+      ],
+      completedCount: 0,
+      activeStage: null,
+    };
   }
+
+  const s = (activeRun.status ?? "QUEUED").toUpperCase();
+
+  if (s === "QUEUED") {
+    return {
+      steps: [
+        { num: 1, title: "Analyze Project", desc: "Static code index & route graph", status: "Running" },
+        { num: 2, title: "Assess Impact", desc: "Git diff risk scoring", status: "Pending" },
+        { num: 3, title: "Build Test Plan", desc: "Scenario & assertion synthesis", status: "Pending" },
+        { num: 4, title: "Execute Checks", desc: "Parallel Playwright execution", status: "Pending" },
+        { num: 5, title: "Get Verdict", desc: "PASS / BLOCK decision", status: "Pending" },
+      ],
+      completedCount: 0,
+      activeStage: "Analyzing Project",
+    };
+  }
+
+  if (s === "RUNNING") {
+    const total = activeRun.total_steps ?? activeRun.totalSteps ?? 0;
+    const passed = activeRun.passed_steps ?? activeRun.passedSteps ?? 0;
+    const failed = activeRun.failed_steps ?? activeRun.failedSteps ?? 0;
+    const countStr = total > 0 ? ` (${passed + failed}/${total})` : "";
+
+    return {
+      steps: [
+        { num: 1, title: "Analyze Project", desc: "Static code index & route graph", status: "Completed" },
+        { num: 2, title: "Assess Impact", desc: "Git diff risk scoring", status: "Completed" },
+        { num: 3, title: "Build Test Plan", desc: "Scenario & assertion synthesis", status: "Completed" },
+        { num: 4, title: "Execute Checks", desc: `Executing checks${countStr}`, status: "Running" },
+        { num: 5, title: "Get Verdict", desc: "PASS / BLOCK decision", status: "Pending" },
+      ],
+      completedCount: 3,
+      activeStage: "Executing Browser Checks",
+    };
+  }
+
+  if (s === "PASS" || s === "PASSED") {
+    return {
+      steps: [
+        { num: 1, title: "Analyze Project", desc: "Static code index & route graph", status: "Completed" },
+        { num: 2, title: "Assess Impact", desc: "Git diff risk scoring", status: "Completed" },
+        { num: 3, title: "Build Test Plan", desc: "Scenario & assertion synthesis", status: "Completed" },
+        { num: 4, title: "Execute Checks", desc: "Parallel Playwright execution", status: "Completed" },
+        { num: 5, title: "Get Verdict", desc: "Gate verdict issued", status: "Completed" },
+      ],
+      completedCount: 5,
+      activeStage: null,
+    };
+  }
+
+  if (s === "FAIL" || s === "FAILED" || s === "ERROR") {
+    return {
+      steps: [
+        { num: 1, title: "Analyze Project", desc: "Static code index & route graph", status: "Completed" },
+        { num: 2, title: "Assess Impact", desc: "Git diff risk scoring", status: "Completed" },
+        { num: 3, title: "Build Test Plan", desc: "Scenario & assertion synthesis", status: "Completed" },
+        { num: 4, title: "Execute Checks", desc: "Execution failed", status: "Failed" },
+        { num: 5, title: "Get Verdict", desc: "Gate verdict blocked", status: "Skipped" },
+      ],
+      completedCount: 3,
+      activeStage: null,
+    };
+  }
+
+  return {
+    steps: [
+      { num: 1, title: "Analyze Project", desc: "Static code index & route graph", status: "Pending" },
+      { num: 2, title: "Assess Impact", desc: "Git diff risk scoring", status: "Pending" },
+      { num: 3, title: "Build Test Plan", desc: "Scenario & assertion synthesis", status: "Pending" },
+      { num: 4, title: "Execute Checks", desc: "Parallel Playwright execution", status: "Pending" },
+      { num: 5, title: "Get Verdict", desc: "PASS / BLOCK decision", status: "Pending" },
+    ],
+    completedCount: 0,
+    activeStage: null,
+  };
 }
 
-function RecentRunsCard(): React.ReactElement {
-  const { data } = useRecentRuns(5);
-  const runs = data.items.slice(0, 5);
+function WelcomeHeader({ onStartQaCheck }: { onStartQaCheck: () => void }): React.ReactElement {
+  const projectId = useActiveProject((s) => s.projectId);
+  const { data: project } = useProject(projectId);
+  const { data: activeRun } = useActiveRun();
+
+  const isActive = activeRun?.status === "QUEUED" || activeRun?.status === "RUNNING";
+  const activeLabel = activeRun?.status === "QUEUED" ? "QA Check Queued" : "QA Check Running";
 
   return (
-    <section
-      className="rounded-md border border-border bg-bg-elev-1 p-[14px]"
-      data-testid="dashboard-recent-runs"
-    >
-      <header className="mb-3 flex items-center justify-between">
-        <h3 className="text-[13px] font-semibold text-fg-1">Recent runs</h3>
-        <span className="font-mono text-[11px] text-fg-4">{runs.length}</span>
-      </header>
-      {runs.length === 0 ? (
-        <EmptyState
-          icon={Play}
-          title="No runs yet"
-          subtitle="Trigger a manual or CI run to populate this list."
-        />
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {runs.map((r) => (
-            <li
-              key={r.id}
-              className="flex items-center justify-between rounded-md px-2 py-1.5 text-[12.5px] hover:bg-bg-elev-2"
-              data-testid="recent-run-row"
-            >
-              <div className="flex min-w-0 items-center gap-2.5">
-                <StatusBadge status={runStatusToBadge(r.status)} />
-                <span className="truncate text-fg-1">{r.name}</span>
-              </div>
-              <div className="flex items-center gap-3 font-mono text-[11px] text-fg-4">
-                <span>
-                  {r.branch ?? "—"}
-                  {r.commit_sha ? `@${r.commit_sha.slice(0, 7)}` : ""}
-                </span>
-                <span>{formatDuration(r.duration_ms)}</span>
-                <span>
-                  {r.started_at
-                    ? formatDistanceToNow(new Date(r.started_at), { addSuffix: true })
-                    : "—"}
-                </span>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-function AgentActivityCard(): React.ReactElement {
-  const { data } = useAgentActivity(5);
-  const items = data.items ?? [];
-  return (
-    <section
-      className="rounded-md border border-border bg-bg-elev-1 p-[14px]"
-      data-testid="dashboard-agent-activity"
-    >
-      <header className="mb-3 flex items-center justify-between">
-        <h3 className="text-[13px] font-semibold text-fg-1">Agent activity</h3>
-        <Sparkles className="h-3.5 w-3.5 text-violet" aria-hidden="true" />
-      </header>
-      {items.length === 0 ? (
-        <EmptyState
-          icon={Bot}
-          title="Agent disabled"
-          subtitle="Running in manual mode. AI features off."
-        />
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {items.map((entry) => (
-            <li key={entry.id} className="rounded-md px-2 py-1.5 text-[12.5px] hover:bg-bg-elev-2">
-              <div className="text-fg-1">{entry.message}</div>
-              <div className="font-mono text-[11px] text-fg-5">
-                {entry.actor} · {entry.action} ·{" "}
-                {formatDistanceToNow(new Date(entry.at), { addSuffix: true })}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-function ReadinessCard(): React.ReactElement {
-  const { data } = useDashboardReadiness();
-  const blockers = data.blockers ?? [];
-  return (
-    <section
-      className="rounded-md border border-border bg-bg-elev-1 p-[14px]"
-      data-testid="dashboard-readiness"
-    >
-      <header className="mb-3 flex items-center justify-between">
-        <div>
-          <h3 className="text-[13px] font-semibold text-fg-1">Release readiness</h3>
-          <p className="text-[11.5px] text-fg-4">
-            Deterministic checks (gating suite, defects, coverage)
-          </p>
+    <header className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-bg-elev-1 p-5" data-testid="dashboard-header">
+      <div>
+        <div className="flex items-center gap-2 text-[11.5px] font-medium text-fg-4">
+          <FolderKanban className="h-4 w-4 text-accent" aria-hidden="true" />
+          <span>Active Project: <strong className="font-mono text-fg-1">{project?.name ?? "D:\\QGate\\qgate-test-shop"}</strong></span>
         </div>
-        <ShieldCheck className="h-4 w-4 text-fg-4" aria-hidden="true" />
-      </header>
-      <div className="flex items-center gap-6">
-        <Gauge value={data.score} label="Score" />
-        <ul className="flex-1 space-y-2 text-[12.5px]">
-          {blockers.length === 0 ? (
-            <li className="flex items-center gap-2 text-fg-3">
-              <Check className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
-              No blockers detected.
-            </li>
-          ) : (
-            blockers.map((b, i) => (
-              <li
-                key={`${b.type}-${i.toString()}`}
-                className="flex items-start gap-2 text-fg-3"
-                data-testid="readiness-blocker"
-              >
-                <X className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red" aria-hidden="true" />
-                <div className="flex flex-col">
-                  <span className="text-fg-1">{b.message}</span>
-                  <span className="font-mono text-[10.5px] text-fg-5">{b.type}</span>
-                </div>
-              </li>
-            ))
-          )}
-        </ul>
+        <h1 className="mt-2 text-[22px] font-bold tracking-tight text-fg-1">
+          QGate Command Center
+        </h1>
+        <p className="mt-1 max-w-[640px] text-[13px] text-fg-3">
+          QGate validates software changes against baseline behavior with empirical evidence before deployment.
+        </p>
       </div>
-    </section>
-  );
-}
-
-function DashboardHeader(): React.ReactElement {
-  const { data: user } = useCurrentUser();
-  const { t } = useTranslation();
-  const firstName = user?.name?.split(" ")[0] ?? user?.email?.split("@")[0] ?? "there";
-  return (
-    <header className="flex items-start justify-between gap-4" data-testid="dashboard-header">
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-2.5">
-          <h2 className="text-[20px] font-semibold tracking-[-.01em] text-fg-1">
-            {t("dashboard.title")}
-          </h2>
-          <StatusBadge status="pass" label="All systems healthy" />
-        </div>
-        <p className="text-[12.5px] text-fg-3">{t("dashboard.greeting", { name: firstName })}</p>
-      </div>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          aria-label="Window"
-          className={cn(
-            "inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-bg-elev-1 px-2.5",
-            "text-[12px] text-fg-3 hover:bg-bg-elev-2",
-          )}
+      <div>
+        <Button
+          size="lg"
+          disabled={isActive}
+          onClick={onStartQaCheck}
+          className="h-10 gap-2 bg-accent text-[13.5px] font-semibold text-accent-fg hover:bg-accent/90 shadow-sm disabled:opacity-75"
+          data-testid="start-qa-check-button"
         >
-          Last 7 days
-          <ChevronDown className="h-3 w-3" aria-hidden="true" />
-        </button>
-        <Button type="button" size="sm" disabled aria-label="Run gating suite">
-          Run gating suite
+          {isActive ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+          )}
+          <span>{isActive ? activeLabel : "Start QA Check"}</span>
         </Button>
       </div>
     </header>
   );
 }
 
-function DashboardError({ reset }: { reset: () => void }): React.ReactElement {
-  return (
-    <EmptyState
-      icon={AlertTriangle}
-      title="Couldn't load dashboard"
-      subtitle="The backend may be down. Retry, or check the API logs."
-      action={{ label: "Retry", onClick: reset }}
-    />
-  );
-}
+function ActiveRunProgressCard({ run, journey }: { run: any; journey: any }): React.ReactElement {
+  const [elapsedSec, setElapsedSec] = useState(0);
 
-function DashboardBody(): React.ReactElement {
+  useEffect(() => {
+    const rawTime = run.created_at || run.createdAt;
+    const startTime = rawTime ? new Date(rawTime).getTime() : Date.now();
+    const timer = setInterval(() => {
+      setElapsedSec(Math.max(0, Math.floor((Date.now() - startTime) / 1000)));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [run.created_at, run.createdAt]);
+
+  const mins = Math.floor(elapsedSec / 60);
+  const secs = elapsedSec % 60;
+  const elapsedStr = `${mins}m ${secs.toString().padStart(2, "0")}s`;
+
+  const percent = Math.round((journey.completedCount / 5) * 100);
+  const isQueuedStalled = run.status === "QUEUED" && elapsedSec > 30;
+  const pubId = (run as any)?.public_id || (run as any)?.publicId || run.id;
+
   return (
-    <Suspense fallback={<DashboardSkeleton />}>
-      <div className="flex flex-col gap-[18px]">
-        <KpiSection />
-        <div className="grid grid-cols-2 gap-[18px]">
-          <PassRateCard />
-          <CoverageCard />
+    <section className="rounded-lg border border-accent/40 bg-bg-elev-1 p-5 shadow-sm" data-testid="active-run-progress-card">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle pb-3">
+        <div className="flex items-center gap-2.5">
+          <Loader2 className="h-5 w-5 animate-spin text-accent" aria-hidden="true" />
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-[15px] font-bold text-fg-1">QA Check in Progress</h2>
+              <span className="font-mono text-[12px] font-semibold text-accent">{pubId}</span>
+            </div>
+            <p className="text-[12px] text-fg-3">{run.name ?? "Automated Validation Run"}</p>
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-[18px]">
-          <RecentRunsCard />
-          <AgentActivityCard />
+        <div className="flex items-center gap-3 text-[12px]">
+          <span className="font-mono text-fg-3">Elapsed: <strong className="text-fg-1">{elapsedStr}</strong></span>
+          <StatusBadge status="running" label={run.status === "QUEUED" ? "QUEUED" : "RUNNING"} />
         </div>
-        <ReadinessCard />
       </div>
-    </Suspense>
-  );
-}
 
-function Dashboard(): React.ReactElement {
-  return (
-    <section className="flex flex-col gap-[18px]" data-testid="dashboard-screen">
-      <DashboardHeader />
-      <ErrorBoundary fallback={({ reset }) => <DashboardError reset={reset} />}>
-        <DashboardBody />
-      </ErrorBoundary>
+      <div className="mt-4 space-y-2">
+        <div className="flex items-center justify-between text-[12.5px]">
+          <span className="font-medium text-fg-2">Stage: <strong className="text-fg-1">{journey.activeStage ?? "Processing"}</strong></span>
+          <span className="font-mono text-[12px] text-fg-3">{journey.completedCount} of 5 steps complete ({percent}%)</span>
+        </div>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-bg-elev-2">
+          <div
+            className="h-full bg-accent transition-all duration-500 ease-out"
+            style={{ width: `${percent}%` }}
+          />
+        </div>
+      </div>
+
+      {isQueuedStalled ? (
+        <div className="mt-3 rounded-md border border-amber/30 bg-amber/10 p-2.5 text-[12px] text-amber flex items-center gap-2">
+          <ShieldAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>Waiting for local QA worker supervisor to process queued run...</span>
+        </div>
+      ) : null}
     </section>
   );
 }
 
-export const Route = createFileRoute("/_app/dashboard")({
-  component: Dashboard,
-  staticData: { title: "Dashboard" },
-});
+function QaPipelineProcessCard({ steps }: { steps: JourneyStepState[] }): React.ReactElement {
+  return (
+    <section className="rounded-lg border border-border bg-bg-elev-1 p-5" data-testid="dashboard-qa-pipeline-card">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-[15px] font-semibold text-fg-1">5-Step QGate QA Journey</h2>
+          <p className="text-[12px] text-fg-4">Automated code change validation workflow from commit to verdict</p>
+        </div>
+        <ShieldCheck className="h-5 w-5 text-accent opacity-80" aria-hidden="true" />
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {steps.map((step) => {
+          let badgeClass = "text-fg-4 bg-bg-elev-3";
+          let icon = null;
+
+          if (step.status === "Completed") {
+            badgeClass = "text-green bg-green/10 border-green/30";
+            icon = <CheckCircle2 className="h-3.5 w-3.5 text-green shrink-0" aria-hidden="true" />;
+          } else if (step.status === "Running") {
+            badgeClass = "text-accent bg-accent/10 border-accent/30";
+            icon = <Loader2 className="h-3.5 w-3.5 animate-spin text-accent shrink-0" aria-hidden="true" />;
+          } else if (step.status === "Failed") {
+            badgeClass = "text-red bg-red/10 border-red/30";
+            icon = <XCircle className="h-3.5 w-3.5 text-red shrink-0" aria-hidden="true" />;
+          }
+
+          return (
+            <div key={step.num} className="flex flex-col justify-between rounded-md border border-border-subtle bg-bg-elev-2 p-3">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-fg-4">
+                    Step {step.num}
+                  </span>
+                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border ${badgeClass}`}>
+                    {icon}
+                    <span>{step.status}</span>
+                  </span>
+                </div>
+                <div className="mt-2 text-[13px] font-semibold text-fg-1">{step.title}</div>
+                <div className="mt-1 text-[11px] leading-snug text-fg-4">{step.desc}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function LatestResultCard(): React.ReactElement {
+  const { data: page } = useRecentRuns(1);
+  const { data: latestFinalGate } = useLatestFinalGate();
+  const runs = page?.items ?? [];
+  const latestRun = runs.length > 0 ? runs[0] : null;
+
+  const isActive = latestRun?.status === "QUEUED" || latestRun?.status === "RUNNING";
+  const pubId = (latestRun as any)?.public_id || (latestRun as any)?.publicId || latestRun?.id;
+
+  return (
+    <section className="flex flex-col rounded-lg border border-border bg-bg-elev-1 p-5" data-testid="dashboard-latest-result">
+      <h2 className="text-[15px] font-semibold text-fg-1">
+        {isActive ? "Current QA Check" : "Latest QA Verdict"}
+      </h2>
+      {latestRun ? (
+        <div className="mt-4 flex flex-1 flex-col justify-between rounded-md border border-border-subtle bg-bg-elev-2 p-4">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <div className="font-mono text-[12px] font-bold text-fg-1">RUN #{pubId}</div>
+              <div className="mt-0.5 text-[12px] text-fg-3">{latestRun.name ?? "Automated Validation Run"}</div>
+            </div>
+            <StatusBadge status={mapRunStatus(latestRun.status)} label={latestRun.status} />
+          </div>
+
+          {latestFinalGate && !isActive ? (
+            <div className="mt-3 rounded-md border border-border-subtle bg-bg-elev-1 p-3 text-[12px]">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-fg-1">Final Gate Verdict:</span>
+                <span className={`font-mono font-bold ${latestFinalGate.verdict === "PASS" ? "text-green" : "text-red"}`}>
+                  {latestFinalGate.verdict}
+                </span>
+              </div>
+              <p className="mt-1 text-[11.5px] text-fg-3">{latestFinalGate.headline}</p>
+            </div>
+          ) : null}
+
+          <div className="mt-4 flex items-center justify-between border-t border-border-subtle pt-3 text-[11px] text-fg-4">
+            <span>
+              {latestRun.completed_at
+                ? formatDistanceToNow(new Date(latestRun.completed_at), { addSuffix: true })
+                : isActive
+                ? "In progress..."
+                : "Completed"}
+            </span>
+            <span className="font-mono text-fg-2">{latestRun.status}</span>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 flex flex-1 flex-col items-center justify-center rounded-md border border-dashed border-border-subtle bg-bg-elev-2/50 p-6 text-center">
+          <ShieldAlert className="h-8 w-8 text-fg-4 opacity-50" aria-hidden="true" />
+          <div className="mt-2 text-[13px] font-medium text-fg-2">No QA check has run yet</div>
+          <p className="mt-1 max-w-[280px] text-[11.5px] text-fg-4">
+            Click "Start QA Check" above to trigger automated validation for your current project branch.
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function RecentChecksCard(): React.ReactElement {
+  const navigate = useNavigate();
+  const { data: page } = useRecentRuns(5);
+  const runs = page?.items ?? [];
+
+  return (
+    <section className="flex flex-col rounded-lg border border-border bg-bg-elev-1 p-5" data-testid="dashboard-recent-runs">
+      <div className="flex items-center justify-between">
+        <h2 className="text-[15px] font-semibold text-fg-1">Recent QA Checks</h2>
+        <span className="text-[11px] text-fg-4 font-mono">{runs.length} checks</span>
+      </div>
+
+      {runs.length > 0 ? (
+        <ul className="mt-4 space-y-2">
+          {runs.map((run) => {
+            const pubId = (run as any)?.public_id || (run as any)?.publicId || run.id;
+            const isRunActive = run.status === "QUEUED" || run.status === "RUNNING";
+
+            return (
+              <li
+                key={run.id}
+                onClick={() => {
+                  void navigate({ to: "/runs" });
+                }}
+                className="flex cursor-pointer items-center justify-between rounded-md border border-border-subtle bg-bg-elev-2 p-3 text-[12px] transition-colors hover:bg-bg-elev-3"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <StatusBadge status={mapRunStatus(run.status)} label={run.status} />
+                  <div className="truncate">
+                    <span className="font-mono font-bold text-fg-1">{pubId}</span>
+                    <span className="ml-2 text-fg-3">{run.name ?? "QA Check"}</span>
+                  </div>
+                </div>
+                <span className="shrink-0 font-mono text-[11px] text-fg-4">
+                  {run.completed_at
+                    ? formatDistanceToNow(new Date(run.completed_at), { addSuffix: true })
+                    : isRunActive
+                    ? "In progress..."
+                    : "Created"}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <div className="mt-4 flex flex-1 flex-col items-center justify-center rounded-md border border-dashed border-border-subtle bg-bg-elev-2/50 p-6 text-center">
+          <Play className="h-8 w-8 text-fg-4 opacity-50" aria-hidden="true" />
+          <div className="mt-2 text-[13px] font-medium text-fg-2">No recent QA checks</div>
+          <p className="mt-1 text-[11.5px] text-fg-4">
+            Trigger a QA Check to evaluate changes and populate recent verdicts.
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DashboardBody(): React.ReactElement {
+  const { data: activeRun } = useActiveRun();
+  const journey = deriveJourneySteps(activeRun);
+  const isRunActive = activeRun?.status === "QUEUED" || activeRun?.status === "RUNNING";
+
+  const handleTriggerQaCheck = () => {
+    if (!isRunActive) {
+      window.dispatchEvent(new CustomEvent("open-start-qa-check"));
+    }
+  };
+
+  return (
+    <main className="flex flex-col gap-5 p-6" data-testid="dashboard-screen">
+      <WelcomeHeader onStartQaCheck={handleTriggerQaCheck} />
+
+      {isRunActive && activeRun ? (
+        <ActiveRunProgressCard run={activeRun} journey={journey} />
+      ) : null}
+
+      <QaPipelineProcessCard steps={journey.steps} />
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <LatestResultCard />
+        <RecentChecksCard />
+      </div>
+    </main>
+  );
+}
+
+function DashboardError({ reset }: { reset: () => void }): React.ReactElement {
+  return (
+    <div className="rounded-lg border border-red/30 bg-red/5 p-6 text-center text-fg-1">
+      <h3 className="text-[15px] font-semibold text-red">Couldn't load dashboard</h3>
+      <p className="mt-1 text-[12px] text-fg-4">The backend may be unavailable. Retry or check API status.</p>
+
+      <Button onClick={reset} size="sm" variant="outline" className="mt-3">
+        Retry
+      </Button>
+    </div>
+  );
+}
+
+function DashboardPage(): React.ReactElement {
+  return (
+    <ErrorBoundary fallback={({ reset }) => <DashboardError reset={reset} />}>
+      <Suspense fallback={<DashboardSkeleton />}>
+        <DashboardBody />
+      </Suspense>
+    </ErrorBoundary>
+  );
+}

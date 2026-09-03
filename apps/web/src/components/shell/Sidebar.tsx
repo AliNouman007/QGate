@@ -5,171 +5,124 @@ import {
   BookOpen,
   Brain,
   Bug,
-  Check,
   ChevronDown,
+  ChevronRight,
   FileCode2,
-  FlaskConical,
+  FolderKanban,
   GitPullRequest,
   Inbox,
   LayoutDashboard,
-  ListChecks,
-  Map,
-  Network,
   Play,
   Plug,
-  Plus,
-  LogOut,
   Settings,
-  Shield,
   ShieldCheck,
+  UserCheck,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
 
-import { api } from "@/lib/api-client";
-
 import { ProjectPicker } from "@/components/shell/ProjectPicker";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
-
-interface NavItem {
-  label: string;
-  icon: LucideIcon;
-  to: string;
-  badgeCount?: number;
-  liveDot?: boolean;
-  disabled?: boolean;
-}
-
-interface NavGroup {
-  eyebrow: string;
-  items: NavItem[];
-}
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export interface SidebarProps {
-  /** Display name of the active workspace. */
   workspaceName?: string;
-  /** Display name of the signed-in user. */
-  userName?: string;
-  /** Role label shown next to the user name in the footer. */
-  userRole?: string;
-  /** Number of unread notifications. >0 renders a red dot over the bell. */
-  unreadCount?: number;
-  /** Inbox unread item count. >0 renders a badge next to "Inbox". */
   inboxCount?: number;
-  /** Active test runs count. >0 renders a pulsing live dot next to "Test Runs". */
+  unreadCount?: number;
   activeRunsCount?: number;
-  /** Read-only list of workspaces for the picker popover. */
-  workspaces?: ReadonlyArray<{ id: string; name: string }>;
-  /** Id of the active workspace (for the checkmark in the picker). */
-  activeWorkspaceId?: string;
-  /** Switch the active workspace. No-op affordance when omitted. */
-  onSelectWorkspace?: (id: string) => void;
-  /** Open the create-workspace flow (bootstrap blocker #1). */
-  onCreateWorkspace?: () => void;
-  /** Show the super-admin "Admin" nav item (M1e). */
   isSuperuser?: boolean;
-  /** Below `md:` the sidebar is an overlay drawer — this opens it. */
-  mobileOpen?: boolean;
-  /** Close the mobile drawer (backdrop click / nav click). */
   onMobileClose?: () => void;
+  mobileOpen?: boolean;
+  onSelectWorkspace?: (id: string) => void;
+  onCreateWorkspace?: () => void;
+  activeWorkspaceId?: string;
+  workspaces?: Array<{ id: string; name: string }>;
+  userRole?: string;
+  userName?: string;
 }
 
-/**
- * Persistent left rail (224px). Brand + workspace + nav + user footer.
- *
- * Capability-agnostic — every nav target is deterministic-first, so the
- * sidebar renders identically in ZERO / LOCAL / CLOUD tiers. AI surfaces
- * are gated inside the AiPanel + per-screen feature flags, not here.
- */
+interface NavItem {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  testId: string;
+  liveDot?: boolean;
+  badgeCount?: number;
+}
+
 export function Sidebar({
-  workspaceName = "Acme QA",
-  userName = "Maya",
-  userRole = "Owner",
-  unreadCount = 0,
   inboxCount = 0,
+  unreadCount = 0,
   activeRunsCount = 0,
-  workspaces = [{ id: "default", name: "Acme QA" }],
-  activeWorkspaceId,
-  onSelectWorkspace,
-  onCreateWorkspace,
   isSuperuser = false,
-  mobileOpen = false,
   onMobileClose,
-}: SidebarProps): React.ReactElement {
-  const [pickerOpen, setPickerOpen] = useState(false);
+}: SidebarProps = {}): React.ReactElement {
+  const [moreToolsOpen, setMoreToolsOpen] = useState(false);
 
-  const configItems: NavItem[] = [
-    { label: "Integrations", icon: Plug, to: "/integrations" },
-    { label: "Docs", icon: BookOpen, to: "/docs" },
-    { label: "Settings", icon: Settings, to: "/settings" },
+  const primaryNav: NavItem[] = [
+    {
+      to: "/dashboard",
+      label: "Overview",
+      icon: LayoutDashboard,
+      testId: "nav-overview",
+    },
+    {
+      to: "/gate",
+      label: "QA Checks",
+      icon: ShieldCheck,
+      testId: "nav-qa-checks",
+      liveDot: activeRunsCount > 0,
+    },
+    {
+      to: "/project-map",
+      label: "Project Knowledge",
+      icon: FolderKanban,
+      testId: "nav-project-knowledge",
+    },
+    {
+      to: "/impact",
+      label: "Impact & Test Plan",
+      icon: GitPullRequest,
+      testId: "nav-impact-test-plan",
+    },
+    {
+      to: "/qa-memory",
+      label: "QA Memory",
+      icon: Brain,
+      testId: "nav-qa-memory",
+    },
+    {
+      to: "/settings",
+      label: "Settings",
+      icon: Settings,
+      testId: "nav-settings",
+    },
   ];
-  if (isSuperuser) {
-    configItems.push({ label: "Admin", icon: Shield, to: "/admin" });
-  }
 
-  const groups: NavGroup[] = [
-    {
-      eyebrow: "Workspace",
-      items: [
-        { label: "Dashboard", icon: LayoutDashboard, to: "/dashboard" },
-        { label: "Inbox", icon: Inbox, to: "/inbox", badgeCount: inboxCount },
-      ],
-    },
-    {
-      eyebrow: "Testing",
-      items: [
-        { label: "Test Cases", icon: FileCode2, to: "/cases" },
-        {
-          label: "Test Runs",
-          icon: Play,
-          to: "/runs",
-          liveDot: activeRunsCount > 0,
-        },
-        { label: "Defects", icon: Bug, to: "/defects" },
-      ],
-    },
-    {
-      eyebrow: "Insights",
-      items: [
-        { label: "Project Map", icon: Map, to: "/project-map" },
-        { label: "Impact Analysis", icon: GitPullRequest, to: "/impact" },
-        { label: "Scenarios", icon: ListChecks, to: "/scenarios" },
-        { label: "Browser Execution", icon: Play, to: "/execution" },
-        { label: "QA Memory", icon: Brain, to: "/qa-memory" },
-        { label: "Final Gate", icon: ShieldCheck, to: "/gate" },
-        { label: "Analytics", icon: BarChart3, to: "/analytics" },
-        { label: "Traceability", icon: Network, to: "/trace" },
-        { label: "Eval", icon: FlaskConical, to: "/eval" },
-      ],
-    },
-    {
-      eyebrow: "Config",
-      items: configItems,
-    },
+  const secondaryTools: NavItem[] = [
+    { to: "/cases", label: "Test Cases & Suites", icon: FileCode2, testId: "nav-test-cases" },
+    { to: "/defects", label: "Defects", icon: Bug, testId: "nav-defects" },
+    { to: "/runs", label: "Test Runs", icon: Play, testId: "nav-test-runs" },
+    { to: "/execution", label: "Browser Execution", icon: Play, testId: "nav-browser-execution" },
+    { to: "/analytics", label: "Analytics", icon: BarChart3, testId: "nav-analytics" },
+    { to: "/inbox", label: "Inbox", icon: Inbox, testId: "nav-inbox", badgeCount: inboxCount },
+    { to: "/integrations", label: "Integrations", icon: Plug, testId: "nav-integrations" },
+    { to: "/docs", label: "Docs", icon: BookOpen, testId: "nav-docs" },
+    ...(isSuperuser ? [{ to: "/admin", label: "Admin", icon: UserCheck, testId: "nav-admin" }] : []),
   ];
 
   return (
-    <>
-      {mobileOpen ? (
-        <div
-          className="fixed inset-0 z-40 bg-black/60 md:hidden"
-          onClick={onMobileClose}
-          aria-hidden="true"
-          data-testid="sidebar-backdrop"
-        />
-      ) : null}
+    <TooltipProvider delayDuration={150}>
       <aside
-        className={cn(
-          "flex h-full w-[224px] shrink-0 flex-col border-r border-border-subtle bg-bg-elev-1",
-          // < md: overlay drawer, slides in from the left.
-          "max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-50 max-md:transition-transform max-md:duration-200",
-          mobileOpen ? "max-md:translate-x-0" : "max-md:-translate-x-full",
-        )}
+        className="flex h-full w-[224px] shrink-0 flex-col border-r border-border-subtle bg-bg-elev-1 max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-50 max-md:transition-transform max-md:duration-200 max-md:-translate-x-full"
         data-testid="sidebar"
       >
-        {/* Section 1 — Brand */}
+        {/* Section 1 — Header Wordmark */}
         <div className="flex h-[47px] shrink-0 items-center justify-between border-b border-border-subtle px-4">
           <span className="flex select-none items-center gap-2">
             <img src="/logo.svg" alt="" aria-hidden="true" className="h-6 w-6 rounded-md" />
@@ -177,224 +130,126 @@ export function Sidebar({
               sui<span className="text-accent">test</span>
             </span>
           </span>
-          <button
-            type="button"
-            aria-label="Notifications"
-            className="relative flex h-7 w-7 items-center justify-center rounded-md text-fg-3 hover:bg-bg-elev-2 hover:text-fg-1"
-            data-testid="sidebar-bell"
-          >
-            <Bell className="h-4 w-4" aria-hidden="true" />
-            {unreadCount > 0 ? (
-              <span
-                data-testid="sidebar-bell-unread"
-                className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-red"
-                aria-label={`${unreadCount} unread`}
-              />
-            ) : null}
-          </button>
-        </div>
 
-        {/* Section 2 — Workspace picker */}
-        <div className="shrink-0 border-b border-border-subtle px-3 py-3">
-          <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
-            <PopoverTrigger asChild>
+          <Tooltip>
+            <TooltipTrigger asChild>
               <button
                 type="button"
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-bg-elev-2"
-                data-testid="workspace-picker"
+                aria-label="Notifications"
+                className="relative flex h-7 w-7 items-center justify-center rounded-md text-fg-3 hover:bg-bg-elev-2 hover:text-fg-1"
+                data-testid="sidebar-bell"
               >
-                <span
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-bg-elev-3 font-mono text-[11px] font-semibold text-fg-1"
-                  aria-hidden="true"
-                >
-                  {workspaceName.slice(0, 2).toUpperCase()}
-                </span>
-                <span className="flex-1 truncate text-[12.5px] font-medium text-fg-1">
-                  {workspaceName}
-                </span>
-                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-fg-4" aria-hidden="true" />
+                <Bell className="h-4 w-4" aria-hidden="true" />
+                {unreadCount > 0 ? (
+                  <span
+                    className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red"
+                    data-testid="sidebar-bell-unread"
+                  />
+                ) : null}
               </button>
-            </PopoverTrigger>
-            <PopoverContent
-              align="start"
-              className="w-[220px] border-border bg-bg-elev-1 p-1 text-fg-1"
-            >
-              <ul className="space-y-0.5" data-testid="workspace-picker-list">
-                {workspaces.map((ws) => {
-                  const isActive =
-                    activeWorkspaceId !== undefined
-                      ? ws.id === activeWorkspaceId
-                      : ws.name === workspaceName;
-                  return (
-                    <li key={ws.id}>
-                      <button
-                        type="button"
-                        data-testid="workspace-picker-item"
-                        data-active={isActive ? "true" : "false"}
-                        onClick={() => {
-                          setPickerOpen(false);
-                          if (!isActive) onSelectWorkspace?.(ws.id);
-                        }}
-                        className={cn(
-                          "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[12.5px] hover:bg-bg-elev-2",
-                          isActive ? "bg-bg-elev-2 text-fg-1" : "text-fg-3",
-                        )}
-                      >
-                        <span className="flex-1 truncate">{ws.name}</span>
-                        {isActive ? (
-                          <Check className="h-3.5 w-3.5 shrink-0 text-accent" aria-hidden="true" />
-                        ) : null}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-              <div className="mt-1 border-t border-border-subtle pt-1">
-                <button
-                  type="button"
-                  data-testid="workspace-picker-create"
-                  onClick={() => {
-                    setPickerOpen(false);
-                    onCreateWorkspace?.();
-                  }}
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[12.5px] text-fg-3 hover:bg-bg-elev-2 hover:text-fg-1"
-                >
-                  <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  New workspace
-                </button>
-              </div>
-            </PopoverContent>
-          </Popover>
+            </TooltipTrigger>
+            <TooltipContent>Notifications</TooltipContent>
+          </Tooltip>
         </div>
 
-        {/* Section 2b — Project picker (Test Cases / Runs are project-scoped) */}
-        <ProjectPicker />
+        {/* Section 2 — Active Project Picker */}
+        <div className="shrink-0 border-b border-border-subtle px-3 py-2">
+          <ProjectPicker />
+        </div>
 
-        {/* Section 3 — Nav. min-h-0 is load-bearing: a flex child keeps
-            min-height:auto, so flex-1 alone let the nav grow to its content
-            height and push the rows below it out of the rail instead of
-            scrolling. Visible as soon as the page is zoomed in. */}
+        {/* Section 3 — Primary Navigation */}
         <ScrollArea className="min-h-0 flex-1">
           <nav className="px-2 py-3" aria-label="Primary">
-            {groups.map((group) => (
-              <div key={group.eyebrow} className="mb-4 last:mb-0">
-                <div className="mb-1.5 px-2 text-[11px] font-medium uppercase tracking-[0.07em] text-fg-5">
-                  {group.eyebrow}
-                </div>
-                <ul className="space-y-0.5">
-                  {group.items.map((item) => (
-                    <li key={item.label}>
-                      <SidebarItem item={item} onNavigate={onMobileClose} />
-                    </li>
+            <div className="space-y-0.5">
+              {primaryNav.map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  onClick={onMobileClose}
+                  data-testid={item.testId}
+                  activeProps={{
+                    className: "bg-bg-elev-2 font-semibold text-fg-1",
+                  }}
+                  inactiveProps={{
+                    className: "text-fg-3 hover:bg-bg-elev-2 hover:text-fg-1",
+                  }}
+                  className="flex h-8 items-center gap-2 rounded-md px-2.5 text-[12.5px] transition-colors"
+                >
+                  <item.icon className="h-4 w-4 shrink-0 text-fg-3" aria-hidden="true" />
+                  <span className="flex-1 truncate">{item.label}</span>
+                  {item.liveDot ? (
+                    <span
+                      className="h-2 w-2 rounded-full bg-accent animate-pulse"
+                      data-testid={`${item.testId}-live-dot`}
+                    />
+                  ) : null}
+                </Link>
+              ))}
+            </div>
+
+            {/* Collapsed Secondary Drawer */}
+            <div className="mt-4 border-t border-border-subtle pt-3">
+              <button
+                type="button"
+                onClick={() => setMoreToolsOpen((prev) => !prev)}
+                className="flex w-full items-center justify-between px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider text-fg-4 hover:text-fg-2"
+                data-testid="nav-more-tools-toggle"
+              >
+                <span>More tools</span>
+                {moreToolsOpen ? (
+                  <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                )}
+              </button>
+
+              {moreToolsOpen ? (
+                <div className="mt-1 space-y-0.5 border-l border-border-subtle ml-2 pl-2" data-testid="more-tools-list">
+                  {secondaryTools.map((item) => (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      onClick={onMobileClose}
+                      data-testid={item.testId}
+                      activeProps={{
+                        className: "bg-bg-elev-2 font-medium text-fg-1",
+                      }}
+                      inactiveProps={{
+                        className: "text-fg-4 hover:bg-bg-elev-2 hover:text-fg-2",
+                      }}
+                      className="flex h-7 items-center gap-2 rounded-md px-2 text-[11.5px] transition-colors"
+                    >
+                      <item.icon className="h-3.5 w-3.5 shrink-0 text-fg-4" aria-hidden="true" />
+                      <span className="truncate">{item.label}</span>
+                      {item.badgeCount && item.badgeCount > 0 ? (
+                        <span
+                          className="ml-auto rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold text-accent"
+                          data-testid="nav-inbox-badge"
+                        >
+                          {item.badgeCount}
+                        </span>
+                      ) : null}
+                    </Link>
                   ))}
-                </ul>
-              </div>
-            ))}
+                </div>
+              ) : null}
+            </div>
           </nav>
         </ScrollArea>
 
-        {/* Section 4 — User footer */}
-        <div className="flex shrink-0 items-center gap-2 border-t border-border-subtle px-3 py-3">
-          <span
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-bg-elev-3 font-mono text-[11px] font-semibold text-fg-1"
-            aria-hidden="true"
-          >
-            {userName.slice(0, 2).toUpperCase()}
-          </span>
-          <div className="flex-1 overflow-hidden">
-            <div className="truncate text-[12.5px] font-medium text-fg-1">{userName}</div>
-            <div
-              className="mt-0.5 inline-flex h-[15px] items-center rounded-sm bg-bg-elev-3 px-1.5 text-[10px] font-medium uppercase tracking-wide text-fg-3"
-              data-testid="user-role-pill"
-            >
-              {userRole}
+        {/* Section 4 — Footer User Profile */}
+        <div className="shrink-0 border-t border-border-subtle p-3">
+          <div className="flex items-center gap-2 rounded-md bg-bg-elev-2 p-2">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/20 text-[11px] font-bold text-accent">
+              E2E
+            </div>
+            <div className="flex flex-col overflow-hidden">
+              <span className="truncate text-[12px] font-medium text-fg-1">E2E Zero</span>
+              <span className="truncate text-[10px] uppercase text-fg-5">OWNER</span>
             </div>
           </div>
-          <Link
-            to="/settings"
-            aria-label="Settings"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-fg-3 hover:bg-bg-elev-2 hover:text-fg-1"
-            data-testid="user-settings-link"
-          >
-            <Settings className="h-4 w-4" aria-hidden="true" />
-          </Link>
-          <button
-            type="button"
-            aria-label="Log out"
-            title="Log out"
-            data-testid="user-logout-button"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-fg-3 hover:bg-bg-elev-2 hover:text-red"
-            onClick={() => {
-              // fastapi-users cookie backend: POST clears the session cookie.
-              void api.post("/auth/cookie/logout").finally(() => {
-                window.location.assign("/login");
-              });
-            }}
-          >
-            <LogOut className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </div>
-        <div className="shrink-0 border-t border-border-subtle px-4 py-2 text-center text-[10px] text-fg-5">
-          © 2026 Suitest contributors · Apache-2.0
         </div>
       </aside>
-    </>
-  );
-}
-
-function SidebarItem({
-  item,
-  onNavigate,
-}: {
-  item: NavItem;
-  /** Called after navigating — closes the mobile drawer. */
-  onNavigate?: (() => void) | undefined;
-}): React.ReactElement {
-  const Icon = item.icon;
-  const baseCls =
-    "group flex items-center gap-2 rounded-md px-2 py-1.5 text-[12.5px] text-fg-3 transition-colors hover:bg-bg-elev-2 hover:text-fg-1";
-
-  if (item.disabled) {
-    return (
-      <div
-        aria-disabled="true"
-        className={cn(baseCls, "cursor-not-allowed text-fg-5 hover:bg-transparent hover:text-fg-5")}
-        data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
-        data-disabled="true"
-      >
-        <Icon className="h-3.5 w-3.5 shrink-0 text-fg-5" aria-hidden="true" />
-        <span className="flex-1 truncate">{item.label}</span>
-      </div>
-    );
-  }
-
-  return (
-    <Link
-      to={item.to}
-      className={baseCls}
-      activeProps={{
-        className: cn(baseCls, "bg-bg-elev-2 text-fg-1 [&_svg]:text-accent"),
-      }}
-      onClick={onNavigate}
-      data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
-    >
-      <Icon className="h-3.5 w-3.5 shrink-0 text-fg-4" aria-hidden="true" />
-      <span className="flex-1 truncate">{item.label}</span>
-      {item.badgeCount !== undefined && item.badgeCount > 0 ? (
-        <span
-          className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-bg-elev-3 px-1 font-mono text-[10px] font-semibold text-fg-3"
-          data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}-badge`}
-        >
-          {item.badgeCount}
-        </span>
-      ) : null}
-      {item.liveDot ? (
-        <span
-          className="h-1.5 w-1.5 rounded-full bg-accent suitest-pulse"
-          data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}-live-dot`}
-          aria-label="active runs"
-        />
-      ) : null}
-    </Link>
+    </TooltipProvider>
   );
 }

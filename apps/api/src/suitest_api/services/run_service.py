@@ -174,7 +174,14 @@ class RunService:
         if project is None or project.workspace_id != self._ctx.workspace_id:
             raise ValueError("project not found")
         if not selection:
-            raise ValueError("selection cannot be empty")
+            # Auto-derive selection from active cases in the project's suites if available
+            auto_cases = await self._session.execute(
+                select(TestCase.id)
+                .join(Suite, Suite.id == TestCase.suite_id)
+                .where(Suite.project_id == project_id)
+                .order_by(Suite.order, TestCase.created_at)
+            )
+            selection = [{"case_id": cid} for (cid,) in auto_cases.all()]
 
         registered = {
             p.name
@@ -185,30 +192,30 @@ class RunService:
         case_ids: list[str] = []
         for item in selection:
             case_id_raw = item.get("case_id")
-            if not isinstance(case_id_raw, str):
-                raise ValueError("selection item missing caseId")
-            case_ids.append(case_id_raw)
+            if isinstance(case_id_raw, str):
+                case_ids.append(case_id_raw)
 
-        case_rows = await self._session.execute(
-            select(TestCase.id, Suite.project_id)
-            .join(Suite, Suite.id == TestCase.suite_id)
-            .where(TestCase.id.in_(case_ids))
-        )
-        case_projects: dict[str, str] = {
-            case_id: row_project_id for case_id, row_project_id in case_rows
-        }
-        for case_id in case_ids:
-            if case_projects.get(case_id) != project_id:
-                raise ValueError(f"case {case_id} not in project")
+        if case_ids:
+            case_rows = await self._session.execute(
+                select(TestCase.id, Suite.project_id)
+                .join(Suite, Suite.id == TestCase.suite_id)
+                .where(TestCase.id.in_(case_ids))
+            )
+            case_projects: dict[str, str] = {
+                case_id: row_project_id for case_id, row_project_id in case_rows
+            }
+            for case_id in case_ids:
+                if case_projects.get(case_id) != project_id:
+                    raise ValueError(f"case {case_id} not in project")
 
-        step_rows = await self._session.execute(
-            select(TestStep.id, TestStep.mcp_provider)
-            .where(TestStep.case_id.in_(case_ids))
-            .order_by(TestStep.case_id, TestStep.order)
-        )
-        for step_id, provider_name in step_rows:
-            if provider_name and provider_name not in registered:
-                raise ValueError(f"step {step_id} references unregistered MCP {provider_name}")
+            step_rows = await self._session.execute(
+                select(TestStep.id, TestStep.mcp_provider)
+                .where(TestStep.case_id.in_(case_ids))
+                .order_by(TestStep.case_id, TestStep.order)
+            )
+            for step_id, provider_name in step_rows:
+                if provider_name and provider_name not in registered:
+                    raise ValueError(f"step {step_id} references unregistered MCP {provider_name}")
 
         capability = await WorkspaceCapabilityRepo(self._session).get(project.workspace_id)
         tier = Tier(capability.tier) if capability is not None else Tier.ZERO

@@ -524,30 +524,24 @@ Documentation is a product requirement, not cleanup work.
 - Relevant documentation must be updated in the same feature branch whenever code behavior/contracts change.
 - `QGATE_PROGRESS.md` must be updated after every meaningful merged feature.
 
-## State-Aware Suitest Sync & Hidden-Wallet Validation ✅ COMPLETE (PR #7)
+### QGate Shell, Dashboard & Run Execution End-to-End Bug Fix (2026-09-02)
 
-### Status
+- **`POST /api/v1/runs` 500 Fix**:
+  1. Identified dependency failure in `get_arq` which unconditionally attempted Redis TCP connection on `localhost:6379`, throwing `redis.exceptions.TimeoutError` in local mode when Redis was not running. Updated `get_arq` and `dispatch_run` to return `None` gracefully in local mode (`SUITEST_MODE="local"`).
+  2. Identified `AttributeError: type object 'TestCase' has no attribute 'order'` in `run_service.py` when auto-deriving selections for project gating runs. Corrected `order_by` clause to `(Suite.order, TestCase.created_at)`.
+  3. Validated end-to-end payload handling for `POST /api/v1/runs` returning `202 ACCEPTED` with a valid `RunPublic` record (e.g. `R-1001`).
 
-**Merged to `main` through PR #7.**
+- **`GET /api/v1/final-gate/latest` 404 Fix**:
+  1. Verified canonical path `/api/v1/final-gate/latest` is the intended endpoint. When no gate report file exists yet in `SUITEST_FINAL_GATE_DIR` (`~/.qgate/final-gate/reports`), backend returns 404 with detail `"no final gate report yet"`.
+  2. Updated `useLatestFinalGate` in `use-final-gate.ts` to catch 404 responses cleanly (`error?.status === 404`), returning `null` so TanStack Query does not retry or log console errors.
 
-Merge commit:
-
-`701b529a3f7b062ddc6f3e9fe7443203a260e7f9`
-
-### Implemented Capabilities
-
-- [x] **State-Aware Scenario Intelligence**: Emits conservative bounded UI state setup hints for evidence-backed user/access/feature states without domain hardcoding.
-- [x] **State-Aware Browser Execution**: Executes state setup steps before assertions and handles state setup failures separately from product assertion failures.
-- [x] **Suitest Test Materialization Sync**: Materializes QGate scenarios into Suitest test cases with idempotent identity tags via `/api/v1/scenario-intelligence/materialize-suitest`.
-- [x] **Generic Deterministic Route Ranking**: Prioritizes routes with direct state-specific evidence tokens over indirect dependency-only matches.
-- [x] **Baseline-Grounded Assertion Synthesis**: Automatically samples DOM candidates on clean baseline builds, extracts baseline expected values, and evaluates changed-build product assertions.
-- [x] **Bounded Deterministic DOM Stabilization**: Implements polling loops with consecutive read matching to guarantee React hydration and DOM stabilization before sampling candidates or evaluating assertions.
-- [x] **Pipeline-Owned Preconditions**: Establishes data and cart preconditions via pipeline automation before route navigation.
-- [x] **End-to-End Hidden-Wallet Proof**: Automatically detects the hidden wallet deduction bug in `qgate-test-shop` (Clean `f6f8d426` vs Bug `5217bea6`), verifying Wallet state on `/checkout`, capturing expected `$9.00`, observing actual `$19.00`, and returning Final Gate `BLOCK` verdict.
+- **UI Error Visibility & Run Resilience**:
+  1. Added error alert banner to `GlobalStartQaCheckModal` (`_app.tsx`) so run creation errors are surfaced clearly instead of failing silently.
+  2. Added button disable state (`disabled={isRunning}`) to prevent duplicate run submissions.
 
 ## Current Next Step
 
-**QGate V1 Core Pipeline and Validation Batch complete. Next step: Begin QGate V1 Hardening and Production Readiness.**
+**Run a real-world end-to-end QGate V1 validation on an actual code change before starting V1 hardening or new major features.**
 
 ## Definition of QGate V1 Success
 
