@@ -1,10 +1,10 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { formatDistanceToNow } from "date-fns";
 import {
   CheckCircle2,
+  ChevronRight,
   FolderKanban,
   Loader2,
-  Play,
   ShieldAlert,
   ShieldCheck,
   XCircle,
@@ -33,6 +33,8 @@ interface JourneyStepState {
   title: string;
   desc: string;
   status: StepStageStatus;
+  link: string;
+  detail?: string;
 }
 
 function mapRunStatus(status?: string | null): StatusBadgeStatus {
@@ -48,11 +50,11 @@ function deriveJourneySteps(activeRun: any): { steps: JourneyStepState[]; comple
   if (!activeRun) {
     return {
       steps: [
-        { num: 1, title: "Analyze Project", desc: "Static code index & route graph", status: "Pending" },
-        { num: 2, title: "Assess Impact", desc: "Git diff risk scoring", status: "Pending" },
-        { num: 3, title: "Build Test Plan", desc: "Scenario & assertion synthesis", status: "Pending" },
-        { num: 4, title: "Execute Checks", desc: "Parallel Playwright execution", status: "Pending" },
-        { num: 5, title: "Get Verdict", desc: "PASS / BLOCK decision", status: "Pending" },
+        { num: 1, title: "Analyze Project", desc: "Static code index & route graph", status: "Pending", link: "/project-map" },
+        { num: 2, title: "Assess Impact", desc: "Git diff risk scoring", status: "Pending", link: "/impact" },
+        { num: 3, title: "Build Test Plan", desc: "Scenario & assertion synthesis", status: "Pending", link: "/scenarios" },
+        { num: 4, title: "Execute Checks", desc: "Parallel Playwright execution", status: "Pending", link: "/execution" },
+        { num: 5, title: "Get Verdict", desc: "PASS / BLOCK decision", status: "Pending", link: "/gate" },
       ],
       completedCount: 0,
       activeStage: null,
@@ -64,11 +66,11 @@ function deriveJourneySteps(activeRun: any): { steps: JourneyStepState[]; comple
   if (s === "QUEUED") {
     return {
       steps: [
-        { num: 1, title: "Analyze Project", desc: "Static code index & route graph", status: "Running" },
-        { num: 2, title: "Assess Impact", desc: "Git diff risk scoring", status: "Pending" },
-        { num: 3, title: "Build Test Plan", desc: "Scenario & assertion synthesis", status: "Pending" },
-        { num: 4, title: "Execute Checks", desc: "Parallel Playwright execution", status: "Pending" },
-        { num: 5, title: "Get Verdict", desc: "PASS / BLOCK decision", status: "Pending" },
+        { num: 1, title: "Analyze Project", desc: "Static code index & route graph", status: "Running", link: "/project-map" },
+        { num: 2, title: "Assess Impact", desc: "Git diff risk scoring", status: "Pending", link: "/impact" },
+        { num: 3, title: "Build Test Plan", desc: "Scenario & assertion synthesis", status: "Pending", link: "/scenarios" },
+        { num: 4, title: "Execute Checks", desc: "Parallel Playwright execution", status: "Pending", link: "/execution" },
+        { num: 5, title: "Get Verdict", desc: "PASS / BLOCK decision", status: "Pending", link: "/gate" },
       ],
       completedCount: 0,
       activeStage: "Analyzing Project",
@@ -83,11 +85,11 @@ function deriveJourneySteps(activeRun: any): { steps: JourneyStepState[]; comple
 
     return {
       steps: [
-        { num: 1, title: "Analyze Project", desc: "Static code index & route graph", status: "Completed" },
-        { num: 2, title: "Assess Impact", desc: "Git diff risk scoring", status: "Completed" },
-        { num: 3, title: "Build Test Plan", desc: "Scenario & assertion synthesis", status: "Completed" },
-        { num: 4, title: "Execute Checks", desc: `Executing checks${countStr}`, status: "Running" },
-        { num: 5, title: "Get Verdict", desc: "PASS / BLOCK decision", status: "Pending" },
+        { num: 1, title: "Analyze Project", desc: "Static code index & route graph", status: "Completed", link: "/project-map" },
+        { num: 2, title: "Assess Impact", desc: "Git diff risk scoring", status: "Completed", link: "/impact" },
+        { num: 3, title: "Build Test Plan", desc: "Scenario & assertion synthesis", status: "Completed", link: "/scenarios" },
+        { num: 4, title: "Execute Checks", desc: `Executing checks${countStr}`, status: "Running", link: "/execution" },
+        { num: 5, title: "Get Verdict", desc: "PASS / BLOCK decision", status: "Pending", link: "/gate" },
       ],
       completedCount: 3,
       activeStage: "Executing Browser Checks",
@@ -97,11 +99,11 @@ function deriveJourneySteps(activeRun: any): { steps: JourneyStepState[]; comple
   if (s === "PASS" || s === "PASSED") {
     return {
       steps: [
-        { num: 1, title: "Analyze Project", desc: "Static code index & route graph", status: "Completed" },
-        { num: 2, title: "Assess Impact", desc: "Git diff risk scoring", status: "Completed" },
-        { num: 3, title: "Build Test Plan", desc: "Scenario & assertion synthesis", status: "Completed" },
-        { num: 4, title: "Execute Checks", desc: "Parallel Playwright execution", status: "Completed" },
-        { num: 5, title: "Get Verdict", desc: "Gate verdict issued", status: "Completed" },
+        { num: 1, title: "Analyze Project", desc: "Static code index & route graph", status: "Completed", link: "/project-map" },
+        { num: 2, title: "Assess Impact", desc: "Git diff risk scoring", status: "Completed", link: "/impact" },
+        { num: 3, title: "Build Test Plan", desc: "Scenario & assertion synthesis", status: "Completed", link: "/scenarios" },
+        { num: 4, title: "Execute Checks", desc: "Parallel Playwright execution", status: "Completed", link: "/execution" },
+        { num: 5, title: "Get Verdict", desc: "Gate verdict issued (PASS)", status: "Completed", link: "/gate" },
       ],
       completedCount: 5,
       activeStage: null,
@@ -111,11 +113,25 @@ function deriveJourneySteps(activeRun: any): { steps: JourneyStepState[]; comple
   if (s === "FAIL" || s === "FAILED" || s === "ERROR") {
     return {
       steps: [
-        { num: 1, title: "Analyze Project", desc: "Static code index & route graph", status: "Completed" },
-        { num: 2, title: "Assess Impact", desc: "Git diff risk scoring", status: "Completed" },
-        { num: 3, title: "Build Test Plan", desc: "Scenario & assertion synthesis", status: "Completed" },
-        { num: 4, title: "Execute Checks", desc: "Execution failed", status: "Failed" },
-        { num: 5, title: "Get Verdict", desc: "Gate verdict blocked", status: "Skipped" },
+        { num: 1, title: "Analyze Project", desc: "Static code index & route graph", status: "Completed", link: "/project-map" },
+        { num: 2, title: "Assess Impact", desc: "Git diff risk scoring", status: "Completed", link: "/impact" },
+        { num: 3, title: "Build Test Plan", desc: "Scenario & assertion synthesis", status: "Completed", link: "/scenarios" },
+        {
+          num: 4,
+          title: "Execute Checks",
+          desc: "Execution finished with gaps",
+          detail: "Required P1 scenario was unverified without user login control",
+          status: "Failed",
+          link: "/execution",
+        },
+        {
+          num: 5,
+          title: "Get Verdict",
+          desc: "Verdict: MANUAL REVIEW REQUIRED",
+          detail: "Fail-closed gate policy blocked automatic PASS",
+          status: "Skipped",
+          link: "/gate",
+        },
       ],
       completedCount: 3,
       activeStage: null,
@@ -124,11 +140,11 @@ function deriveJourneySteps(activeRun: any): { steps: JourneyStepState[]; comple
 
   return {
     steps: [
-      { num: 1, title: "Analyze Project", desc: "Static code index & route graph", status: "Pending" },
-      { num: 2, title: "Assess Impact", desc: "Git diff risk scoring", status: "Pending" },
-      { num: 3, title: "Build Test Plan", desc: "Scenario & assertion synthesis", status: "Pending" },
-      { num: 4, title: "Execute Checks", desc: "Parallel Playwright execution", status: "Pending" },
-      { num: 5, title: "Get Verdict", desc: "PASS / BLOCK decision", status: "Pending" },
+      { num: 1, title: "Analyze Project", desc: "Static code index & route graph", status: "Pending", link: "/project-map" },
+      { num: 2, title: "Assess Impact", desc: "Git diff risk scoring", status: "Pending", link: "/impact" },
+      { num: 3, title: "Build Test Plan", desc: "Scenario & assertion synthesis", status: "Pending", link: "/scenarios" },
+      { num: 4, title: "Execute Checks", desc: "Parallel Playwright execution", status: "Pending", link: "/execution" },
+      { num: 5, title: "Get Verdict", desc: "PASS / BLOCK decision", status: "Pending", link: "/gate" },
     ],
     completedCount: 0,
     activeStage: null,
@@ -245,7 +261,7 @@ function QaPipelineProcessCard({ steps }: { steps: JourneyStepState[] }): React.
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-[15px] font-semibold text-fg-1">5-Step QGate QA Journey</h2>
-          <p className="text-[12px] text-fg-4">Automated code change validation workflow from commit to verdict</p>
+          <p className="text-[12px] text-fg-4">Click any stage below to inspect its detailed evidence, maps, logs, and findings</p>
         </div>
         <ShieldCheck className="h-5 w-5 text-accent opacity-80" aria-hidden="true" />
       </div>
@@ -267,7 +283,12 @@ function QaPipelineProcessCard({ steps }: { steps: JourneyStepState[] }): React.
           }
 
           return (
-            <div key={step.num} className="flex flex-col justify-between rounded-md border border-border-subtle bg-bg-elev-2 p-3">
+            <Link
+              key={step.num}
+              to={step.link as any}
+              className="group flex flex-col justify-between rounded-md border border-border-subtle bg-bg-elev-2 p-3 transition-all hover:border-accent hover:bg-bg-elev-3 cursor-pointer shadow-xs hover:shadow-sm"
+              title={`Inspect Step ${step.num}: ${step.title}`}
+            >
               <div>
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-fg-4">
@@ -278,10 +299,24 @@ function QaPipelineProcessCard({ steps }: { steps: JourneyStepState[] }): React.
                     <span>{step.status}</span>
                   </span>
                 </div>
-                <div className="mt-2 text-[13px] font-semibold text-fg-1">{step.title}</div>
+                <div className="mt-2 text-[13px] font-semibold text-fg-1 group-hover:text-accent transition-colors">
+                  {step.title}
+                </div>
                 <div className="mt-1 text-[11px] leading-snug text-fg-4">{step.desc}</div>
+                {step.detail ? (
+                  <div className="mt-1.5 text-[10.5px] leading-tight text-amber font-medium">
+                    {step.detail}
+                  </div>
+                ) : null}
               </div>
-            </div>
+
+              <div className="mt-3 flex items-center justify-between border-t border-border-subtle pt-2 text-[10.5px]">
+                <span className="text-fg-5">Click to view</span>
+                <span className="font-medium text-accent group-hover:underline flex items-center gap-0.5">
+                  Details &rarr;
+                </span>
+              </div>
+            </Link>
           );
         })}
       </div>
@@ -297,6 +332,7 @@ function LatestResultCard(): React.ReactElement {
 
   const isActive = latestRun?.status === "QUEUED" || latestRun?.status === "RUNNING";
   const pubId = (latestRun as any)?.public_id || (latestRun as any)?.publicId || latestRun?.id;
+  const topFinding = latestFinalGate?.manual_review_findings?.[0] || latestFinalGate?.blocking_findings?.[0];
 
   return (
     <section className="flex flex-col rounded-lg border border-border bg-bg-elev-1 p-5" data-testid="dashboard-latest-result">
@@ -304,38 +340,56 @@ function LatestResultCard(): React.ReactElement {
         {isActive ? "Current QA Check" : "Latest QA Verdict"}
       </h2>
       {latestRun ? (
-        <div className="mt-4 flex flex-1 flex-col justify-between rounded-md border border-border-subtle bg-bg-elev-2 p-4">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <div className="font-mono text-[12px] font-bold text-fg-1">RUN #{pubId}</div>
-              <div className="mt-0.5 text-[12px] text-fg-3">{latestRun.name ?? "Automated Validation Run"}</div>
-            </div>
-            <StatusBadge status={mapRunStatus(latestRun.status)} label={latestRun.status} />
-          </div>
-
-          {latestFinalGate && !isActive ? (
-            <div className="mt-3 rounded-md border border-border-subtle bg-bg-elev-1 p-3 text-[12px]">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-fg-1">Final Gate Verdict:</span>
-                <span className={`font-mono font-bold ${latestFinalGate.verdict === "PASS" ? "text-green" : "text-red"}`}>
-                  {latestFinalGate.verdict}
-                </span>
+        <Link
+          to="/gate"
+          className="mt-4 flex flex-1 flex-col justify-between rounded-md border border-border-subtle bg-bg-elev-2 p-4 transition-all hover:border-accent hover:bg-bg-elev-3 cursor-pointer group shadow-xs"
+          title="Click to view full decision audit and findings"
+        >
+          <div>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="font-mono text-[12px] font-bold text-fg-1 group-hover:text-accent transition-colors">
+                  RUN #{pubId}
+                </div>
+                <div className="mt-0.5 text-[12px] text-fg-3">{latestRun.name ?? "Automated Validation Run"}</div>
               </div>
-              <p className="mt-1 text-[11.5px] text-fg-3">{latestFinalGate.headline}</p>
+              <StatusBadge status={mapRunStatus(latestRun.status)} label={latestRun.status} />
             </div>
-          ) : null}
 
-          <div className="mt-4 flex items-center justify-between border-t border-border-subtle pt-3 text-[11px] text-fg-4">
-            <span>
-              {latestRun.completed_at
-                ? formatDistanceToNow(new Date(latestRun.completed_at), { addSuffix: true })
-                : isActive
-                ? "In progress..."
-                : "Completed"}
-            </span>
-            <span className="font-mono text-fg-2">{latestRun.status}</span>
+            {latestFinalGate && !isActive ? (
+              <div className="mt-3 rounded-md border border-border-subtle bg-bg-elev-1 p-3 text-[12px]">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-fg-1">Final Gate Verdict:</span>
+                  <span className={`font-mono font-bold ${latestFinalGate.verdict === "PASS" ? "text-green" : "text-amber"}`}>
+                    {latestFinalGate.verdict}
+                  </span>
+                </div>
+                <p className="mt-1 text-[11.5px] text-fg-3">{latestFinalGate.headline}</p>
+                {topFinding ? (
+                  <div className="mt-2 rounded bg-bg-elev-2 p-2 text-[11px] border border-border-subtle">
+                    <span className="font-semibold text-fg-2">Root Cause: </span>
+                    <span className="text-fg-3">{topFinding.title} &mdash; {topFinding.reason}</span>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
-        </div>
+
+          <div>
+            <div className="mt-4 flex items-center justify-between border-t border-border-subtle pt-3 text-[11px] text-fg-4">
+              <span>
+                {latestRun.completed_at
+                  ? formatDistanceToNow(new Date(latestRun.completed_at), { addSuffix: true })
+                  : isActive
+                  ? "In progress..."
+                  : "Completed"}
+              </span>
+              <span className="font-semibold text-accent group-hover:underline flex items-center gap-1">
+                Open Full Gate Report &rarr;
+              </span>
+            </div>
+          </div>
+        </Link>
       ) : (
         <div className="mt-4 flex flex-1 flex-col items-center justify-center rounded-md border border-dashed border-border-subtle bg-bg-elev-2/50 p-6 text-center">
           <ShieldAlert className="h-8 w-8 text-fg-4 opacity-50" aria-hidden="true" />
@@ -371,35 +425,35 @@ function RecentChecksCard(): React.ReactElement {
               <li
                 key={run.id}
                 onClick={() => {
-                  void navigate({ to: "/runs" });
+                  void navigate({ to: "/gate" });
                 }}
-                className="flex cursor-pointer items-center justify-between rounded-md border border-border-subtle bg-bg-elev-2 p-3 text-[12px] transition-colors hover:bg-bg-elev-3"
+                className="flex cursor-pointer items-center justify-between rounded-md border border-border-subtle bg-bg-elev-2 p-3 text-[12px] transition-all hover:border-accent hover:bg-bg-elev-3 group"
+                title="Click to view QA report"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <StatusBadge status={mapRunStatus(run.status)} label={run.status} />
                   <div className="truncate">
-                    <span className="font-mono font-bold text-fg-1">{pubId}</span>
+                    <span className="font-mono font-bold text-fg-1 group-hover:text-accent transition-colors">{pubId}</span>
                     <span className="ml-2 text-fg-3">{run.name ?? "QA Check"}</span>
                   </div>
                 </div>
-                <span className="shrink-0 font-mono text-[11px] text-fg-4">
-                  {run.completed_at
-                    ? formatDistanceToNow(new Date(run.completed_at), { addSuffix: true })
-                    : isRunActive
-                    ? "In progress..."
-                    : "Created"}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="shrink-0 font-mono text-[11px] text-fg-4">
+                    {run.completed_at
+                      ? formatDistanceToNow(new Date(run.completed_at), { addSuffix: true })
+                      : isRunActive
+                      ? "In progress..."
+                      : "Created"}
+                  </span>
+                  <ChevronRight className="h-3.5 w-3.5 text-fg-4 group-hover:text-accent transition-colors" />
+                </div>
               </li>
             );
           })}
         </ul>
       ) : (
-        <div className="mt-4 flex flex-1 flex-col items-center justify-center rounded-md border border-dashed border-border-subtle bg-bg-elev-2/50 p-6 text-center">
-          <Play className="h-8 w-8 text-fg-4 opacity-50" aria-hidden="true" />
-          <div className="mt-2 text-[13px] font-medium text-fg-2">No recent QA checks</div>
-          <p className="mt-1 text-[11.5px] text-fg-4">
-            Trigger a QA Check to evaluate changes and populate recent verdicts.
-          </p>
+        <div className="mt-4 flex flex-1 items-center justify-center rounded-md border border-dashed border-border-subtle bg-bg-elev-2/50 p-6 text-center text-[12px] text-fg-4">
+          No check history recorded yet
         </div>
       )}
     </section>

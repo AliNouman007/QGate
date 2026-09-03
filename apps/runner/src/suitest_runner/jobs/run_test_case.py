@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Protocol, cast, runtime_checkable
@@ -341,27 +340,6 @@ async def run_test_case(ctx: dict[str, object], run_id: str) -> dict[str, object
             {"runId": run_id, "tier": tier.value},
             factory=factory,
         )
-
-        # Check if project has a local filesystem path for QGate pipeline execution
-        from suitest_runner.jobs.qgate_pipeline import execute_qgate_pipeline, resolve_project_path
-        project_path = resolve_project_path(project)
-        if project_path is not None:
-            log.info("runner.qgate.dispatched", run_id=run_id, project_path=str(project_path))
-            qgate_result = await execute_qgate_pipeline(
-                factory=factory,
-                run_id=run_id,
-                project=project,
-                project_path=project_path,
-                base_url=os.environ.get("QGATE_TARGET_URL", "http://localhost:3001"),
-            )
-            await _publish(
-                redis_client,
-                run_id,
-                "run.completed",
-                {"runId": run_id, "status": qgate_result["status"]},
-                factory=factory,
-            )
-            return qgate_result
 
         # --- per-step dispatch --------------------------------------------
         summary = {"total": 0, "passed": 0, "failed": 0, "errored": 0, "skipped": 0}

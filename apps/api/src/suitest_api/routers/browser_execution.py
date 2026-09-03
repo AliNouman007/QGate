@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from qgate_browser_execution.models import ExecutionReport, ExecutionSummary
 from qgate_browser_execution.store import JsonExecutionReportStore
@@ -75,3 +77,32 @@ async def get_execution_report(
     if report is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="execution report not found")
     return report
+
+
+@router.get("/artifacts/{subpath:path}")
+async def get_execution_artifact(subpath: str, request: Request) -> FileResponse:
+    """Serve visual evidence (screenshots, videos) captured during browser execution."""
+    root = (
+        Path(
+            os.path.expanduser(
+                os.environ.get(
+                    "SUITEST_BROWSER_EXECUTION_DIR", "~/.qgate/browser-execution"
+                )
+            )
+        )
+        / "artifacts"
+    ).resolve()
+    target = (root / subpath).resolve()
+    if not str(target).startswith(str(root)) or not target.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="artifact not found")
+
+    ext = target.suffix.lower()
+    media_type = (
+        "image/png"
+        if ext == ".png"
+        else "video/webm"
+        if ext == ".webm"
+        else "application/octet-stream"
+    )
+    return FileResponse(target, media_type=media_type)
+

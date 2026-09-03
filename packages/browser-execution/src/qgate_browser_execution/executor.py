@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 from .classification import assertion_failure, classify_exception
 from .evidence import capture_page_evidence
 from .models import (
+    ArtifactRef,
     AttemptRecord,
     CompiledScenario,
     CompiledStep,
@@ -198,7 +199,12 @@ class BrowserExecutor:
                 }
             } catch {}
         }"""
-        context = await browser.new_context()
+        artifact_root = self._artifact_root(
+            request.config.artifact_dir, run_id, scenario.scenario_key
+        )
+        videos_dir = artifact_root / "videos"
+        videos_dir.mkdir(parents=True, exist_ok=True)
+        context = await browser.new_context(record_video_dir=str(videos_dir))
         await context.add_init_script(init_script)
         page = await context.new_page()
         page.set_default_timeout(request.config.step_timeout_ms)
@@ -244,9 +250,6 @@ class BrowserExecutor:
             target_route=scenario.route,
             started_at=started,
             source_impact_keys=scenario.source_impact_keys,
-        )
-        artifact_root = self._artifact_root(
-            request.config.artifact_dir, run_id, scenario.scenario_key
         )
 
         if request.config.baseline_url:
@@ -354,7 +357,24 @@ class BrowserExecutor:
                 )
             )
         finally:
+            video_ref = page.video
+            await page.close()
             await context.close()
+            if video_ref:
+                try:
+                    video_path = await video_ref.path()
+                    if video_path and Path(video_path).exists():
+                        size = Path(video_path).stat().st_size
+                        if size > 0 and execution.steps:
+                            execution.steps[-1].evidence.artifacts.append(
+                                ArtifactRef(
+                                    kind="video/webm",
+                                    path=str(video_path),
+                                    size_bytes=size,
+                                )
+                            )
+                except Exception:
+                    pass
         execution.completed_at = datetime.now(UTC)
         execution.duration_ms = (time.perf_counter() - start_clock) * 1000
         return execution
@@ -462,9 +482,11 @@ class BrowserExecutor:
             if result.failure_category not in infrastructure:
                 result.failure_category = FailureCategory.STATE_SETUP_FAILURE
 
-        screenshot = None
-        if request.config.screenshot_on_failure and result.status != ExecutionStatus.PASSED:
-            screenshot = artifact_root / f"step-{step.index}-failure.png"
+        screenshot = (
+            artifact_root / f"step-{step.index}-failure.png"
+            if result.status != ExecutionStatus.PASSED
+            else artifact_root / f"step-{step.index}.png"
+        )
         try:
             result.evidence = await capture_page_evidence(
                 page,

@@ -1,10 +1,28 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AlertTriangle, CheckCircle2, CircleSlash2, PlayCircle, XCircle } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  CircleSlash2,
+  Eye,
+  FileVideo,
+  PlayCircle,
+  X,
+  XCircle,
+} from "lucide-react";
+import { useState } from "react";
 
 import {
   type ScenarioExecution,
   useLatestBrowserExecution,
 } from "@/hooks/use-browser-execution";
+
+function getArtifactUrl(rawPath: string): string {
+  const norm = rawPath.replace(/\\/g, "/");
+  const marker = "/artifacts/";
+  const idx = norm.indexOf(marker);
+  const subpath = idx !== -1 ? norm.slice(idx + marker.length) : norm.split("/").slice(-2).join("/");
+  return `/api/v1/browser-execution/artifacts/${subpath}`;
+}
 
 function StatusIcon({ status }: { status: string }): React.ReactElement {
   if (status === "passed") return <CheckCircle2 className="h-4 w-4 text-green" aria-hidden="true" />;
@@ -14,6 +32,7 @@ function StatusIcon({ status }: { status: string }): React.ReactElement {
 }
 
 function ScenarioCard({ item }: { item: ScenarioExecution }): React.ReactElement {
+  const [activeMedia, setActiveMedia] = useState<{ url: string; type: "image" | "video"; title: string } | null>(null);
   const artifacts = item.steps.flatMap((step) => step.evidence.artifacts);
   const consoleCount = item.steps.reduce((count, step) => count + step.evidence.console.length, 0);
   const networkFailures = item.steps.reduce(
@@ -63,14 +82,97 @@ function ScenarioCard({ item }: { item: ScenarioExecution }): React.ReactElement
                   expected: {step.expected ?? "—"} · actual: {step.actual ?? "—"}
                 </p>
               ) : null}
-              {step.evidence.artifacts.map((artifact) => (
-                <p key={artifact.path} className="mt-1 truncate font-mono text-[9.5px] text-fg-5">
-                  {artifact.kind}: {artifact.path}
-                </p>
-              ))}
+              {step.evidence.artifacts.length > 0 ? (
+                <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                  {step.evidence.artifacts.map((artifact) => {
+                    const isVideo = artifact.kind.includes("video") || artifact.path.endsWith(".webm");
+                    const isImage = artifact.kind.includes("image") || artifact.path.endsWith(".png");
+                    const url = getArtifactUrl(artifact.path);
+
+                    if (isVideo) {
+                      return (
+                        <button
+                          key={artifact.path}
+                          type="button"
+                          onClick={() => setActiveMedia({ url, type: "video", title: `${item.title} — Step ${step.index} Video` })}
+                          className="inline-flex items-center gap-1.5 rounded bg-accent/15 px-2 py-1 text-[11px] font-medium text-accent hover:bg-accent/25 transition-colors cursor-pointer"
+                        >
+                          <FileVideo className="h-3.5 w-3.5" />
+                          <span>Watch Browser Video</span>
+                        </button>
+                      );
+                    }
+
+                    if (isImage) {
+                      return (
+                        <button
+                          key={artifact.path}
+                          type="button"
+                          onClick={() => setActiveMedia({ url, type: "image", title: `${item.title} — Step ${step.index} Screenshot` })}
+                          className="group/img relative inline-block overflow-hidden rounded border border-border bg-bg-elev-1 transition-all hover:border-accent cursor-pointer"
+                          title="Click to view full screenshot"
+                        >
+                          <img
+                            src={url}
+                            alt={`Step ${step.index} screenshot`}
+                            className="h-16 w-28 object-cover object-top transition-transform group-hover/img:scale-105"
+                            loading="lazy"
+                          />
+                          <span className="absolute bottom-1 right-1 rounded bg-black/80 px-1 py-0.5 text-[8.5px] text-white flex items-center gap-0.5">
+                            <Eye className="h-2.5 w-2.5" /> View
+                          </span>
+                        </button>
+                      );
+                    }
+
+                    return (
+                      <span key={artifact.path} className="font-mono text-[9.5px] text-fg-5">
+                        {artifact.kind}: {artifact.path}
+                      </span>
+                    );
+                  })}
+                </div>
+              ) : null}
             </li>
           ))}
         </ol>
+      ) : null}
+
+      {activeMedia ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs"
+          onClick={() => setActiveMedia(null)}
+        >
+          <div
+            className="relative max-h-[90vh] max-w-[90vw] overflow-hidden rounded-lg border border-border bg-bg-elev-1 p-3 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-2 mb-2 border-b border-border">
+              <span className="text-[13px] font-semibold text-fg-1">{activeMedia.title}</span>
+              <button
+                type="button"
+                onClick={() => setActiveMedia(null)}
+                className="rounded p-1 text-fg-4 hover:bg-bg-elev-2 hover:text-fg-1 cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {activeMedia.type === "image" ? (
+              <img
+                src={activeMedia.url}
+                alt={activeMedia.title}
+                className="max-h-[75vh] w-auto rounded object-contain border border-border"
+              />
+            ) : (
+              <video
+                src={activeMedia.url}
+                controls
+                autoPlay
+                className="max-h-[75vh] w-auto rounded border border-border"
+              />
+            )}
+          </div>
+        </div>
       ) : null}
     </article>
   );
